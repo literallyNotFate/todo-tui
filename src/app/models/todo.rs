@@ -5,7 +5,7 @@ pub struct Todo {
 }
 
 impl Todo {
-    pub fn new<T: Into<String>>(title: T) -> Self {
+    pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
             done: false,
@@ -16,7 +16,7 @@ impl Todo {
         self.done = !self.done;
     }
 
-    pub fn rename<T: Into<String>>(&mut self, new_name: T) {
+    pub fn rename(&mut self, new_name: impl Into<String>) {
         self.title = new_name.into();
     }
 }

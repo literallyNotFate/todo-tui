@@ -8,7 +8,7 @@ use app::Application;
 fn main() -> Result<()> {
     color_eyre::install()?;
 
-    let mut app: Application = Application::new()?;
+    let mut app: Application = Application::new();
     let terminal: DefaultTerminal = ratatui::init();
     let result = app.run(terminal);
     ratatui::restore();
