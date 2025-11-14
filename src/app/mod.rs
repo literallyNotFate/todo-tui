@@ -68,7 +68,10 @@ impl Application {
 
                 let usage_text = usage.join("\n");
                 self.ui.show_popup(
-                    Popup::new(PopupKind::Info, usage_text).close_on(KeyCode::Char('?')),
+                    Popup::new(usage_text)
+                        .kind(PopupKind::Help)
+                        .title("Controls")
+                        .close_on(KeyCode::Char('?')),
                 )
             }
             _ => {}

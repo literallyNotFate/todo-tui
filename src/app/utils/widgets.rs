@@ -17,13 +17,20 @@ pub fn color_based_on_popup_kind(kind: PopupKind) -> Color {
 }
 
 pub fn lines_based_on_popup<'a>(popup: Popup) -> (Line<'a>, Line<'a>) {
-    let main_line: Line = Line::from(Span::styled(
-        match popup.kind {
+    let max_title_text: String = if popup.title.is_some() {
+        format!(" {} ", popup.title.unwrap_or("".to_string()))
+    } else {
+        (match popup.kind {
             PopupKind::Help => " Help ",
             PopupKind::Error => " Error ",
             PopupKind::Success => " Success ",
             PopupKind::Info => " Info ",
-        },
+        })
+        .to_string()
+    };
+
+    let main_line: Line = Line::from(Span::styled(
+        max_title_text,
         Style::default()
             .fg(Color::Rgb(252, 252, 252))
             .add_modifier(Modifier::BOLD),
