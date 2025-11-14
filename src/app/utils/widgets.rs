@@ -1,9 +1,11 @@
-use crate::app::ui::popup::{Popup, PopupCloseBehavior, PopupKind};
+use crate::app::ui::components::popup::{Popup, PopupCloseBehavior, PopupKind};
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
 };
+
+// For popup
 
 pub fn color_based_on_popup_kind(kind: PopupKind) -> Color {
     match kind {
@@ -55,15 +57,6 @@ pub fn get_popup_area(area: Rect, x_length: u16, y_length: u16) -> Rect {
     let horizontal = Layout::horizontal([Constraint::Max(x_length)]).flex(Flex::Center);
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
-
-    area
-}
-
-pub fn _center(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
-    let [area] = Layout::horizontal([horizontal])
-        .flex(Flex::Center)
-        .areas(area);
-    let [area] = Layout::vertical([vertical]).flex(Flex::Center).areas(area);
 
     area
 }

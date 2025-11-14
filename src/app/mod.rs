@@ -3,21 +3,23 @@ pub mod ui;
 pub mod utils;
 
 use color_eyre::Result;
+use models::todo::Todo;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyModifiers},
 };
 
-use crate::app::models::todo::Todo;
 use ui::{
     UIState,
-    popup::{Popup, PopupCloseBehavior, PopupKind},
+    components::popup::{Popup, PopupCloseBehavior, PopupKind},
+    renderer::Renderer,
 };
 
 pub struct Application {
     pub todos: Vec<Todo>,
     pub running: bool,
     pub ui: UIState,
+    pub renderer: Renderer,
 }
 
 impl Application {
@@ -26,6 +28,7 @@ impl Application {
             todos: Vec::new(),
             running: true,
             ui: UIState::default(),
+            renderer: Renderer,
         }
     }
 
@@ -51,9 +54,23 @@ impl Application {
 
         match key {
             KeyCode::Char('q') | KeyCode::Esc => self.running = false,
-            KeyCode::Char('?') => self.ui.show_popup(
-                Popup::new(PopupKind::Success, "Testing message").close_on(KeyCode::Char('q')),
-            ),
+            KeyCode::Char('?') => {
+                let usage: Vec<&str> = vec![
+                    " a -> append a todo",
+                    " r -> rename a todo",
+                    " d -> delete a todo",
+                    " Enter -> mark as completed",
+                    " k/Up -> go up",
+                    " j/Down -> go down",
+                    " q/Esc -> quit",
+                    " ? -> toggle help",
+                ];
+
+                let usage_text = usage.join("\n");
+                self.ui.show_popup(
+                    Popup::new(PopupKind::Info, usage_text).close_on(KeyCode::Char('?')),
+                )
+            }
             _ => {}
         }
     }
@@ -71,8 +88,6 @@ impl Application {
     }
 
     pub fn render(&self, frame: &mut Frame) {
-        frame.render_widget("todo-tui", frame.area());
-
-        self.ui.render(frame);
+        self.renderer.render(frame, self);
     }
 }

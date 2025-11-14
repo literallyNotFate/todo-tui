@@ -1,7 +1,7 @@
-pub mod popup;
+pub mod components;
+pub mod renderer;
 
-use popup::Popup;
-use ratatui::Frame;
+use components::popup::Popup;
 
 #[derive(Default)]
 pub struct UIState {
@@ -16,12 +16,5 @@ impl UIState {
 
     pub fn close_popup(&mut self) {
         self.popup = None;
-    }
-
-    // Render
-    pub fn render(&self, frame: &mut Frame) {
-        if let Some(popup) = &self.popup {
-            popup.render(frame);
-        }
     }
 }
