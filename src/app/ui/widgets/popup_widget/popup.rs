@@ -8,7 +8,8 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use crate::app::utils::{other as other_utils, widgets as widgets_utils};
+use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
+use crate::app::utils::text::wrap_text;
 
 #[derive(Debug, Clone)]
 pub enum PopupCloseBehavior {
@@ -30,6 +31,7 @@ pub struct PopupStyles {
     pub border_color: Color,
     pub padding: Padding,
     pub max_width: Option<u16>,
+    pub show_title: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -51,7 +53,7 @@ impl Popup {
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
 
             styles: PopupStyles {
-                border_color: widgets_utils::color_based_on_popup_kind(PopupKind::Info),
+                border_color: color_based_on_popup_kind(PopupKind::Info),
                 padding: Padding {
                     right: 2,
                     left: 2,
@@ -59,6 +61,7 @@ impl Popup {
                     bottom: 1,
                 },
                 max_width: None,
+                show_title: true,
             },
         }
     }
@@ -66,8 +69,8 @@ impl Popup {
     // Rendering
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         let content_width = area.width.saturating_sub(4) as usize;
-        let wrapped = other_utils::wrap_text(&self.message, content_width);
-        let titles = widgets_utils::lines_based_on_popup(self.clone());
+        let wrapped = wrap_text(&self.message, content_width);
+        let titles = lines_based_on_popup(self.clone());
 
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
@@ -84,56 +87,20 @@ impl Popup {
         frame.render_widget(paragraph, area);
     }
 
-    pub fn calculate_area(&self, frame_area: Rect) -> Rect {
-        let titles = widgets_utils::lines_based_on_popup(self.clone());
-
-        let max_allowed_width: usize = ((frame_area.width as f32) * 0.7).floor() as usize;
-        let raw_lines = self.message.lines().collect::<Vec<_>>();
-
-        let extra_space_width: usize = 6;
-
-        let content_max_line = raw_lines
-            .iter()
-            .map(|l| l.chars().count())
-            .max()
-            .unwrap_or(1)
-            .max(1);
-
-        let base_width = content_max_line.min(max_allowed_width);
-
-        let wrapped = other_utils::wrap_text(&self.message, base_width);
-        let content_height = wrapped.len();
-
-        let mut height = content_height;
-
-        if !titles.0.spans.is_empty() {
-            height += 1;
-        }
-
-        if !titles.1.spans.is_empty() {
-            height += 1;
-        }
-
-        height += (self.styles.padding.top + self.styles.padding.bottom) as usize;
-
-        let mut width = base_width + extra_space_width;
-        width += (self.styles.padding.left + self.styles.padding.right) as usize;
-
-        width = width.min(frame_area.width as usize);
-        height = height.min(frame_area.height as usize);
-
-        widgets_utils::get_popup_area(frame_area, width as u16, height as u16)
-    }
-
     // Chaining API
     pub fn kind(mut self, kind: PopupKind) -> Self {
         self.kind = kind.clone();
-        self.styles.border_color = widgets_utils::color_based_on_popup_kind(kind);
+        self.styles.border_color = color_based_on_popup_kind(kind);
         self
     }
 
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
+        self
+    }
+
+    pub fn no_title(mut self) -> Self {
+        self.styles.show_title = false;
         self
     }
 

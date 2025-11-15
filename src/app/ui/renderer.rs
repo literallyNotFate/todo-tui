@@ -1,10 +1,12 @@
-use crate::app::{Application, models::todo::Todo};
 use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     widgets::Block,
 };
+
+use super::widgets::popup_widget::utils::calculate_area;
+use crate::app::{application::Application, models::todo::Todo};
 
 pub struct Renderer;
 
@@ -13,7 +15,7 @@ impl Renderer {
         self.render_todo_list(frame, &app.todos);
 
         if let Some(popup) = &app.ui.popup {
-            let popup_area = popup.calculate_area(frame.area());
+            let popup_area: Rect = calculate_area(popup.clone(), frame.area());
             self.render_overlay_except(frame, popup_area);
             popup.render(frame, popup_area);
         }

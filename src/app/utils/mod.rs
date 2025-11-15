@@ -1,2 +1,3 @@
-pub mod other;
-pub mod widgets;
+pub mod layout;
+pub mod math;
+pub mod text;

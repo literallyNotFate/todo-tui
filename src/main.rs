@@ -3,7 +3,7 @@ mod app;
 use color_eyre::Result;
 use ratatui::DefaultTerminal;
 
-use app::Application;
+use app::application::Application;
 
 fn main() -> Result<()> {
     color_eyre::install()?;
