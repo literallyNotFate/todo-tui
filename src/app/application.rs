@@ -6,6 +6,7 @@ use ratatui::{
 
 use super::{
     models::todo::Todo,
+    state::ApplicationState,
     ui::{
         components::help_popup, renderer::Renderer, state::UIState,
         widgets::popup_widget::popup::PopupCloseBehavior,
@@ -13,7 +14,7 @@ use super::{
 };
 
 pub struct Application {
-    pub todos: Vec<Todo>,
+    pub state: ApplicationState,
     pub running: bool,
     pub ui: UIState,
     pub renderer: Renderer,
@@ -22,7 +23,20 @@ pub struct Application {
 impl Application {
     pub fn new() -> Self {
         Self {
-            todos: Vec::new(),
+            state: ApplicationState::new(vec![
+                Todo {
+                    title: "Task 1".to_string(),
+                    done: true,
+                },
+                Todo {
+                    title: "Task 2".to_string(),
+                    done: false,
+                },
+                Todo {
+                    title: "Task 3".to_string(),
+                    done: false,
+                },
+            ]),
             running: true,
             ui: UIState::default(),
             renderer: Renderer,
@@ -51,6 +65,15 @@ impl Application {
 
         match key {
             KeyCode::Char('q') | KeyCode::Esc => self.running = false,
+            KeyCode::Char('k') | KeyCode::Up => self.state.select_state.select_previous(),
+            KeyCode::Char('j') | KeyCode::Down => self.state.select_state.select_next(),
+            KeyCode::Enter => {
+                if let Some(index) = self.state.select_state.selected()
+                    && let Some(item) = self.state.todos.get_mut(index)
+                {
+                    item.done = !item.done;
+                }
+            }
             KeyCode::Char('?') => {
                 self.ui.show_popup(help_popup::help_popup());
             }
@@ -70,7 +93,12 @@ impl Application {
         Ok(())
     }
 
-    pub fn render(&self, frame: &mut Frame) {
-        self.renderer.render(frame, self);
+    pub fn render(&mut self, frame: &mut Frame) {
+        self.renderer.render(
+            frame,
+            &self.state.todos,
+            &mut self.state.select_state,
+            &self.ui,
+        );
     }
 }

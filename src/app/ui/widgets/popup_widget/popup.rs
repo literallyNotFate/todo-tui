@@ -1,5 +1,6 @@
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Alignment;
+use ratatui::style::Stylize;
 use ratatui::widgets::{BorderType, Padding, Wrap};
 use ratatui::{
     Frame,
@@ -77,6 +78,7 @@ impl Popup {
             .title_alignment(Alignment::Center)
             .title(titles.0)
             .title_bottom(titles.1)
+            .fg(Color::Rgb(252, 252, 252))
             .border_style(Style::default().fg(self.styles.border_color))
             .padding(self.styles.padding);
 
