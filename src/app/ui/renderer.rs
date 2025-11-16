@@ -6,8 +6,8 @@ use ratatui::{
     widgets::{Block, BorderType, List, ListItem, ListState, Padding, Widget},
 };
 
-use super::{state::UIState, widgets::popup_widget::utils::calculate_area};
-use crate::app::models::todo::Todo;
+use super::{state::UIState, widgets::popup_widget::utils::calculate_popup_area};
+use crate::app::{models::todo::Todo, utils::layout::center};
 
 pub struct Renderer;
 
@@ -22,9 +22,15 @@ impl Renderer {
         self.render_todo_list(frame, todos, select_state);
 
         if let Some(popup) = &ui.popup {
-            let popup_area: Rect = calculate_area(popup.clone(), frame.area());
+            let popup_area: Rect = calculate_popup_area(popup.clone(), frame.area());
             self.render_overlay_except(frame, popup_area);
             popup.render(frame, popup_area);
+        }
+
+        if let Some(input) = &ui.inputbox {
+            let input_area: Rect = center(frame.area(), 50, 3);
+            self.render_overlay_except(frame, input_area);
+            input.clone().render(frame, input_area);
         }
     }
 

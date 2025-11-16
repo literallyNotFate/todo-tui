@@ -5,11 +5,18 @@ use ratatui::{
 };
 
 use super::{
-    models::todo::Todo,
     state::ApplicationState,
     ui::{
-        components::help_popup, renderer::Renderer, state::UIState,
-        widgets::popup_widget::popup::PopupCloseBehavior,
+        components::help_popup,
+        renderer::Renderer,
+        state::UIState,
+        widgets::{
+            inputbox::{
+                input::InputBox,
+                state::{InputMode, InputResult},
+            },
+            popup_widget::popup::PopupCloseBehavior,
+        },
     },
 };
 
@@ -23,20 +30,7 @@ pub struct Application {
 impl Application {
     pub fn new() -> Self {
         Self {
-            state: ApplicationState::new(vec![
-                Todo {
-                    title: "Task 1".to_string(),
-                    done: true,
-                },
-                Todo {
-                    title: "Task 2".to_string(),
-                    done: false,
-                },
-                Todo {
-                    title: "Task 3".to_string(),
-                    done: false,
-                },
-            ]),
+            state: ApplicationState::new(),
             running: true,
             ui: UIState::default(),
             renderer: Renderer,
@@ -63,17 +57,32 @@ impl Application {
             return;
         }
 
+        if let Some(input) = self.ui.inputbox.as_mut() {
+            match input.handle_key(key) {
+                InputResult::Continue => (),
+                InputResult::Cancel => self.ui.close_input(),
+                InputResult::Submit(text) => {
+                    match input.mode {
+                        InputMode::Insert => self.state.append_todo(text),
+                        InputMode::Edit => self.state.rename_todo(text),
+                    }
+
+                    self.ui.close_input();
+                }
+            }
+            return;
+        }
+
         match key {
             KeyCode::Char('q') | KeyCode::Esc => self.running = false,
             KeyCode::Char('k') | KeyCode::Up => self.state.select_state.select_previous(),
             KeyCode::Char('j') | KeyCode::Down => self.state.select_state.select_next(),
-            KeyCode::Enter => {
-                if let Some(index) = self.state.select_state.selected()
-                    && let Some(item) = self.state.todos.get_mut(index)
-                {
-                    item.done = !item.done;
-                }
-            }
+            KeyCode::Char('a') => self.ui.show_input(InputBox::insert()),
+            KeyCode::Char('r') => self
+                .ui
+                .show_input(InputBox::edit(self.state.get_current_todo().title)),
+            KeyCode::Char('d') => self.state.remove_todo(),
+            KeyCode::Enter => self.state.toggle_current(),
             KeyCode::Char('?') => {
                 self.ui.show_popup(help_popup::help_popup());
             }

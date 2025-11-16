@@ -1,4 +1,4 @@
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Todo {
     pub title: String,
     pub done: bool,

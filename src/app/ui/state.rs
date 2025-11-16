@@ -1,8 +1,9 @@
-use super::widgets::popup_widget::popup::Popup;
+use super::widgets::{inputbox::input::InputBox, popup_widget::popup::Popup};
 
 #[derive(Default)]
 pub struct UIState {
     pub popup: Option<Popup>,
+    pub inputbox: Option<InputBox>,
 }
 
 impl UIState {
@@ -13,5 +14,14 @@ impl UIState {
 
     pub fn close_popup(&mut self) {
         self.popup = None;
+    }
+
+    // Input
+    pub fn show_input(&mut self, input: InputBox) {
+        self.inputbox = Some(input);
+    }
+
+    pub fn close_input(&mut self) {
+        self.inputbox = None;
     }
 }

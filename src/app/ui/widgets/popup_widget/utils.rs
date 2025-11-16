@@ -8,7 +8,7 @@ use super::popup::{Popup, PopupCloseBehavior, PopupKind};
 use crate::app::utils::{layout::center, text::wrap_text};
 
 // Calculate popup area based on context
-pub fn calculate_area(popup: Popup, frame_area: Rect) -> Rect {
+pub fn calculate_popup_area(popup: Popup, frame_area: Rect) -> Rect {
     use crate::app::utils::math::*;
 
     let (top, bottom) = lines_based_on_popup(popup.clone());
