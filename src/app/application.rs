@@ -11,6 +11,7 @@ use super::{
         renderer::Renderer,
         state::UIState,
         widgets::{
+            confirm_widget::{action::ConfirmAction, confirm::Confirm},
             inputbox::{
                 input::InputBox,
                 state::{InputMode, InputResult},
@@ -43,6 +44,31 @@ impl Application {
             return;
         }
 
+        if let Some(confirm) = self.ui.confirm.as_mut() {
+            if let Some(result) = confirm.handle_key(key) {
+                let action = confirm.action.take();
+                self.ui.close_confirm();
+
+                if result && let Some(action) = action {
+                    match action {
+                        ConfirmAction::Append(text) => {
+                            self.state.append_todo(text);
+                        }
+                        ConfirmAction::Remove => {
+                            self.state.remove_todo();
+                        }
+                        ConfirmAction::Rename(text) => {
+                            self.state.rename_todo(text);
+                        }
+                    }
+                }
+
+                return;
+            } else {
+                return;
+            }
+        }
+
         if let Some(popup) = &self.ui.popup {
             match popup.close_behavior {
                 PopupCloseBehavior::AnyKey => {
@@ -63,8 +89,16 @@ impl Application {
                 InputResult::Cancel => self.ui.close_input(),
                 InputResult::Submit(text) => {
                     match input.mode {
-                        InputMode::Insert => self.state.append_todo(text),
-                        InputMode::Edit => self.state.rename_todo(text),
+                        InputMode::Insert => self.ui.show_confirm(
+                            Confirm::new()
+                                .with_message("Append this todo?")
+                                .action(ConfirmAction::Append(text)),
+                        ),
+                        InputMode::Edit => self.ui.show_confirm(
+                            Confirm::new()
+                                .with_message("Rename this todo?")
+                                .action(ConfirmAction::Rename(text)),
+                        ),
                     }
 
                     self.ui.close_input();
@@ -81,11 +115,13 @@ impl Application {
             KeyCode::Char('r') => self
                 .ui
                 .show_input(InputBox::edit(self.state.get_current_todo().title)),
-            KeyCode::Char('d') => self.state.remove_todo(),
+            KeyCode::Char('d') => self.ui.show_confirm(
+                Confirm::new()
+                    .with_message("Remove this todo?")
+                    .action(ConfirmAction::Remove),
+            ),
             KeyCode::Enter => self.state.toggle_current(),
-            KeyCode::Char('?') => {
-                self.ui.show_popup(help_popup::help_popup());
-            }
+            KeyCode::Char('?') => self.ui.show_popup(help_popup::help_popup()),
             _ => {}
         }
     }

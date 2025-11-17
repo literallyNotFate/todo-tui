@@ -32,6 +32,12 @@ impl Renderer {
             self.render_overlay_except(frame, input_area);
             input.clone().render(frame, input_area);
         }
+
+        if let Some(confirm) = &ui.confirm {
+            let confirm_area: Rect = center(frame.area(), 40, 10);
+            self.render_overlay_except(frame, confirm_area);
+            confirm.render(frame, confirm_area);
+        }
     }
 
     fn render_overlay_except(&self, frame: &mut Frame, popup_area: Rect) {
