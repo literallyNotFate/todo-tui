@@ -1,13 +1,17 @@
+use super::utils::get_confirm_buttons;
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
-    layout::{Alignment, Margin, Rect},
-    style::{Color, Style, Stylize},
-    text::Line,
-    widgets::{Block, BorderType, Padding, Paragraph, Wrap},
+    layout::Rect,
+    style::{Color, Stylize},
+    widgets::Padding,
 };
 
-use super::{action::ConfirmAction, utils::get_confirm_buttons};
+pub enum ConfirmAction {
+    Remove,
+    Append(String),
+    Rename(String),
+}
 
 pub struct ConfirmStyles {
     pub border_color: Color,
@@ -43,7 +47,15 @@ impl Confirm {
         }
     }
 
+    // Render
     pub fn render(&self, frame: &mut Frame, area: Rect) {
+        use ratatui::{
+            layout::{Alignment, Margin},
+            style::Style,
+            text::Line,
+            widgets::{Block, BorderType, Paragraph, Wrap},
+        };
+
         let confirm_block: Block = Block::bordered()
             .fg(Color::Rgb(252, 252, 252))
             .border_style(Style::default().fg(self.styles.border_color))
@@ -86,6 +98,10 @@ impl Confirm {
             KeyCode::Esc => Some(false),
             _ => None,
         }
+    }
+
+    pub fn get_buttons_length() -> usize {
+        get_confirm_buttons(true).iter().len()
     }
 
     // Chaining API

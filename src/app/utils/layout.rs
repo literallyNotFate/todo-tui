@@ -1,15 +1,9 @@
-use ratatui::{
-    layout::{Constraint, Flex, Layout, Rect},
-    widgets::Padding,
-};
-
-use super::{
-    math::{calculate_max_line_len, percentage_of},
-    text::wrap_text,
-};
+use ratatui::{layout::Rect, widgets::Padding};
 
 // Center a widget
 pub fn center(area: Rect, width: u16, height: u16) -> Rect {
+    use ratatui::layout::{Constraint, Flex, Layout};
+
     let vertical = Layout::vertical([Constraint::Max(height)]).flex(Flex::Center);
     let [vert_area] = vertical.areas(area);
 
@@ -28,6 +22,11 @@ pub fn calculate_modal_area(
     padding: Padding,
     max_percent: f32,
 ) -> Rect {
+    use super::{
+        math::{calculate_max_line_len, percentage_of},
+        text::wrap_text,
+    };
+
     let max_allowed_width: usize = percentage_of(frame_area.width, max_percent);
     let raw_lines: Vec<&str> = content.lines().collect::<Vec<_>>();
 

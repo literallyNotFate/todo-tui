@@ -1,13 +1,7 @@
 use ratatui::crossterm::event::KeyCode;
-use ratatui::layout::Alignment;
 use ratatui::style::Stylize;
-use ratatui::widgets::{BorderType, Padding, Wrap};
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Style},
-    widgets::{Block, Paragraph},
-};
+use ratatui::widgets::Padding;
+use ratatui::{Frame, layout::Rect, style::Color};
 
 use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
 use crate::app::utils::text::wrap_text;
@@ -69,6 +63,12 @@ impl Popup {
 
     // Rendering
     pub fn render(&self, frame: &mut Frame, area: Rect) {
+        use ratatui::{
+            layout::Alignment,
+            style::Style,
+            widgets::{Block, BorderType, Paragraph, Wrap},
+        };
+
         let content_width = area.width.saturating_sub(4) as usize;
         let wrapped = wrap_text(&self.message, content_width);
         let titles = lines_based_on_popup(self.clone());
@@ -78,8 +78,8 @@ impl Popup {
             .title_alignment(Alignment::Center)
             .title(titles.0)
             .title_bottom(titles.1)
-            .fg(Color::Rgb(252, 252, 252))
             .border_style(Style::default().fg(self.styles.border_color))
+            .fg(Color::Rgb(252, 252, 252))
             .padding(self.styles.padding);
 
         let paragraph = Paragraph::new(wrapped.join("\n"))

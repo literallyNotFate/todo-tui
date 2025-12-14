@@ -1,20 +1,10 @@
+use super::state::UIState;
+use crate::app::models::todo::Todo;
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style, Stylize},
-    text::Line,
-    widgets::{Block, BorderType, List, ListItem, ListState, Padding, Widget},
-};
-
-use super::{
-    state::UIState,
-    widgets::{
-        confirm_widget::utils::get_confirm_buttons, popup_widget::utils::lines_based_on_popup,
-    },
-};
-use crate::app::{
-    models::todo::Todo,
-    utils::layout::{calculate_modal_area, center},
+    widgets::{Block, ListState, Padding, Widget},
 };
 
 pub struct Renderer;
@@ -27,6 +17,11 @@ impl Renderer {
         select_state: &mut ListState,
         ui: &UIState,
     ) {
+        use crate::app::{
+            ui::widgets::{confirm::confirm::Confirm, popup::utils::lines_based_on_popup},
+            utils::layout::{calculate_modal_area, center},
+        };
+
         self.render_todo_list(frame, todos, select_state);
 
         if let Some(popup) = &ui.popup {
@@ -56,7 +51,7 @@ impl Renderer {
                 frame.area(),
                 &confirm.message,
                 0,
-                get_confirm_buttons(confirm.selected).iter().len(),
+                Confirm::get_buttons_length(),
                 Padding {
                     top: 3,
                     bottom: 3,
@@ -110,6 +105,12 @@ impl Renderer {
     }
 
     fn render_todo_list(&self, frame: &mut Frame, todos: &[Todo], select_state: &mut ListState) {
+        use ratatui::{
+            layout::{Constraint, Layout},
+            text::Line,
+            widgets::{BorderType, List, ListItem},
+        };
+
         let [main_layout] = Layout::vertical([Constraint::Fill(1)])
             .margin(1)
             .areas(frame.area());

@@ -1,24 +1,14 @@
-use color_eyre::Result;
+use color_eyre::eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyModifiers},
 };
 
+use crate::app::ui::components::help_popup;
+
 use super::{
     state::ApplicationState,
-    ui::{
-        components::help_popup,
-        renderer::Renderer,
-        state::UIState,
-        widgets::{
-            confirm_widget::{action::ConfirmAction, confirm::Confirm},
-            inputbox::{
-                input::InputBox,
-                state::{InputMode, InputResult},
-            },
-            popup_widget::popup::PopupCloseBehavior,
-        },
-    },
+    ui::{renderer::Renderer, state::UIState},
 };
 
 pub struct Application {
@@ -39,6 +29,12 @@ impl Application {
     }
 
     fn handle_key(&mut self, key: KeyCode, modifiers: KeyModifiers) {
+        use super::ui::widgets::{
+            confirm::confirm::{Confirm, ConfirmAction},
+            input::input::{Input, InputMode, InputResult},
+            popup::popup::PopupCloseBehavior,
+        };
+
         if key == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
             self.running = false;
             return;
@@ -111,10 +107,13 @@ impl Application {
             KeyCode::Char('q') | KeyCode::Esc => self.running = false,
             KeyCode::Char('k') | KeyCode::Up => self.state.select_state.select_previous(),
             KeyCode::Char('j') | KeyCode::Down => self.state.select_state.select_next(),
-            KeyCode::Char('a') => self.ui.show_input(InputBox::insert()),
-            KeyCode::Char('r') => self
-                .ui
-                .show_input(InputBox::edit(self.state.get_current_todo().title)),
+            KeyCode::Char('a') => self.ui.show_input(Input::insert()),
+            KeyCode::Char('r') => {
+                if !self.state.todos.is_empty() {
+                    self.ui
+                        .show_input(Input::edit(self.state.get_current_todo().title))
+                }
+            }
             KeyCode::Char('d') => {
                 if !self.state.todos.is_empty() {
                     self.ui.show_confirm(

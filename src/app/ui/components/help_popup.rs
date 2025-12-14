@@ -1,4 +1,4 @@
-use crate::app::ui::widgets::popup_widget::popup::{Popup, PopupKind};
+use crate::app::ui::widgets::popup::popup::{Popup, PopupKind};
 use ratatui::crossterm::event::KeyCode;
 
 // Help popup (controls)

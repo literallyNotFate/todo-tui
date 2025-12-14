@@ -1,16 +1,26 @@
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
-    layout::{Position, Rect},
-    style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, BorderType, Padding, Paragraph},
+    layout::Rect,
+    style::{Color, Stylize},
+    widgets::Padding,
 };
 
-use super::state::{InputMode, InputResult};
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputMode {
+    #[default]
+    Insert,
+    Edit,
+}
+
+pub enum InputResult {
+    Continue,
+    Submit(String),
+    Cancel,
+}
 
 #[derive(Clone)]
-pub struct InputBoxStyles {
+pub struct InputStyles {
     pub fg_color: Color,
     pub padding: Padding,
     pub max_chars: usize,
@@ -18,23 +28,23 @@ pub struct InputBoxStyles {
 }
 
 #[derive(Clone)]
-pub struct InputBox {
+pub struct Input {
     pub title: Option<String>,
     pub buffer: String,
     pub cursor: usize,
     pub mode: InputMode,
 
-    pub styles: InputBoxStyles,
+    pub styles: InputStyles,
 }
 
-impl InputBox {
+impl Input {
     pub fn insert() -> Self {
         Self {
             buffer: "".to_string(),
             title: None,
             cursor: 0,
             mode: InputMode::Insert,
-            styles: InputBoxStyles {
+            styles: InputStyles {
                 fg_color: Color::Rgb(245, 161, 145),
                 padding: Padding::new(1, 1, 0, 0),
                 max_chars: 46,
@@ -52,7 +62,7 @@ impl InputBox {
             title: None,
             cursor: cursor_value,
             mode: InputMode::Edit,
-            styles: InputBoxStyles {
+            styles: InputStyles {
                 fg_color: Color::Rgb(234, 141, 165),
                 padding: Padding::new(1, 1, 0, 0),
                 max_chars: 46,
@@ -61,7 +71,15 @@ impl InputBox {
         }
     }
 
+    // Render
     pub fn render(self, frame: &mut Frame, area: Rect) {
+        use ratatui::{
+            layout::Position,
+            style::{Modifier, Style},
+            text::{Line, Span},
+            widgets::{Block, BorderType, Paragraph},
+        };
+
         let title: Line = if self.styles.show_title {
             if let Some(ref user_title) = self.title {
                 Line::from(Span::styled(

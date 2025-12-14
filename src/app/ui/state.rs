@@ -1,11 +1,9 @@
-use super::widgets::{
-    confirm_widget::confirm::Confirm, inputbox::input::InputBox, popup_widget::popup::Popup,
-};
+use super::widgets::{confirm::confirm::Confirm, input::input::Input, popup::popup::Popup};
 
 #[derive(Default)]
 pub struct UIState {
     pub popup: Option<Popup>,
-    pub inputbox: Option<InputBox>,
+    pub inputbox: Option<Input>,
     pub confirm: Option<Confirm>,
 }
 
@@ -20,7 +18,7 @@ impl UIState {
     }
 
     // Input
-    pub fn show_input(&mut self, input: InputBox) {
+    pub fn show_input(&mut self, input: Input) {
         self.inputbox = Some(input);
     }
 

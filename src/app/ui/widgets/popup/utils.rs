@@ -1,48 +1,7 @@
-use ratatui::{
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-};
-
 use super::popup::{Popup, PopupCloseBehavior, PopupKind};
-use crate::app::utils::{layout::center, text::wrap_text};
+use ratatui::{style::Color, text::Line};
 
-// Calculate popup area based on context
-pub fn calculate_popup_area(popup: Popup, frame_area: Rect) -> Rect {
-    use crate::app::utils::math::*;
-
-    let (top, bottom) = lines_based_on_popup(popup.clone());
-
-    let top_title_width: usize = top.width();
-    let bottom_title_width: usize = bottom.width();
-
-    let max_allowed_width: usize = percentage_of(frame_area.width, 70.0);
-    let raw_lines: Vec<&str> = popup.message.lines().collect::<Vec<_>>();
-    let extra_space_width: usize = 6;
-
-    let content_max_line: usize = calculate_max_line_len(&raw_lines);
-
-    let base_width: usize = content_max_line.min(max_allowed_width);
-    let content_height: usize = wrap_text(&popup.message, base_width).len();
-
-    let mut height = content_height + 2;
-    height += (popup.styles.padding.top + popup.styles.padding.bottom) as usize;
-
-    let mut width = base_width + extra_space_width;
-    width = width.max(bottom_title_width);
-
-    if !top.spans.is_empty() {
-        width = width.max(top_title_width);
-    }
-
-    width += (popup.styles.padding.left + popup.styles.padding.right) as usize;
-
-    width = width.min(frame_area.width as usize);
-    height = height.min(frame_area.height as usize);
-
-    center(frame_area, width as u16, height as u16)
-}
-
+// Color based on popup kind (info, error, success, help)
 pub fn color_based_on_popup_kind(kind: PopupKind) -> Color {
     match kind {
         PopupKind::Error => Color::Rgb(245, 161, 145),
@@ -52,7 +11,13 @@ pub fn color_based_on_popup_kind(kind: PopupKind) -> Color {
     }
 }
 
+// Pre-rendered lines based on popup
 pub fn lines_based_on_popup<'a>(popup: Popup) -> (Line<'a>, Line<'a>) {
+    use ratatui::{
+        style::{Modifier, Style},
+        text::Span,
+    };
+
     let top_line: Line = if popup.styles.show_title {
         if let Some(ref user_title) = popup.title {
             Line::from(Span::styled(

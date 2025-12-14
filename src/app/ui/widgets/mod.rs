@@ -1,3 +1,3 @@
-pub mod confirm_widget;
-pub mod inputbox;
-pub mod popup_widget;
+pub mod confirm;
+pub mod input;
+pub mod popup;
