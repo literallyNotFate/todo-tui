@@ -3,16 +3,24 @@ use ratatui::{
     crossterm::event::KeyCode,
     layout::{Alignment, Margin, Rect},
     style::{Color, Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, BorderType, Paragraph, Wrap},
+    text::Line,
+    widgets::{Block, BorderType, Padding, Paragraph, Wrap},
 };
 
-use super::action::ConfirmAction;
+use super::{action::ConfirmAction, utils::get_confirm_buttons};
+
+pub struct ConfirmStyles {
+    pub border_color: Color,
+    pub padding: Padding,
+    pub max_width: Option<u16>,
+}
 
 pub struct Confirm {
     pub message: String,
     pub selected: bool,
     pub action: Option<ConfirmAction>,
+
+    pub styles: ConfirmStyles,
 }
 
 impl Confirm {
@@ -21,49 +29,51 @@ impl Confirm {
             message: "".to_string(),
             selected: false,
             action: None,
+
+            styles: ConfirmStyles {
+                border_color: Color::Rgb(252, 252, 252),
+                padding: Padding {
+                    top: 3,
+                    bottom: 3,
+                    left: 2,
+                    right: 2,
+                },
+                max_width: None,
+            },
         }
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
-        let confirm_block = Block::bordered()
+        let confirm_block: Block = Block::bordered()
             .fg(Color::Rgb(252, 252, 252))
+            .border_style(Style::default().fg(self.styles.border_color))
+            .padding(self.styles.padding)
             .border_type(BorderType::Rounded);
 
         frame.render_widget(confirm_block, area);
-        let msg_area = area.inner(Margin {
+
+        let inner_area: Rect = area.inner(Margin {
             vertical: 2,
             horizontal: 2,
         });
 
-        let msg = Paragraph::new(self.message.clone())
+        let message: Paragraph = Paragraph::new(self.message.clone())
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: false });
 
-        frame.render_widget(msg, msg_area);
+        frame.render_widget(message, inner_area);
 
-        let btn_area = Rect {
-            x: msg_area.x,
-            y: msg_area.y + msg_area.height.saturating_sub(2),
-            width: msg_area.width,
+        let buttons_area = Rect {
+            x: inner_area.x,
+            y: inner_area.y + inner_area.height.saturating_sub(2),
+            width: inner_area.width,
             height: 2,
         };
 
-        let buttons = if self.selected {
-            Line::from(vec![
-                Span::styled("[ Yes ]", Style::default().fg(Color::Rgb(155, 201, 166))),
-                Span::raw("   "),
-                Span::styled("Cancel", Style::default().fg(Color::Rgb(252, 252, 252))),
-            ])
-        } else {
-            Line::from(vec![
-                Span::styled("Yes", Style::default().fg(Color::Rgb(252, 252, 252))),
-                Span::raw("   "),
-                Span::styled("[ Cancel ]", Style::default().fg(Color::Rgb(201, 155, 155))),
-            ])
-        };
+        let buttons: Line = get_confirm_buttons(self.selected);
 
-        let btns_widget = Paragraph::new(buttons).alignment(Alignment::Center);
-        frame.render_widget(btns_widget, btn_area);
+        let buttons_widget: Paragraph = Paragraph::new(buttons).alignment(Alignment::Center);
+        frame.render_widget(buttons_widget, buttons_area);
     }
 
     pub fn handle_key(&mut self, key: KeyCode) -> Option<bool> {
@@ -86,6 +96,21 @@ impl Confirm {
 
     pub fn action(mut self, action: ConfirmAction) -> Self {
         self.action = Some(action);
+        self
+    }
+
+    pub fn with_border_color(mut self, color: Color) -> Self {
+        self.styles.border_color = color;
+        self
+    }
+
+    pub fn with_padding(mut self, padding: Padding) -> Self {
+        self.styles.padding = padding;
+        self
+    }
+
+    pub fn with_max_width(mut self, width: u16) -> Self {
+        self.styles.max_width = Some(width);
         self
     }
 }

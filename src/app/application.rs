@@ -115,11 +115,15 @@ impl Application {
             KeyCode::Char('r') => self
                 .ui
                 .show_input(InputBox::edit(self.state.get_current_todo().title)),
-            KeyCode::Char('d') => self.ui.show_confirm(
-                Confirm::new()
-                    .with_message("Remove this todo?")
-                    .action(ConfirmAction::Remove),
-            ),
+            KeyCode::Char('d') => {
+                if !self.state.todos.is_empty() {
+                    self.ui.show_confirm(
+                        Confirm::new()
+                            .with_message("Remove this todo?")
+                            .action(ConfirmAction::Remove),
+                    )
+                }
+            }
             KeyCode::Enter => self.state.toggle_current(),
             KeyCode::Char('?') => self.ui.show_popup(help_popup::help_popup()),
             _ => {}

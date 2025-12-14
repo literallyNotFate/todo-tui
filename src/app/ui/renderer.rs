@@ -6,8 +6,16 @@ use ratatui::{
     widgets::{Block, BorderType, List, ListItem, ListState, Padding, Widget},
 };
 
-use super::{state::UIState, widgets::popup_widget::utils::calculate_popup_area};
-use crate::app::{models::todo::Todo, utils::layout::center};
+use super::{
+    state::UIState,
+    widgets::{
+        confirm_widget::utils::get_confirm_buttons, popup_widget::utils::lines_based_on_popup,
+    },
+};
+use crate::app::{
+    models::todo::Todo,
+    utils::layout::{calculate_modal_area, center},
+};
 
 pub struct Renderer;
 
@@ -22,7 +30,17 @@ impl Renderer {
         self.render_todo_list(frame, todos, select_state);
 
         if let Some(popup) = &ui.popup {
-            let popup_area: Rect = calculate_popup_area(popup.clone(), frame.area());
+            let titles = lines_based_on_popup(popup.clone());
+
+            let popup_area: Rect = calculate_modal_area(
+                frame.area(),
+                &popup.message,
+                titles.0.iter().len(),
+                titles.1.iter().len(),
+                popup.styles.padding,
+                70.0,
+            );
+
             self.render_overlay_except(frame, popup_area);
             popup.render(frame, popup_area);
         }
@@ -34,7 +52,20 @@ impl Renderer {
         }
 
         if let Some(confirm) = &ui.confirm {
-            let confirm_area: Rect = center(frame.area(), 40, 10);
+            let confirm_area: Rect = calculate_modal_area(
+                frame.area(),
+                &confirm.message,
+                0,
+                get_confirm_buttons(confirm.selected).iter().len(),
+                Padding {
+                    top: 3,
+                    bottom: 3,
+                    left: 2,
+                    right: 2,
+                },
+                60.0,
+            );
+
             self.render_overlay_except(frame, confirm_area);
             confirm.render(frame, confirm_area);
         }

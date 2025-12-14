@@ -1,3 +1,4 @@
+// Wrap content in widgets
 pub fn wrap_text(input: &str, max_width: usize) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
 
