@@ -4,8 +4,6 @@ use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyModifiers},
 };
 
-use crate::app::ui::components::help_popup;
-
 use super::{
     state::ApplicationState,
     ui::{renderer::Renderer, state::UIState},
@@ -29,10 +27,13 @@ impl Application {
     }
 
     fn handle_key(&mut self, key: KeyCode, modifiers: KeyModifiers) {
-        use super::ui::widgets::{
-            confirm::confirm::{Confirm, ConfirmAction},
-            input::input::{Input, InputMode, InputResult},
-            popup::popup::PopupCloseBehavior,
+        use super::ui::{
+            components::components::Components,
+            widgets::{
+                confirm::confirm::ConfirmAction,
+                input::input::{Input, InputMode, InputResult},
+                popup::popup::PopupCloseBehavior,
+            },
         };
 
         if key == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
@@ -85,16 +86,8 @@ impl Application {
                 InputResult::Cancel => self.ui.close_input(),
                 InputResult::Submit(text) => {
                     match input.mode {
-                        InputMode::Insert => self.ui.show_confirm(
-                            Confirm::new()
-                                .with_message("Append this todo?")
-                                .action(ConfirmAction::Append(text)),
-                        ),
-                        InputMode::Edit => self.ui.show_confirm(
-                            Confirm::new()
-                                .with_message("Rename this todo?")
-                                .action(ConfirmAction::Rename(text)),
-                        ),
+                        InputMode::Insert => self.ui.show_confirm(Components::append_confirm(text)),
+                        InputMode::Edit => self.ui.show_confirm(Components::rename_confirm(text)),
                     }
 
                     self.ui.close_input();
@@ -116,15 +109,11 @@ impl Application {
             }
             KeyCode::Char('d') => {
                 if !self.state.todos.is_empty() {
-                    self.ui.show_confirm(
-                        Confirm::new()
-                            .with_message("Remove this todo?")
-                            .action(ConfirmAction::Remove),
-                    )
+                    self.ui.show_confirm(Components::remove_confirm())
                 }
             }
             KeyCode::Enter => self.state.toggle_current(),
-            KeyCode::Char('?') => self.ui.show_popup(help_popup::help_popup()),
+            KeyCode::Char('?') => self.ui.show_popup(Components::help_popup()),
             _ => {}
         }
     }
