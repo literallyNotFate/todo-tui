@@ -22,7 +22,7 @@ impl Application {
             state: ApplicationState::new(),
             running: true,
             ui: UIState::default(),
-            renderer: Renderer,
+            renderer: Renderer::new(),
         }
     }
 
