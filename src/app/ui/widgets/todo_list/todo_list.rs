@@ -7,12 +7,10 @@ use crate::app::models::todo::Todo;
 
 pub struct TodoList {}
 
+// Todo list methods implementation
 impl TodoList {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn render(&self, frame: &mut Frame, todos: &[Todo], select_state: &mut ListState) {
+    // Rendering
+    pub fn render(frame: &mut Frame, todos: &[Todo], select_state: &mut ListState) {
         use ratatui::{
             layout::{Constraint, Layout},
             style::{Color, Style, Stylize},

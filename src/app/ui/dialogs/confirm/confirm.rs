@@ -1,4 +1,4 @@
-use super::utils::get_confirm_buttons;
+use crate::app::ui::dialogs::dialog::{Dialog, DialogResult};
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
@@ -7,32 +7,30 @@ use ratatui::{
     widgets::Padding,
 };
 
-pub enum ConfirmAction {
-    Remove,
-    Append(String),
-    Rename(String),
-}
+use super::utils::get_confirm_buttons;
 
+// Styles for confirm
 pub struct ConfirmStyles {
     pub border_color: Color,
     pub padding: Padding,
     pub max_width: Option<u16>,
 }
 
+// Main confirm window
 pub struct Confirm {
     pub message: String,
     pub selected: bool,
-    pub action: Option<ConfirmAction>,
 
     pub styles: ConfirmStyles,
 }
 
-impl Confirm {
-    pub fn new() -> Self {
+// Dialog trait implementation
+impl Dialog for Confirm {
+    // Default constructor
+    fn new() -> Self {
         Self {
             message: "".to_string(),
             selected: false,
-            action: None,
 
             styles: ConfirmStyles {
                 border_color: Color::Rgb(252, 252, 252),
@@ -47,8 +45,22 @@ impl Confirm {
         }
     }
 
-    // Render
-    pub fn render(&self, frame: &mut Frame, area: Rect) {
+    // Calculate area for confirm
+    fn area(&self, frame_area: Rect) -> Rect {
+        use crate::app::utils::layout::calculate_modal_area;
+
+        calculate_modal_area(
+            frame_area,
+            &self.message,
+            0,
+            Confirm::get_buttons_length(),
+            self.styles.padding,
+            60.0,
+        )
+    }
+
+    // Rendering
+    fn render(&self, frame: &mut Frame, area: Rect) {
         use ratatui::{
             layout::{Alignment, Margin},
             style::Style,
@@ -88,18 +100,27 @@ impl Confirm {
         frame.render_widget(buttons_widget, buttons_area);
     }
 
-    pub fn handle_key(&mut self, key: KeyCode) -> Option<bool> {
+    // Key event handling
+    fn handle_key(&mut self, key: KeyCode) -> Option<DialogResult> {
         match key {
             KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l') => {
                 self.selected = !self.selected;
                 None
             }
-            KeyCode::Enter => Some(self.selected),
-            KeyCode::Esc => Some(false),
+            KeyCode::Enter => Some(if self.selected {
+                DialogResult::Confirmed
+            } else {
+                DialogResult::Cancelled
+            }),
+            KeyCode::Esc => Some(DialogResult::Cancelled),
             _ => None,
         }
     }
+}
 
+// Other methods implementation
+impl Confirm {
+    // Confirm buttons length
     pub fn get_buttons_length() -> usize {
         get_confirm_buttons(true).iter().len()
     }
@@ -107,11 +128,6 @@ impl Confirm {
     // Chaining API
     pub fn with_message(mut self, message: impl Into<String>) -> Self {
         self.message = message.into();
-        self
-    }
-
-    pub fn action(mut self, action: ConfirmAction) -> Self {
-        self.action = Some(action);
         self
     }
 

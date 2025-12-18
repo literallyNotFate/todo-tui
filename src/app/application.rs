@@ -4,6 +4,8 @@ use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyModifiers},
 };
 
+use crate::app::ui::state::DialogIntent;
+
 use super::{
     state::ApplicationState,
     ui::{renderer::Renderer, state::UIState},
@@ -22,18 +24,15 @@ impl Application {
             state: ApplicationState::new(),
             running: true,
             ui: UIState::default(),
-            renderer: Renderer::new(),
+            renderer: Renderer,
         }
     }
 
     fn handle_key(&mut self, key: KeyCode, modifiers: KeyModifiers) {
         use super::ui::{
             components::components::Components,
-            widgets::{
-                confirm::confirm::ConfirmAction,
-                input::input::{Input, InputMode, InputResult},
-                popup::popup::PopupCloseBehavior,
-            },
+            dialogs::dialog::DialogResult,
+            widgets::input::input::{Input, InputMode, InputResult},
         };
 
         if key == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
@@ -41,53 +40,53 @@ impl Application {
             return;
         }
 
-        if let Some(confirm) = self.ui.confirm.as_mut() {
-            if let Some(result) = confirm.handle_key(key) {
-                let action = confirm.action.take();
-                self.ui.close_confirm();
+        if let Some(active) = self.ui.dialog.as_mut() {
+            if let Some(result) = active.modal.handle_key(key) {
+                match result {
+                    DialogResult::None => {
+                        return;
+                    }
 
-                if result && let Some(action) = action {
-                    match action {
-                        ConfirmAction::Append(text) => {
-                            self.state.append_todo(text);
+                    DialogResult::Cancelled => {
+                        self.ui.close_dialog();
+                        return;
+                    }
+
+                    DialogResult::Confirmed => {
+                        match &active.intent {
+                            DialogIntent::Append(text) => {
+                                self.state.append_todo(text);
+                            }
+                            DialogIntent::Rename(text) => {
+                                self.state.rename_todo(text);
+                            }
+                            DialogIntent::Remove => {
+                                self.state.remove_todo();
+                            }
+                            DialogIntent::None => (),
                         }
-                        ConfirmAction::Remove => {
-                            self.state.remove_todo();
-                        }
-                        ConfirmAction::Rename(text) => {
-                            self.state.rename_todo(text);
-                        }
+
+                        self.ui.close_dialog();
+                        return;
                     }
                 }
-
-                return;
             } else {
                 return;
             }
         }
 
-        if let Some(popup) = &self.ui.popup {
-            match popup.close_behavior {
-                PopupCloseBehavior::AnyKey => {
-                    self.ui.close_popup();
-                }
-                PopupCloseBehavior::Specific(k) if k == key => {
-                    self.ui.close_popup();
-                }
-                _ => {}
-            }
-
-            return;
-        }
-
-        if let Some(input) = self.ui.inputbox.as_mut() {
+        if let Some(input) = self.ui.input.as_mut() {
             match input.handle_key(key) {
                 InputResult::Continue => (),
                 InputResult::Cancel => self.ui.close_input(),
                 InputResult::Submit(text) => {
                     match input.mode {
-                        InputMode::Insert => self.ui.show_confirm(Components::append_confirm(text)),
-                        InputMode::Edit => self.ui.show_confirm(Components::rename_confirm(text)),
+                        InputMode::Insert => self
+                            .ui
+                            .show_dialog(Components::append_confirm(), DialogIntent::Append(text)),
+                        InputMode::Edit => self
+                            .ui
+                            .show_dialog(Components::rename_confirm(), DialogIntent::Rename(text)),
                     }
 
                     self.ui.close_input();
@@ -109,11 +108,14 @@ impl Application {
             }
             KeyCode::Char('d') => {
                 if !self.state.todos.is_empty() {
-                    self.ui.show_confirm(Components::remove_confirm())
+                    self.ui
+                        .show_dialog(Components::remove_confirm(), DialogIntent::Remove)
                 }
             }
             KeyCode::Enter => self.state.toggle_current(),
-            KeyCode::Char('?') => self.ui.show_popup(Components::help_popup()),
+            KeyCode::Char('?') => self
+                .ui
+                .show_dialog(Components::help_popup(), DialogIntent::None),
             _ => {}
         }
     }

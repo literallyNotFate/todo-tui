@@ -6,6 +6,7 @@ use ratatui::{
     widgets::Padding,
 };
 
+// Defines the status of input (inserting the text, editing existing text)
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
     #[default]
@@ -13,13 +14,15 @@ pub enum InputMode {
     Edit,
 }
 
+// The result action
 pub enum InputResult {
     Continue,
     Submit(String),
     Cancel,
 }
 
-#[derive(Clone)]
+// Styles for input
+#[derive(Default, Clone)]
 pub struct InputStyles {
     pub fg_color: Color,
     pub padding: Padding,
@@ -27,7 +30,8 @@ pub struct InputStyles {
     pub show_title: bool,
 }
 
-#[derive(Clone)]
+// Main input modal window
+#[derive(Default, Clone)]
 pub struct Input {
     pub title: Option<String>,
     pub buffer: String,
@@ -37,7 +41,9 @@ pub struct Input {
     pub styles: InputStyles,
 }
 
+// Input methods inplementation
 impl Input {
+    // Create insert input modal
     pub fn insert() -> Self {
         Self {
             buffer: "".to_string(),
@@ -53,6 +59,7 @@ impl Input {
         }
     }
 
+    // Create edit input modal
     pub fn edit(initial: impl Into<String>) -> Self {
         let initial_string: String = initial.into();
         let cursor_value: usize = initial_string.len();
@@ -71,34 +78,22 @@ impl Input {
         }
     }
 
+    // Calculate area for input
+    pub fn area(&self, frame_area: Rect) -> Rect {
+        use crate::app::utils::layout::center;
+        center(frame_area, 50, 3)
+    }
+
     // Render
     pub fn render(self, frame: &mut Frame, area: Rect) {
+        use super::utils::get_input_title;
         use ratatui::{
             layout::Position,
-            style::{Modifier, Style},
-            text::{Line, Span},
+            text::Line,
             widgets::{Block, BorderType, Paragraph},
         };
 
-        let title: Line = if self.styles.show_title {
-            if let Some(ref user_title) = self.title {
-                Line::from(Span::styled(
-                    format!(" {} ", user_title),
-                    Style::default()
-                        .fg(self.styles.fg_color)
-                        .add_modifier(Modifier::BOLD),
-                ))
-            } else {
-                let defaults: String = match self.mode {
-                    InputMode::Edit => " Rename a todo ".to_string(),
-                    InputMode::Insert => " Append a todo ".to_string(),
-                };
-
-                Line::from(defaults)
-            }
-        } else {
-            Line::default()
-        };
+        let title: Line = get_input_title(self.clone());
 
         let input = Paragraph::new(self.buffer).fg(self.styles.fg_color).block(
             Block::bordered()
@@ -114,6 +109,7 @@ impl Input {
         ));
     }
 
+    // Key even handling
     pub fn handle_key(&mut self, key: KeyCode) -> InputResult {
         match key {
             KeyCode::Enter => {

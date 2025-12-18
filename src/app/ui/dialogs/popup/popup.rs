@@ -1,11 +1,11 @@
 use ratatui::crossterm::event::KeyCode;
-use ratatui::style::Stylize;
 use ratatui::widgets::Padding;
 use ratatui::{Frame, layout::Rect, style::Color};
 
 use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
-use crate::app::utils::text::wrap_text;
+use crate::app::ui::dialogs::dialog::{Dialog, DialogResult};
 
+// Defines how popup closes (on key, on ESC or does not close)
 #[derive(Debug, Clone)]
 pub enum PopupCloseBehavior {
     AnyKey,
@@ -13,6 +13,7 @@ pub enum PopupCloseBehavior {
     None,
 }
 
+// Popup type (Help, Info, Error, Success)
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupKind {
     Help,
@@ -21,6 +22,7 @@ pub enum PopupKind {
     Success,
 }
 
+// Styles for popup
 #[derive(Debug, Clone, PartialEq)]
 pub struct PopupStyles {
     pub border_color: Color,
@@ -29,6 +31,7 @@ pub struct PopupStyles {
     pub show_title: bool,
 }
 
+// Main popup window
 #[derive(Debug, Clone)]
 pub struct Popup {
     pub kind: PopupKind,
@@ -39,11 +42,13 @@ pub struct Popup {
     pub styles: PopupStyles,
 }
 
-impl Popup {
-    pub fn new(message: impl Into<String>) -> Self {
+// Dialog trait implementation
+impl Dialog for Popup {
+    // Default constructor
+    fn new() -> Self {
         Self {
             kind: PopupKind::Info,
-            message: message.into(),
+            message: "".to_string(),
             title: None,
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
 
@@ -61,11 +66,27 @@ impl Popup {
         }
     }
 
+    // Calculate area for popup
+    fn area(&self, frame_area: Rect) -> Rect {
+        use crate::app::utils::layout::calculate_modal_area;
+        let titles = lines_based_on_popup(self.clone());
+
+        calculate_modal_area(
+            frame_area,
+            &self.message,
+            titles.0.iter().len(),
+            titles.1.iter().len(),
+            self.styles.padding,
+            70.0,
+        )
+    }
+
     // Rendering
-    pub fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect) {
+        use crate::app::utils::text::wrap_text;
         use ratatui::{
             layout::Alignment,
-            style::Style,
+            style::{Style, Stylize},
             widgets::{Block, BorderType, Paragraph, Wrap},
         };
 
@@ -89,10 +110,27 @@ impl Popup {
         frame.render_widget(paragraph, area);
     }
 
+    // Key event handling
+    fn handle_key(&mut self, key: KeyCode) -> Option<DialogResult> {
+        match self.close_behavior {
+            PopupCloseBehavior::AnyKey => Some(DialogResult::Cancelled),
+            PopupCloseBehavior::Specific(k) if k == key => Some(DialogResult::Cancelled),
+            _ => None,
+        }
+    }
+}
+
+// Other methods implementation
+impl Popup {
     // Chaining API
     pub fn kind(mut self, kind: PopupKind) -> Self {
         self.kind = kind.clone();
         self.styles.border_color = color_based_on_popup_kind(kind);
+        self
+    }
+
+    pub fn with_message(mut self, message: impl Into<String>) -> Self {
+        self.message = message.into();
         self
     }
 

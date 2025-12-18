@@ -1,37 +1,43 @@
-use super::widgets::{confirm::confirm::Confirm, input::input::Input, popup::popup::Popup};
+use super::{dialogs::dialog::Dialog, widgets::input::input::Input};
+
+// Dialog actions (remove todo, append, rename, remove, save, load, none - for popup)
+pub enum DialogIntent {
+    None,
+    Append(String),
+    Rename(String),
+    Remove,
+}
 
 #[derive(Default)]
 pub struct UIState {
-    pub popup: Option<Popup>,
-    pub inputbox: Option<Input>,
-    pub confirm: Option<Confirm>,
+    pub dialog: Option<ActiveDialog>,
+    pub input: Option<Input>,
+}
+
+pub struct ActiveDialog {
+    pub modal: Box<dyn Dialog>,
+    pub intent: DialogIntent,
 }
 
 impl UIState {
-    // Popup
-    pub fn show_popup(&mut self, popup: Popup) {
-        self.popup = Some(popup)
+    // Dialog
+    pub fn show_dialog<D: Dialog + 'static>(&mut self, dialog: D, intent: DialogIntent) {
+        self.dialog = Some(ActiveDialog {
+            modal: Box::new(dialog),
+            intent,
+        });
     }
 
-    pub fn close_popup(&mut self) {
-        self.popup = None;
+    pub fn close_dialog(&mut self) {
+        self.dialog = None;
     }
 
     // Input
     pub fn show_input(&mut self, input: Input) {
-        self.inputbox = Some(input);
+        self.input = Some(input);
     }
 
     pub fn close_input(&mut self) {
-        self.inputbox = None;
-    }
-
-    // Confirm
-    pub fn show_confirm(&mut self, confirm: Confirm) {
-        self.confirm = Some(confirm);
-    }
-
-    pub fn close_confirm(&mut self) {
-        self.confirm = None;
+        self.input = None;
     }
 }
