@@ -43,10 +43,6 @@ impl Application {
         if let Some(active) = self.ui.dialog.as_mut() {
             if let Some(result) = active.modal.handle_key(key) {
                 match result {
-                    DialogResult::None => {
-                        return;
-                    }
-
                     DialogResult::Cancelled => {
                         self.ui.close_dialog();
                         return;
@@ -54,12 +50,6 @@ impl Application {
 
                     DialogResult::Confirmed => {
                         match &active.intent {
-                            DialogIntent::Append(text) => {
-                                self.state.append_todo(text);
-                            }
-                            DialogIntent::Rename(text) => {
-                                self.state.rename_todo(text);
-                            }
                             DialogIntent::Remove => {
                                 self.state.remove_todo();
                             }
@@ -81,12 +71,8 @@ impl Application {
                 InputResult::Cancel => self.ui.close_input(),
                 InputResult::Submit(text) => {
                     match input.mode {
-                        InputMode::Insert => self
-                            .ui
-                            .show_dialog(Components::append_confirm(), DialogIntent::Append(text)),
-                        InputMode::Edit => self
-                            .ui
-                            .show_dialog(Components::rename_confirm(), DialogIntent::Rename(text)),
+                        InputMode::Insert => self.state.append_todo(text),
+                        InputMode::Edit => self.state.rename_todo(text),
                     }
 
                     self.ui.close_input();
@@ -108,8 +94,10 @@ impl Application {
             }
             KeyCode::Char('d') => {
                 if !self.state.todos.is_empty() {
-                    self.ui
-                        .show_dialog(Components::remove_confirm(), DialogIntent::Remove)
+                    self.ui.show_dialog(
+                        Components::remove_confirm(self.state.get_current_todo().title),
+                        DialogIntent::Remove,
+                    )
                 }
             }
             KeyCode::Enter => self.state.toggle_current(),

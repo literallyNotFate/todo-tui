@@ -1,10 +1,8 @@
 use super::{dialogs::dialog::Dialog, widgets::input::input::Input};
 
-// Dialog actions (remove todo, append, rename, remove, save, load, none - for popup)
+// Dialog actions (remove todo, save, load, none - for popup)
 pub enum DialogIntent {
     None,
-    Append(String),
-    Rename(String),
     Remove,
 }
 

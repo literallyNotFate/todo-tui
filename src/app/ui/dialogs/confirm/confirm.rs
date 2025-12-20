@@ -13,7 +13,6 @@ use super::utils::get_confirm_buttons;
 pub struct ConfirmStyles {
     pub border_color: Color,
     pub padding: Padding,
-    pub max_width: Option<u16>,
 }
 
 // Main confirm window
@@ -40,7 +39,6 @@ impl Dialog for Confirm {
                     left: 2,
                     right: 2,
                 },
-                max_width: None,
             },
         }
     }
@@ -71,6 +69,7 @@ impl Dialog for Confirm {
         let confirm_block: Block = Block::bordered()
             .fg(Color::Rgb(252, 252, 252))
             .border_style(Style::default().fg(self.styles.border_color))
+            .title_top(Line::from(" Confirm operation ").centered())
             .padding(self.styles.padding)
             .border_type(BorderType::Rounded);
 
@@ -138,11 +137,6 @@ impl Confirm {
 
     pub fn with_padding(mut self, padding: Padding) -> Self {
         self.styles.padding = padding;
-        self
-    }
-
-    pub fn with_max_width(mut self, width: u16) -> Self {
-        self.styles.max_width = Some(width);
         self
     }
 }

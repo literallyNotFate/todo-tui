@@ -28,24 +28,10 @@ impl Components {
             .close_on(KeyCode::Char('?'))
     }
 
-    // Append todo confirm dialog
-    pub fn append_confirm() -> Confirm {
-        Confirm::new()
-            .with_message("Append this todo?")
-            .with_border_color(Color::Rgb(249, 214, 109))
-    }
-
-    // Rename todo confirm dialog
-    pub fn rename_confirm() -> Confirm {
-        Confirm::new()
-            .with_message("Rename this todo?")
-            .with_border_color(Color::Rgb(109, 172, 249))
-    }
-
     // Remove todo confirm dialog
-    pub fn remove_confirm() -> Confirm {
+    pub fn remove_confirm(data: String) -> Confirm {
         Confirm::new()
-            .with_message("Remove this todo?")
+            .with_message(format!("Are you sure to remove selected task ({})?", data))
             .with_border_color(Color::Rgb(249, 109, 109))
     }
 }
