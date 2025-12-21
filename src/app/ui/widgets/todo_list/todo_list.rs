@@ -11,11 +11,12 @@ pub struct TodoList {}
 impl TodoList {
     // Rendering
     pub fn render(frame: &mut Frame, todos: &[Todo], select_state: &mut ListState) {
+        use super::utils::{generate_stateful_list, lines_based_on_list};
         use ratatui::{
             layout::{Constraint, Layout},
-            style::{Color, Style, Stylize},
+            style::{Color, Stylize},
             text::Line,
-            widgets::{Block, BorderType, List, ListItem, Padding},
+            widgets::{Block, BorderType, List, Padding},
         };
 
         let [main_layout] = Layout::vertical([Constraint::Fill(1)])
@@ -31,24 +32,15 @@ impl TodoList {
             .fg(Color::Rgb(230, 185, 157))
             .render(main_layout, frame.buffer_mut());
 
-        let list_block = Block::bordered()
+        let titles: (Line, Line) = lines_based_on_list();
+
+        let list_block: Block = Block::bordered()
             .border_type(BorderType::Rounded)
-            .title(" List of what's to complete ")
-            .title_bottom(
-                Line::from(" Help <?> ")
-                    .fg(Color::Rgb(252, 252, 252))
-                    .centered(),
-            )
+            .title(titles.0)
+            .title_bottom(titles.1)
             .padding(Padding::uniform(1));
 
-        let list_widget = List::new(todos.iter().map(|item| {
-            let prefix = if item.done { " [✓] " } else { " [ ] " };
-            ListItem::new(format!("{}{}", prefix, item.title))
-        }))
-        .block(list_block)
-        .highlight_symbol(">")
-        .highlight_style(Style::default().fg(Color::Rgb(229, 218, 156)));
-
+        let list_widget: List = generate_stateful_list(todos, list_block, ">");
         frame.render_stateful_widget(list_widget, inner_layout, select_state);
     }
 }

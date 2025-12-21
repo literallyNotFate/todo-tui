@@ -14,6 +14,7 @@ impl Components {
             " a -> append a todo",
             " r -> rename a todo",
             " d -> delete a todo",
+            " x -> clear all todos",
             " Enter -> mark as completed",
             " k/Up -> go up",
             " j/Down -> go down",
@@ -29,9 +30,19 @@ impl Components {
     }
 
     // Remove todo confirm dialog
-    pub fn remove_confirm(data: String) -> Confirm {
+    pub fn remove_todo_confirm(data: String) -> Confirm {
         Confirm::new()
             .with_message(format!("Are you sure to remove selected task ({})?", data))
             .with_border_color(Color::Rgb(249, 109, 109))
+    }
+
+    // Clear all todos in the list
+    pub fn clear_todos_confirm(data: usize) -> Confirm {
+        Confirm::new()
+            .with_message(format!(
+                "Are you sure to clear all tasks (todos count: {})?",
+                data
+            ))
+            .with_border_color(Color::Rgb(249, 196, 109))
     }
 }

@@ -1,9 +1,10 @@
 use super::{dialogs::dialog::Dialog, widgets::input::input::Input};
 
-// Dialog actions (remove todo, save, load, none - for popup)
+// Dialog actions (remove todo, clear, save, load, none - for popup)
 pub enum DialogIntent {
     None,
     Remove,
+    Clear,
 }
 
 #[derive(Default)]

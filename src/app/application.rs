@@ -50,9 +50,8 @@ impl Application {
 
                     DialogResult::Confirmed => {
                         match &active.intent {
-                            DialogIntent::Remove => {
-                                self.state.remove_todo();
-                            }
+                            DialogIntent::Remove => self.state.remove_todo(),
+                            DialogIntent::Clear => self.state.clear_todos(),
                             DialogIntent::None => (),
                         }
 
@@ -95,11 +94,15 @@ impl Application {
             KeyCode::Char('d') => {
                 if !self.state.todos.is_empty() {
                     self.ui.show_dialog(
-                        Components::remove_confirm(self.state.get_current_todo().title),
+                        Components::remove_todo_confirm(self.state.get_current_todo().title),
                         DialogIntent::Remove,
                     )
                 }
             }
+            KeyCode::Char('x') => self.ui.show_dialog(
+                Components::clear_todos_confirm(self.state.todos.len()),
+                DialogIntent::Clear,
+            ),
             KeyCode::Enter => self.state.toggle_current(),
             KeyCode::Char('?') => self
                 .ui

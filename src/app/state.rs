@@ -42,4 +42,8 @@ impl ApplicationState {
             self.todos[index].toggle_done();
         }
     }
+
+    pub fn clear_todos(&mut self) {
+        self.todos = Vec::new();
+    }
 }
