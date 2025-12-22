@@ -1,4 +1,19 @@
-use super::{dialogs::dialog::Dialog, widgets::input::input::Input};
+use super::{
+    dialogs::dialog::Dialog,
+    widgets::{input::input::Input, notification::notification::Notification},
+};
+
+// Defines where widget is going to be rendered
+#[derive(Default, Debug, Clone)]
+pub enum WidgetPosition {
+    #[default]
+    Center,
+
+    TopRight,
+    TopLeft,
+    BottomRight,
+    BottomLeft,
+}
 
 // Dialog actions (remove todo, clear, save, load, none - for popup)
 pub enum DialogIntent {
@@ -11,6 +26,7 @@ pub enum DialogIntent {
 pub struct UIState {
     pub dialog: Option<ActiveDialog>,
     pub input: Option<Input>,
+    pub notification: Option<Notification>,
 }
 
 pub struct ActiveDialog {
@@ -38,5 +54,10 @@ impl UIState {
 
     pub fn close_input(&mut self) {
         self.input = None;
+    }
+
+    // Notification
+    pub fn show_notification(&mut self, notification: Notification) {
+        self.notification = Some(notification);
     }
 }

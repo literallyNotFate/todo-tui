@@ -1,14 +1,12 @@
+use super::{
+    state::ApplicationState,
+    ui::{renderer::Renderer, state::UIState},
+};
+use crate::app::ui::state::DialogIntent;
 use color_eyre::eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyModifiers},
-};
-
-use crate::app::ui::state::DialogIntent;
-
-use super::{
-    state::ApplicationState,
-    ui::{renderer::Renderer, state::UIState},
 };
 
 pub struct Application {
@@ -32,14 +30,26 @@ impl Application {
         use super::ui::{
             components::components::Components,
             dialogs::dialog::DialogResult,
-            widgets::input::input::{Input, InputMode, InputResult},
+            widgets::{
+                input::input::{Input, InputMode, InputResult},
+                notification::notification::Notification,
+            },
         };
 
+        // Ctrl + C exit
         if key == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
             self.running = false;
             return;
         }
 
+        // Handling notification
+        if let Some(notification) = &self.ui.notification
+            && notification.created_at.elapsed() > notification.duration
+        {
+            self.ui.notification = None;
+        }
+
+        // Handling dialog (confirm/popup)
         if let Some(active) = self.ui.dialog.as_mut() {
             if let Some(result) = active.modal.handle_key(key) {
                 match result {
@@ -64,6 +74,7 @@ impl Application {
             }
         }
 
+        // Handling input box widget
         if let Some(input) = self.ui.input.as_mut() {
             match input.handle_key(key) {
                 InputResult::Continue => (),
@@ -80,6 +91,7 @@ impl Application {
             return;
         }
 
+        // Other keys
         match key {
             KeyCode::Char('q') | KeyCode::Esc => self.running = false,
             KeyCode::Char('k') | KeyCode::Up => self.state.select_state.select_previous(),
@@ -99,10 +111,15 @@ impl Application {
                     )
                 }
             }
-            KeyCode::Char('x') => self.ui.show_dialog(
-                Components::clear_todos_confirm(self.state.todos.len()),
-                DialogIntent::Clear,
-            ),
+            KeyCode::Char('x') => {
+                if !self.state.todos.is_empty() {
+                    self.ui.show_dialog(
+                        Components::clear_todos_confirm(self.state.todos.len()),
+                        DialogIntent::Clear,
+                    )
+                }
+            }
+            KeyCode::Char('n') => self.ui.show_notification(Notification::success("Testing")),
             KeyCode::Enter => self.state.toggle_current(),
             KeyCode::Char('?') => self
                 .ui
@@ -111,12 +128,36 @@ impl Application {
         }
     }
 
+    pub fn tick(&mut self) {
+        if let Some(n) = &self.ui.notification
+            && n.created_at.elapsed() >= n.duration
+        {
+            self.ui.notification = None;
+        }
+    }
+
     pub fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        use std::time::{Duration, Instant};
+
+        let tick_rate = Duration::from_millis(100);
+        let mut last_tick = Instant::now();
+
         while self.running {
             terminal.draw(|frame| self.render(frame))?;
 
-            if let Event::Key(key) = event::read()? {
+            let timeout = tick_rate
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or(Duration::ZERO);
+
+            if event::poll(timeout)?
+                && let Event::Key(key) = event::read()?
+            {
                 self.handle_key(key.code, key.modifiers);
+            }
+
+            if last_tick.elapsed() >= tick_rate {
+                self.tick();
+                last_tick = Instant::now();
             }
         }
 

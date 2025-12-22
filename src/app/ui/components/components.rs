@@ -1,6 +1,5 @@
-use ratatui::style::Color;
-
 use crate::app::ui::dialogs::{confirm::confirm::Confirm, dialog::Dialog, popup::popup::Popup};
+use ratatui::style::Color;
 
 pub struct Components;
 

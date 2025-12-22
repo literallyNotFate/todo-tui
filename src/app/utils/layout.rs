@@ -1,4 +1,36 @@
+use crate::app::ui::state::WidgetPosition;
 use ratatui::{layout::Rect, widgets::Padding};
+
+// Calculate area based on widget position
+pub fn position_area(frame: Rect, width: u16, height: u16, position: WidgetPosition) -> Rect {
+    match position {
+        WidgetPosition::Center => center(frame, width, height),
+        WidgetPosition::TopRight => Rect {
+            x: frame.x + frame.width - width - 2,
+            y: frame.y + 1,
+            width,
+            height,
+        },
+        WidgetPosition::TopLeft => Rect {
+            x: frame.x + 2,
+            y: frame.y + 1,
+            width,
+            height,
+        },
+        WidgetPosition::BottomRight => Rect {
+            x: frame.x + frame.width - width - 2,
+            y: frame.y + frame.height - height - 1,
+            width,
+            height,
+        },
+        WidgetPosition::BottomLeft => Rect {
+            x: frame.x + 2,
+            y: frame.y + frame.height - height - 1,
+            width,
+            height,
+        },
+    }
+}
 
 // Center a widget
 pub fn center(area: Rect, width: u16, height: u16) -> Rect {
@@ -13,15 +45,15 @@ pub fn center(area: Rect, width: u16, height: u16) -> Rect {
     final_area
 }
 
-// Calculate modal area for popups/confirm
-pub fn calculate_modal_area(
+// Calculate content size (width/height) for modals and other widgets
+pub fn calculate_content_size(
     frame_area: Rect,
     content: &str,
     title_top_width: usize,
     title_bottom_width: usize,
     padding: Padding,
     max_percent: f32,
-) -> Rect {
+) -> (u16, u16) {
     use super::{
         math::{calculate_max_line_len, percentage_of},
         text::wrap_text,
@@ -44,5 +76,5 @@ pub fn calculate_modal_area(
     width = width.min(frame_area.width as usize);
     height = height.min(frame_area.height as usize);
 
-    center(frame_area, width as u16, height as u16)
+    (width as u16, height as u16)
 }

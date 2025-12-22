@@ -1,11 +1,10 @@
+use crate::app::models::todo::Todo;
 use ratatui::{
     Frame,
     widgets::{ListState, Widget},
 };
 
-use crate::app::models::todo::Todo;
-
-pub struct TodoList {}
+pub struct TodoList;
 
 // Todo list methods implementation
 impl TodoList {

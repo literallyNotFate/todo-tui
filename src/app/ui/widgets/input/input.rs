@@ -1,3 +1,4 @@
+use crate::app::ui::state::WidgetPosition;
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
@@ -37,6 +38,7 @@ pub struct Input {
     pub buffer: String,
     pub cursor: usize,
     pub mode: InputMode,
+    pub position: WidgetPosition,
 
     pub styles: InputStyles,
 }
@@ -50,6 +52,7 @@ impl Input {
             title: None,
             cursor: 0,
             mode: InputMode::Insert,
+            position: WidgetPosition::Center,
             styles: InputStyles {
                 fg_color: Color::Rgb(245, 161, 145),
                 padding: Padding::new(1, 1, 0, 0),
@@ -69,6 +72,7 @@ impl Input {
             title: None,
             cursor: cursor_value,
             mode: InputMode::Edit,
+            position: WidgetPosition::Center,
             styles: InputStyles {
                 fg_color: Color::Rgb(234, 141, 165),
                 padding: Padding::new(1, 1, 0, 0),
@@ -80,8 +84,8 @@ impl Input {
 
     // Calculate area for input
     pub fn area(&self, frame_area: Rect) -> Rect {
-        use crate::app::utils::layout::center;
-        center(frame_area, 50, 3)
+        use crate::app::utils::layout::position_area;
+        position_area(frame_area, 50, 3, self.position.clone())
     }
 
     // Render
@@ -156,6 +160,11 @@ impl Input {
     // Chaining API
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
+        self
+    }
+
+    pub fn position(mut self, position: WidgetPosition) -> Self {
+        self.position = position;
         self
     }
 

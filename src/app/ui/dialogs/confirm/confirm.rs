@@ -1,4 +1,8 @@
-use crate::app::ui::dialogs::dialog::{Dialog, DialogResult};
+use super::utils::get_confirm_buttons;
+use crate::app::ui::{
+    dialogs::dialog::{Dialog, DialogResult},
+    state::WidgetPosition,
+};
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
@@ -6,8 +10,6 @@ use ratatui::{
     style::{Color, Stylize},
     widgets::Padding,
 };
-
-use super::utils::get_confirm_buttons;
 
 // Styles for confirm
 pub struct ConfirmStyles {
@@ -19,6 +21,7 @@ pub struct ConfirmStyles {
 pub struct Confirm {
     pub message: String,
     pub selected: bool,
+    pub position: WidgetPosition,
 
     pub styles: ConfirmStyles,
 }
@@ -30,6 +33,7 @@ impl Dialog for Confirm {
         Self {
             message: "".to_string(),
             selected: false,
+            position: WidgetPosition::Center,
 
             styles: ConfirmStyles {
                 border_color: Color::Rgb(252, 252, 252),
@@ -45,16 +49,18 @@ impl Dialog for Confirm {
 
     // Calculate area for confirm
     fn area(&self, frame_area: Rect) -> Rect {
-        use crate::app::utils::layout::calculate_modal_area;
+        use crate::app::utils::layout::{calculate_content_size, position_area};
 
-        calculate_modal_area(
+        let (width, height): (u16, u16) = calculate_content_size(
             frame_area,
             &self.message,
             0,
             Confirm::get_buttons_length(),
             self.styles.padding,
             60.0,
-        )
+        );
+
+        position_area(frame_area, width, height, self.position.clone())
     }
 
     // Rendering
@@ -127,6 +133,11 @@ impl Confirm {
     // Chaining API
     pub fn with_message(mut self, message: impl Into<String>) -> Self {
         self.message = message.into();
+        self
+    }
+
+    pub fn position(mut self, position: WidgetPosition) -> Self {
+        self.position = position;
         self
     }
 

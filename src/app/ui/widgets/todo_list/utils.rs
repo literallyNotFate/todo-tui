@@ -1,10 +1,9 @@
+use crate::app::models::todo::Todo;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Line,
     widgets::{Block, List},
 };
-
-use crate::app::models::todo::Todo;
 
 // Pre-rendered lines based on todo list
 pub fn lines_based_on_list<'a>() -> (Line<'a>, Line<'a>) {

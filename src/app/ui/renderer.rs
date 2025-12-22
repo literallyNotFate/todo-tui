@@ -1,6 +1,10 @@
 use super::state::UIState;
 use crate::app::models::todo::Todo;
-use ratatui::{Frame, layout::Rect, widgets::ListState};
+use ratatui::{
+    Frame,
+    layout::Rect,
+    widgets::{Clear, ListState},
+};
 
 pub struct Renderer;
 
@@ -16,14 +20,22 @@ impl Renderer {
 
         TodoList::render(frame, todos, select_state);
 
+        if let Some(notification) = &ui.notification {
+            let notification_area: Rect = notification.area(frame.area());
+            frame.render_widget(Clear, notification_area);
+            notification.render(frame, notification_area);
+        }
+
         if let Some(dialog) = &ui.dialog {
             let dialog_area: Rect = dialog.modal.area(frame.area());
+            frame.render_widget(Clear, dialog_area);
             self.render_overlay_except(frame, dialog_area);
             dialog.modal.render(frame, dialog_area);
         }
 
         if let Some(input) = &ui.input {
             let input_area: Rect = input.area(frame.area());
+            frame.render_widget(Clear, input_area);
             self.render_overlay_except(frame, input_area);
             input.clone().render(frame, input_area);
         }

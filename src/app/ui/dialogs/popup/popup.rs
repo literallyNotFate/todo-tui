@@ -1,9 +1,9 @@
+use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
+use crate::app::ui::dialogs::dialog::{Dialog, DialogResult};
+use crate::app::ui::state::WidgetPosition;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::widgets::Padding;
 use ratatui::{Frame, layout::Rect, style::Color};
-
-use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
-use crate::app::ui::dialogs::dialog::{Dialog, DialogResult};
 
 // Defines how popup closes (on key, on ESC or does not close)
 #[derive(Debug, Clone)]
@@ -38,6 +38,7 @@ pub struct Popup {
     pub message: String,
     pub title: Option<String>,
     pub close_behavior: PopupCloseBehavior,
+    pub position: WidgetPosition,
 
     pub styles: PopupStyles,
 }
@@ -51,6 +52,7 @@ impl Dialog for Popup {
             message: "".to_string(),
             title: None,
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
+            position: WidgetPosition::Center,
 
             styles: PopupStyles {
                 border_color: color_based_on_popup_kind(PopupKind::Info),
@@ -68,17 +70,19 @@ impl Dialog for Popup {
 
     // Calculate area for popup
     fn area(&self, frame_area: Rect) -> Rect {
-        use crate::app::utils::layout::calculate_modal_area;
+        use crate::app::utils::layout::{calculate_content_size, position_area};
         let titles = lines_based_on_popup(self.clone());
 
-        calculate_modal_area(
+        let (width, height): (u16, u16) = calculate_content_size(
             frame_area,
             &self.message,
             titles.0.iter().len(),
             titles.1.iter().len(),
             self.styles.padding,
             70.0,
-        )
+        );
+
+        position_area(frame_area, width, height, self.position.clone())
     }
 
     // Rendering
@@ -131,6 +135,11 @@ impl Popup {
 
     pub fn with_message(mut self, message: impl Into<String>) -> Self {
         self.message = message.into();
+        self
+    }
+
+    pub fn position(mut self, position: WidgetPosition) -> Self {
+        self.position = position;
         self
     }
 
