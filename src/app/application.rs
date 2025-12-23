@@ -30,10 +30,7 @@ impl Application {
         use super::ui::{
             components::components::Components,
             dialogs::dialog::DialogResult,
-            widgets::{
-                input::input::{Input, InputMode, InputResult},
-                notification::notification::Notification,
-            },
+            widgets::input::input::{Input, InputMode, InputResult},
         };
 
         // Ctrl + C exit
@@ -119,7 +116,6 @@ impl Application {
                     )
                 }
             }
-            KeyCode::Char('n') => self.ui.show_notification(Notification::success("Testing")),
             KeyCode::Enter => self.state.toggle_current(),
             KeyCode::Char('?') => self
                 .ui

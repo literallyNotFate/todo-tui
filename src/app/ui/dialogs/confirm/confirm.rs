@@ -51,16 +51,22 @@ impl Dialog for Confirm {
     fn area(&self, frame_area: Rect) -> Rect {
         use crate::app::utils::layout::{calculate_content_size, position_area};
 
+        let (top_len, bottom_len): (usize, usize) = self.titles_len();
         let (width, height): (u16, u16) = calculate_content_size(
             frame_area,
             &self.message,
-            0,
-            Confirm::get_buttons_length(),
+            top_len,
+            bottom_len,
             self.styles.padding,
             60.0,
         );
 
         position_area(frame_area, width, height, self.position.clone())
+    }
+
+    // Calculate titles length
+    fn titles_len(&self) -> (usize, usize) {
+        (0, get_confirm_buttons(true).width())
     }
 
     // Rendering
@@ -125,11 +131,6 @@ impl Dialog for Confirm {
 
 // Other methods implementation
 impl Confirm {
-    // Confirm buttons length
-    pub fn get_buttons_length() -> usize {
-        get_confirm_buttons(true).iter().len()
-    }
-
     // Chaining API
     pub fn with_message(mut self, message: impl Into<String>) -> Self {
         self.message = message.into();

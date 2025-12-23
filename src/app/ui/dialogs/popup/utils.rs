@@ -1,4 +1,4 @@
-use super::popup::{Popup, PopupCloseBehavior, PopupKind};
+use super::popup::{PopupCloseBehavior, PopupKind};
 use ratatui::{style::Color, text::Line};
 
 // Color based on popup kind (info, error, success, help)
@@ -12,22 +12,27 @@ pub fn color_based_on_popup_kind(kind: PopupKind) -> Color {
 }
 
 // Pre-rendered lines based on popup
-pub fn lines_based_on_popup<'a>(popup: Popup) -> (Line<'a>, Line<'a>) {
+pub fn lines_based_on_popup<'a>(
+    title: Option<String>,
+    kind: PopupKind,
+    close_behavior: PopupCloseBehavior,
+    show_title: bool,
+) -> (Line<'a>, Line<'a>) {
     use ratatui::{
         style::{Modifier, Style},
         text::Span,
     };
 
-    let top_line: Line = if popup.styles.show_title {
-        if let Some(ref user_title) = popup.title {
+    let top_line: Line = if show_title {
+        if let Some(title) = title {
             Line::from(Span::styled(
-                format!(" {} ", user_title),
+                format!(" {} ", title),
                 Style::default()
                     .fg(Color::Rgb(252, 252, 252))
                     .add_modifier(Modifier::BOLD),
             ))
         } else {
-            let defaults: &str = match popup.kind {
+            let defaults: &str = match kind {
                 PopupKind::Help => " Help ",
                 PopupKind::Error => " Error ",
                 PopupKind::Success => " Success ",
@@ -44,7 +49,7 @@ pub fn lines_based_on_popup<'a>(popup: Popup) -> (Line<'a>, Line<'a>) {
         Line::default()
     };
 
-    let key: String = match popup.close_behavior {
+    let key: String = match close_behavior {
         PopupCloseBehavior::AnyKey => "any key".to_string(),
         PopupCloseBehavior::Specific(c) => format!("<{}>", c),
         PopupCloseBehavior::None => "".to_string(),

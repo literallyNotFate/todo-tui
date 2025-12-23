@@ -71,18 +71,32 @@ impl Dialog for Popup {
     // Calculate area for popup
     fn area(&self, frame_area: Rect) -> Rect {
         use crate::app::utils::layout::{calculate_content_size, position_area};
-        let titles = lines_based_on_popup(self.clone());
 
+        let (top_len, bottom_len): (usize, usize) = self.titles_len();
         let (width, height): (u16, u16) = calculate_content_size(
             frame_area,
             &self.message,
-            titles.0.iter().len(),
-            titles.1.iter().len(),
+            top_len,
+            bottom_len,
             self.styles.padding,
             70.0,
         );
 
         position_area(frame_area, width, height, self.position.clone())
+    }
+
+    // Calculate titles length
+    fn titles_len(&self) -> (usize, usize) {
+        use ratatui::text::Line;
+
+        let titles: (Line, Line) = lines_based_on_popup(
+            self.title.clone(),
+            self.kind.clone(),
+            self.close_behavior.clone(),
+            self.styles.show_title,
+        );
+
+        (titles.0.width(), titles.1.width())
     }
 
     // Rendering
@@ -96,7 +110,12 @@ impl Dialog for Popup {
 
         let content_width = area.width.saturating_sub(4) as usize;
         let wrapped = wrap_text(&self.message, content_width);
-        let titles = lines_based_on_popup(self.clone());
+        let titles = lines_based_on_popup(
+            self.title.clone(),
+            self.kind.clone(),
+            self.close_behavior.clone(),
+            self.styles.show_title,
+        );
 
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
