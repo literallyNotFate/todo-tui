@@ -31,12 +31,14 @@ impl TodoList {
             .fg(Color::Rgb(230, 185, 157))
             .render(main_layout, frame.buffer_mut());
 
-        let titles: (Line, Line) = lines_based_on_list();
+        let (top_line, bottom_center, bottom_left): (Line, Line, Line) =
+            lines_based_on_list(todos, select_state.selected());
 
         let list_block: Block = Block::bordered()
             .border_type(BorderType::Rounded)
-            .title(titles.0)
-            .title_bottom(titles.1)
+            .title_top(top_line)
+            .title_bottom(bottom_center)
+            .title_bottom(bottom_left)
             .padding(Padding::uniform(1));
 
         let list_widget: List = generate_stateful_list(todos, list_block, ">");

@@ -27,7 +27,7 @@ impl ApplicationState {
         }
 
         self.todos.push(Todo::new(title));
-        self.select_state.select(Some(self.todos.len()));
+        self.select_state.select(Some(self.todos.len() - 1));
 
         Ok(())
     }
@@ -59,6 +59,14 @@ impl ApplicationState {
             .ok_or(ApplicationStateError::TaskNotSelected)?;
 
         self.todos.remove(index);
+
+        if self.todos.is_empty() {
+            self.select_state.select(None);
+        } else {
+            let new_index = index.min(self.todos.len() - 1);
+            self.select_state.select(Some(new_index));
+        }
+
         Ok(())
     }
 
