@@ -1,6 +1,6 @@
 use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
 use crate::app::ui::dialogs::dialog::{Dialog, DialogResult};
-use crate::app::ui::state::WidgetPosition;
+use crate::app::ui::renderer::state::WidgetPosition;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::widgets::Padding;
 use ratatui::{Frame, layout::Rect, style::Color};

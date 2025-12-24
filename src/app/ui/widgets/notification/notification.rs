@@ -1,4 +1,4 @@
-use crate::app::ui::state::WidgetPosition;
+use crate::app::ui::renderer::state::WidgetPosition;
 use ratatui::{
     Frame,
     layout::{Alignment, Margin, Rect},

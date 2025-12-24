@@ -1,6 +1,9 @@
-use super::{
-    dialogs::dialog::Dialog,
-    widgets::{input::input::Input, notification::notification::Notification},
+use crate::app::{
+    state::error::ApplicationStateError,
+    ui::{
+        dialogs::dialog::Dialog,
+        widgets::{input::input::Input, notification::notification::Notification},
+    },
 };
 
 // Defines where widget is going to be rendered
@@ -35,6 +38,18 @@ pub struct ActiveDialog {
 }
 
 impl UIState {
+    // Notify todo action w/error handling
+    pub fn notify<T>(&mut self, result: Result<T, ApplicationStateError>, success_message: &str) {
+        match result {
+            Ok(_) => {
+                self.show_notification(Notification::success(success_message));
+            }
+            Err(err) => {
+                self.show_notification(Notification::error(err.to_string()));
+            }
+        }
+    }
+
     // Dialog
     pub fn show_dialog<D: Dialog + 'static>(&mut self, dialog: D, intent: DialogIntent) {
         self.dialog = Some(ActiveDialog {

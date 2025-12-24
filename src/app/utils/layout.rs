@@ -1,4 +1,4 @@
-use crate::app::ui::state::WidgetPosition;
+use crate::app::ui::renderer::state::WidgetPosition;
 use ratatui::{layout::Rect, widgets::Padding};
 
 // Calculate area based on widget position

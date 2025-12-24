@@ -1,5 +1,6 @@
-use crate::app::ui::state::WidgetPosition;
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
+
+use crate::app::ui::renderer::state::WidgetPosition;
 
 // Defines the status of input (inserting the text, editing existing text)
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,9 +124,7 @@ impl Input {
     pub fn handle_key(&mut self, key: KeyCode) -> InputResult {
         match key {
             KeyCode::Enter => {
-                if !self.buffer.is_empty() {
-                    return InputResult::Submit(self.buffer.clone());
-                }
+                return InputResult::Submit(self.buffer.clone());
             }
             KeyCode::Esc => {
                 return InputResult::Cancel;

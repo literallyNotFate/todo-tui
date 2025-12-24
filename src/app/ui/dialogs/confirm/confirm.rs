@@ -1,7 +1,7 @@
 use super::utils::get_confirm_buttons;
 use crate::app::ui::{
     dialogs::dialog::{Dialog, DialogResult},
-    state::WidgetPosition,
+    renderer::state::WidgetPosition,
 };
 use ratatui::{
     Frame,

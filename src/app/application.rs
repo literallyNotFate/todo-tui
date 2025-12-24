@@ -1,8 +1,10 @@
 use super::{
-    state::ApplicationState,
-    ui::{renderer::Renderer, state::UIState},
+    state::state::ApplicationState,
+    ui::renderer::{
+        renderer::Renderer,
+        state::{DialogIntent, UIState},
+    },
 };
-use crate::app::ui::state::DialogIntent;
 use color_eyre::eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -57,8 +59,12 @@ impl Application {
 
                     DialogResult::Confirmed => {
                         match &active.intent {
-                            DialogIntent::Remove => self.state.remove_todo(),
-                            DialogIntent::Clear => self.state.clear_todos(),
+                            DialogIntent::Remove => self
+                                .ui
+                                .notify(self.state.remove_todo(), "Task was removed!"),
+                            DialogIntent::Clear => self
+                                .ui
+                                .notify(self.state.clear_todos(), "Tasks were cleared!"),
                             DialogIntent::None => (),
                         }
 
@@ -78,8 +84,19 @@ impl Application {
                 InputResult::Cancel => self.ui.close_input(),
                 InputResult::Submit(text) => {
                     match input.mode {
-                        InputMode::Insert => self.state.append_todo(text),
-                        InputMode::Edit => self.state.rename_todo(text),
+                        InputMode::Insert => self.ui.notify(
+                            self.state.append_todo(text.clone()),
+                            format!("Task {} was added to the list!", text).as_str(),
+                        ),
+                        InputMode::Edit => self.ui.notify(
+                            self.state.rename_todo(text.clone()),
+                            format!(
+                                "Task with index {} was renamed to {}!",
+                                self.state.select_state.selected().unwrap_or(0),
+                                text
+                            )
+                            .as_str(),
+                        ),
                     }
 
                     self.ui.close_input();
@@ -95,27 +112,28 @@ impl Application {
             KeyCode::Char('j') | KeyCode::Down => self.state.select_state.select_next(),
             KeyCode::Char('a') => self.ui.show_input(Input::insert()),
             KeyCode::Char('r') => {
-                if !self.state.todos.is_empty() {
-                    self.ui
-                        .show_input(Input::edit(self.state.get_current_todo().title))
-                }
+                let title: String = self
+                    .state
+                    .current_todo()
+                    .map(|t| t.title.clone())
+                    .unwrap_or_default();
+
+                self.ui.show_input(Input::edit(title))
             }
             KeyCode::Char('d') => {
-                if !self.state.todos.is_empty() {
-                    self.ui.show_dialog(
-                        Components::remove_todo_confirm(self.state.get_current_todo().title),
-                        DialogIntent::Remove,
-                    )
-                }
+                let title: String = self
+                    .state
+                    .current_todo()
+                    .map(|t| t.title.clone())
+                    .unwrap_or_default();
+
+                self.ui
+                    .show_dialog(Components::remove_todo_confirm(title), DialogIntent::Remove)
             }
-            KeyCode::Char('x') => {
-                if !self.state.todos.is_empty() {
-                    self.ui.show_dialog(
-                        Components::clear_todos_confirm(self.state.todos.len()),
-                        DialogIntent::Clear,
-                    )
-                }
-            }
+            KeyCode::Char('x') => self.ui.show_dialog(
+                Components::clear_todos_confirm(self.state.todos.len()),
+                DialogIntent::Clear,
+            ),
             KeyCode::Enter => self.state.toggle_current(),
             KeyCode::Char('?') => self
                 .ui
