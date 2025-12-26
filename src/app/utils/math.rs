@@ -1,6 +1,7 @@
 // Calculate percentage of a value
-pub fn percentage_of(value: u16, percent: f32) -> usize {
-    (value as f32 * (percent / 100.0)).floor() as usize
+pub fn percentage_of(value: u16, percent: f32) -> u16 {
+    let ratio = (percent / 100.0).clamp(0.0, 1.0);
+    ((value as f32) * ratio).floor() as u16
 }
 
 // Calculate max line of a slice of strings

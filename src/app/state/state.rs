@@ -1,5 +1,3 @@
-use std::fmt::write;
-
 use super::error::ApplicationStateError;
 use crate::app::models::todo::Todo;
 use ratatui::widgets::ListState;

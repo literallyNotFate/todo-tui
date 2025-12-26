@@ -59,11 +59,11 @@ pub fn calculate_content_size(
         text::wrap_text,
     };
 
-    let max_allowed_width: usize = percentage_of(frame_area.width, max_percent);
+    let max_allowed_width: u16 = percentage_of(frame_area.width, max_percent);
     let raw_lines: Vec<&str> = content.lines().collect::<Vec<_>>();
 
     let content_max_line: usize = calculate_max_line_len(&raw_lines);
-    let base_width: usize = content_max_line.min(max_allowed_width);
+    let base_width: usize = content_max_line.min(max_allowed_width.into());
 
     let content_height: usize = wrap_text(content, base_width).len();
     let mut height = content_height + padding.top as usize + padding.bottom as usize + 2;

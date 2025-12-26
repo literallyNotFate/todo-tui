@@ -1,23 +1,43 @@
 // Wrap content in widgets
 pub fn wrap_text(input: &str, max_width: usize) -> Vec<String> {
-    let mut lines: Vec<String> = Vec::new();
+    if input.trim().is_empty() {
+        return vec!["".to_string()];
+    }
 
-    for line in input.lines() {
-        let mut current_line: String = String::new();
-        for word in line.split_whitespace() {
-            if current_line.len() + word.len() + 1 > max_width {
-                lines.push(current_line.trim_end().to_string());
-                current_line = String::new();
-            }
+    let mut result: Vec<String> = Vec::new();
 
-            current_line.push_str(word);
-            current_line.push(' ');
+    for logical_line in input.lines() {
+        let trimmed: &str = logical_line.trim_end();
+        if trimmed.chars().count() <= max_width {
+            result.push(trimmed.to_string());
+            continue;
         }
 
-        if !current_line.is_empty() {
-            lines.push(current_line.trim_end().to_string());
+        let mut current: String = String::new();
+        for word in logical_line.split_whitespace() {
+            let word_len: usize = word.chars().count();
+            let added_space: usize = if current.is_empty() { 0 } else { 1 };
+
+            if current.chars().count() + added_space + word_len > max_width && !current.is_empty() {
+                result.push(current.trim_end().to_string());
+                current.clear();
+            }
+
+            if !current.is_empty() {
+                current.push(' ');
+            }
+
+            current.push_str(word);
+        }
+
+        if !current.is_empty() {
+            result.push(current.trim_end().to_string());
         }
     }
 
-    lines
+    if result.is_empty() {
+        vec!["".to_string()]
+    } else {
+        result
+    }
 }
