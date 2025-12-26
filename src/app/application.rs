@@ -91,8 +91,13 @@ impl Application {
                         InputMode::Edit => self.ui.notify(
                             self.state.rename_todo(text.clone()),
                             format!(
-                                "Task with index {} was renamed to {}!",
-                                self.state.select_state.selected().unwrap_or(0),
+                                "Task ({} / {}) was renamed to {}!",
+                                self.state
+                                    .select_state
+                                    .selected()
+                                    .map(|i| i + 1)
+                                    .unwrap_or(0),
+                                self.state.todos.len(),
                                 text
                             )
                             .as_str(),

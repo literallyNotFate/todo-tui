@@ -30,8 +30,14 @@ impl Components {
 
     // Remove todo confirm dialog
     pub fn remove_todo_confirm(data: String) -> Confirm {
+        let message: String = if !data.is_empty() {
+            format!("Are you sure to remove selected task ({})?", data)
+        } else {
+            "Are you sure to remove selected task?".to_string()
+        };
+
         Confirm::new()
-            .with_message(format!("Are you sure to remove selected task ({})?", data))
+            .with_message(message)
             .with_border_color(Color::Rgb(249, 109, 109))
     }
 

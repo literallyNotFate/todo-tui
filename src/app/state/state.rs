@@ -1,3 +1,5 @@
+use std::fmt::write;
+
 use super::error::ApplicationStateError;
 use crate::app::models::todo::Todo;
 use ratatui::widgets::ListState;
@@ -26,6 +28,10 @@ impl ApplicationState {
             return Err(ApplicationStateError::EmptyTitle);
         }
 
+        if self.todo_by_title(&title).is_some() {
+            return Err(ApplicationStateError::TaskAlreadyExists(title));
+        }
+
         self.todos.push(Todo::new(title));
         self.select_state.select(Some(self.todos.len() - 1));
 
@@ -33,9 +39,9 @@ impl ApplicationState {
     }
 
     pub fn rename_todo(&mut self, new_title: impl Into<String>) -> ApplicationResult<()> {
-        let title: String = new_title.into();
+        let new_title: String = new_title.into();
 
-        if title.is_empty() {
+        if new_title.is_empty() {
             return Err(ApplicationStateError::EmptyTitle);
         }
 
@@ -44,7 +50,13 @@ impl ApplicationState {
             .selected()
             .ok_or(ApplicationStateError::TaskNotSelected)?;
 
-        self.todos[index].rename(title);
+        let current_title: &String = &self.todos[index].title;
+
+        if new_title != *current_title && self.todo_by_title(&new_title).is_some() {
+            return Err(ApplicationStateError::TaskAlreadyExists(new_title));
+        }
+
+        self.todos[index].rename(new_title);
         Ok(())
     }
 
@@ -88,5 +100,10 @@ impl ApplicationState {
     // Other actions
     pub fn current_todo(&self) -> Option<&Todo> {
         self.select_state.selected().and_then(|i| self.todos.get(i))
+    }
+
+    pub fn todo_by_title(&self, target: impl Into<String>) -> Option<&Todo> {
+        let title: String = target.into();
+        self.todos.iter().find(|todo| todo.title == title)
     }
 }
