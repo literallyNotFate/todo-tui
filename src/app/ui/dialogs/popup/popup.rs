@@ -6,7 +6,7 @@ use ratatui::widgets::Padding;
 use ratatui::{Frame, layout::Rect, style::Color};
 
 // Defines how popup closes (on key, on ESC or does not close)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PopupCloseBehavior {
     AnyKey,
     Specific(KeyCode),
@@ -179,6 +179,11 @@ impl Popup {
 
     pub fn close_on(mut self, key: KeyCode) -> Self {
         self.close_behavior = PopupCloseBehavior::Specific(key);
+        self
+    }
+
+    pub fn not_closable(mut self) -> Self {
+        self.close_behavior = PopupCloseBehavior::None;
         self
     }
 

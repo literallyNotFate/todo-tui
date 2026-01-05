@@ -52,22 +52,26 @@ pub fn lines_based_on_popup<'a>(
     let key: String = match close_behavior {
         PopupCloseBehavior::AnyKey => "any key".to_string(),
         PopupCloseBehavior::Specific(c) => format!("<{}>", c),
-        PopupCloseBehavior::None => "".to_string(),
+        _ => "".to_string(),
     };
 
-    let bottom_line: Line = Line::from(vec![
-        Span::styled(" Press ", Style::default().fg(Color::Rgb(252, 252, 252))),
-        Span::styled(
-            key,
-            Style::default()
-                .fg(Color::Rgb(165, 252, 115))
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            " to close this popup. ",
-            Style::default().fg(Color::Rgb(252, 252, 252)),
-        ),
-    ]);
+    let bottom_line: Line = if close_behavior != PopupCloseBehavior::None {
+        Line::from(vec![
+            Span::styled(" Press ", Style::default().fg(Color::Rgb(252, 252, 252))),
+            Span::styled(
+                key,
+                Style::default()
+                    .fg(Color::Rgb(165, 252, 115))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " to close this popup. ",
+                Style::default().fg(Color::Rgb(252, 252, 252)),
+            ),
+        ])
+    } else {
+        Line::default()
+    };
 
     (top_line, bottom_line)
 }

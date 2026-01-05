@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_content_size_empty_content() {
+    fn should_calculate_content_size_empty_content() {
         let frame: Rect = rect(0, 0, 100, 50);
         let (width, height): (u16, u16) =
             calculate_content_size(frame, "", 20, 30, Padding::uniform(1), 80.0);

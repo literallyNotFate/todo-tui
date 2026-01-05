@@ -1,4 +1,4 @@
-use super::utils::get_confirm_buttons;
+use super::utils::render_confirm_buttons;
 use crate::app::ui::{
     dialogs::dialog::{Dialog, DialogResult},
     renderer::state::WidgetPosition,
@@ -17,10 +17,17 @@ pub struct ConfirmStyles {
     pub padding: Padding,
 }
 
+// Selection options
+#[derive(Clone, PartialEq)]
+pub enum ConfirmOption {
+    Yes,
+    Cancel,
+}
+
 // Main confirm window
 pub struct Confirm {
     pub message: String,
-    pub selected: bool,
+    pub select: ConfirmOption,
     pub position: WidgetPosition,
 
     pub styles: ConfirmStyles,
@@ -32,7 +39,7 @@ impl Dialog for Confirm {
     fn new() -> Self {
         Self {
             message: "".to_string(),
-            selected: false,
+            select: ConfirmOption::Cancel,
             position: WidgetPosition::Center,
 
             styles: ConfirmStyles {
@@ -66,7 +73,7 @@ impl Dialog for Confirm {
 
     // Calculate titles length
     fn titles_len(&self) -> (usize, usize) {
-        (0, get_confirm_buttons(true).width())
+        (0, render_confirm_buttons(ConfirmOption::Yes).width())
     }
 
     // Rendering
@@ -105,7 +112,7 @@ impl Dialog for Confirm {
             height: 2,
         };
 
-        let buttons: Line = get_confirm_buttons(self.selected);
+        let buttons: Line = render_confirm_buttons(self.select.clone());
 
         let buttons_widget: Paragraph = Paragraph::new(buttons).alignment(Alignment::Center);
         frame.render_widget(buttons_widget, buttons_area);
@@ -114,16 +121,27 @@ impl Dialog for Confirm {
     // Key event handling
     fn handle_key(&mut self, key: KeyCode) -> Option<DialogResult> {
         match key {
-            KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l') => {
-                self.selected = !self.selected;
+            KeyCode::Left | KeyCode::Char('h') => {
+                self.select = ConfirmOption::Yes;
                 None
             }
-            KeyCode::Enter => Some(if self.selected {
-                DialogResult::Confirmed
-            } else {
-                DialogResult::Cancelled
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.select = ConfirmOption::Cancel;
+                None
+            }
+            KeyCode::Enter => Some(match self.select {
+                ConfirmOption::Yes => DialogResult::Confirmed,
+                ConfirmOption::Cancel => DialogResult::Cancelled,
             }),
             KeyCode::Esc => Some(DialogResult::Cancelled),
+            KeyCode::Char('y') => {
+                self.select = ConfirmOption::Yes;
+                Some(DialogResult::Confirmed)
+            }
+            KeyCode::Char('n') => {
+                self.select = ConfirmOption::Cancel;
+                Some(DialogResult::Cancelled)
+            }
             _ => None,
         }
     }

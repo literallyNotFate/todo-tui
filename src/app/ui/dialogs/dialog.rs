@@ -1,6 +1,7 @@
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect};
 
 // Dialog result (confirmed or cancelled for confirm)
+#[derive(Debug, PartialEq)]
 pub enum DialogResult {
     Confirmed,
     Cancelled,
