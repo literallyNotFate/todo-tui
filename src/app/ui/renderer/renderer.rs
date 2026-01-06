@@ -1,5 +1,5 @@
 use super::state::UIState;
-use crate::app::models::todo::Todo;
+use crate::app::{models::todo::Todo, utils::colors::theme::*};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -43,17 +43,14 @@ impl Renderer {
 
     fn render_overlay_except(&self, frame: &mut Frame, widget_area: Rect) {
         use ratatui::{
-            style::{Color, Modifier, Style},
+            style::{Modifier, Style},
             widgets::Block,
         };
 
         let full: Rect = frame.area();
 
-        let blackout: Block = Block::default().style(
-            Style::default()
-                .bg(Color::Rgb(0, 0, 0))
-                .add_modifier(Modifier::DIM),
-        );
+        let blackout: Block =
+            Block::default().style(Style::default().bg(BG_DIM).add_modifier(Modifier::DIM));
 
         if widget_area.y > 0 {
             let top = Rect::new(full.x, full.y, full.width, widget_area.y);

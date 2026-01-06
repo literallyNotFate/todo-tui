@@ -1,4 +1,4 @@
-use crate::app::models::todo::Todo;
+use crate::app::{models::todo::Todo, utils::colors::theme::*};
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Line,
@@ -15,16 +15,16 @@ pub fn lines_based_on_list<'a>(
     let top_line: Line = Line::from(Span::styled(
         " List of what's to complete ",
         Style::default()
-            .fg(Color::Rgb(252, 252, 252))
+            .fg(TEXT_PRIMARY)
             .add_modifier(Modifier::BOLD),
     ));
 
     let bottom_center_line: Line = Line::from(vec![
-        Span::styled(" Help", Style::default().fg(Color::Rgb(252, 252, 252))),
+        Span::styled(" Help", Style::default().fg(TEXT_PRIMARY)),
         Span::styled(
             " <?> ",
             Style::default()
-                .fg(Color::Rgb(165, 252, 115))
+                .fg(COLOR_GREEN)
                 .add_modifier(Modifier::BOLD),
         ),
     ])
@@ -37,10 +37,7 @@ pub fn lines_based_on_list<'a>(
         .unwrap_or(0);
 
     let bottom_left_line: Line = if todos_length == 0 {
-        Line::from(Span::styled(
-            " 0 / 0 ",
-            Style::default().fg(Color::Rgb(252, 252, 252)),
-        ))
+        Line::from(Span::styled(" 0 / 0 ", Style::default().fg(TEXT_PRIMARY)))
     } else {
         let current_num = if todos_length == 0 {
             0
@@ -53,26 +50,20 @@ pub fn lines_based_on_list<'a>(
         } else {
             todos
                 .get(effective_index)
-                .map(|todo| {
-                    if todo.done {
-                        "Completed "
-                    } else {
-                        "Incomplete "
-                    }
-                })
+                .map(|todo| if todo.done { "Done " } else { "Undone " })
                 .unwrap_or("")
         };
 
-        let status_color: Color = if status_text == "Completed " {
-            Color::Rgb(165, 252, 115)
+        let status_color: Color = if status_text == "Done " {
+            COLOR_GREEN
         } else {
-            Color::Rgb(255, 180, 180)
+            COLOR_RED
         };
 
         Line::from(vec![
             Span::styled(
                 format!(" {} / {} ", current_num, todos_length),
-                Style::default().fg(Color::Rgb(252, 252, 252)),
+                Style::default().fg(TEXT_PRIMARY),
             ),
             Span::raw(" -> "),
             Span::styled(
@@ -104,7 +95,7 @@ pub fn generate_stateful_list<'a>(
     .highlight_symbol(highlight_symbol)
     .highlight_style(
         Style::default()
-            .fg(Color::Rgb(229, 218, 156))
+            .fg(TEXT_SELECTED)
             .add_modifier(Modifier::BOLD),
     )
 }

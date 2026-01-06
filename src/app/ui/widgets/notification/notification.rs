@@ -1,4 +1,4 @@
-use crate::app::ui::renderer::state::WidgetPosition;
+use crate::app::{ui::renderer::state::WidgetPosition, utils::colors::theme::*};
 use ratatui::{
     Frame,
     layout::{Alignment, Margin, Rect},
@@ -58,7 +58,7 @@ impl Notification {
         use ratatui::widgets::Padding;
 
         let top_title_len: usize = " Notification ".chars().count();
-        let bottom_title_len: usize = " Closes in (xxxs) ".chars().count();
+        let bottom_title_len: usize = " Closes in xxx seconds ".chars().count();
 
         let (width, height): (u16, u16) = calculate_content_size(
             frame_area,
@@ -76,7 +76,7 @@ impl Notification {
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         use super::utils::lines_based_on_notifcation;
         use ratatui::{
-            style::{Color, Style},
+            style::Style,
             text::Line,
             widgets::{Block, BorderType, Paragraph, Wrap},
         };
@@ -88,8 +88,8 @@ impl Notification {
             .title(titles.0)
             .title_bottom(titles.1)
             .style(match self.kind {
-                NotificationKind::Success => Style::default().fg(Color::Rgb(144, 185, 159)),
-                NotificationKind::Error => Style::default().fg(Color::Rgb(245, 161, 145)),
+                NotificationKind::Success => Style::default().fg(COLOR_GREEN),
+                NotificationKind::Error => Style::default().fg(COLOR_RED),
             });
 
         let text = Paragraph::new(self.message.clone())

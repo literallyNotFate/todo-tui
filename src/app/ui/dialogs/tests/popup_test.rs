@@ -1,20 +1,23 @@
 // Unit-tests for popup widget
 #[cfg(test)]
 mod tests {
-    use crate::app::ui::{
-        dialogs::{
-            dialog::{Dialog, DialogResult},
-            popup::{
-                popup::{Popup, PopupCloseBehavior, PopupKind},
-                utils::{color_based_on_popup_kind, lines_based_on_popup},
+    use crate::app::{
+        ui::{
+            dialogs::{
+                dialog::{Dialog, DialogResult},
+                popup::{
+                    popup::{Popup, PopupCloseBehavior, PopupKind},
+                    utils::{color_based_on_popup_kind, lines_based_on_popup},
+                },
             },
+            renderer::state::WidgetPosition,
         },
-        renderer::state::WidgetPosition,
+        utils::colors::theme::*,
     };
     use ratatui::{
         crossterm::event::KeyCode,
         layout::Rect,
-        style::{Color, Modifier, Style},
+        style::{Modifier, Style},
         text::{Line, Span},
         widgets::Padding,
     };
@@ -133,16 +136,16 @@ mod tests {
     #[test]
     fn should_return_border_color_based_on_popup_kind() {
         let mut popup: Popup = Popup::new().kind(PopupKind::Error);
-        assert_eq!(popup.styles.border_color, Color::Rgb(245, 161, 145));
+        assert_eq!(popup.styles.border_color, ERROR_POPUP_FG);
 
         popup = popup.kind(PopupKind::Success);
-        assert_eq!(popup.styles.border_color, Color::Rgb(144, 185, 159));
+        assert_eq!(popup.styles.border_color, SUCCESS_POPUP_FG);
 
         popup = popup.kind(PopupKind::Help);
-        assert_eq!(popup.styles.border_color, Color::Rgb(226, 158, 202));
+        assert_eq!(popup.styles.border_color, HELP_POPUP_FG);
 
         popup = popup.kind(PopupKind::Info);
-        assert_eq!(popup.styles.border_color, Color::Rgb(172, 161, 207));
+        assert_eq!(popup.styles.border_color, INFO_POPUP_FG);
     }
 
     #[test]
@@ -157,23 +160,20 @@ mod tests {
         let expected_top_line: Line = Line::from(Span::styled(
             " Test ",
             Style::default()
-                .fg(Color::Rgb(252, 252, 252))
+                .fg(TEXT_PRIMARY)
                 .add_modifier(Modifier::BOLD),
         ));
         assert_eq!(lines.0, expected_top_line);
 
         let expected_bottom_line: Line = Line::from(vec![
-            Span::styled(" Press ", Style::default().fg(Color::Rgb(252, 252, 252))),
+            Span::styled(" Press ", Style::default().fg(TEXT_PRIMARY)),
             Span::styled(
                 "<Return>",
                 Style::default()
-                    .fg(Color::Rgb(165, 252, 115))
+                    .fg(COLOR_GREEN)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(
-                " to close this popup. ",
-                Style::default().fg(Color::Rgb(252, 252, 252)),
-            ),
+            Span::styled(" to close this popup. ", Style::default().fg(TEXT_PRIMARY)),
         ]);
         assert_eq!(lines.1, expected_bottom_line);
     }
@@ -185,17 +185,14 @@ mod tests {
         assert_eq!(lines.0, Line::default());
 
         let expected_bottom_line: Line = Line::from(vec![
-            Span::styled(" Press ", Style::default().fg(Color::Rgb(252, 252, 252))),
+            Span::styled(" Press ", Style::default().fg(TEXT_PRIMARY)),
             Span::styled(
                 "any key",
                 Style::default()
-                    .fg(Color::Rgb(165, 252, 115))
+                    .fg(COLOR_GREEN)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(
-                " to close this popup. ",
-                Style::default().fg(Color::Rgb(252, 252, 252)),
-            ),
+            Span::styled(" to close this popup. ", Style::default().fg(TEXT_PRIMARY)),
         ]);
         assert_eq!(lines.1, expected_bottom_line);
     }
@@ -208,7 +205,7 @@ mod tests {
         let expected_top_line: Line = Line::from(Span::styled(
             " Error ",
             Style::default()
-                .fg(Color::Rgb(252, 252, 252))
+                .fg(TEXT_PRIMARY)
                 .add_modifier(Modifier::BOLD),
         ));
 

@@ -1,9 +1,12 @@
 use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
-use crate::app::ui::dialogs::dialog::{Dialog, DialogResult};
-use crate::app::ui::renderer::state::WidgetPosition;
-use ratatui::crossterm::event::KeyCode;
-use ratatui::widgets::Padding;
-use ratatui::{Frame, layout::Rect, style::Color};
+use crate::app::{
+    ui::{
+        dialogs::dialog::{Dialog, DialogResult},
+        renderer::state::WidgetPosition,
+    },
+    utils::colors::theme::*,
+};
+use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
 
 // Defines how popup closes (on key, on ESC or does not close)
 #[derive(Debug, Clone, PartialEq)]
@@ -123,7 +126,7 @@ impl Dialog for Popup {
             .title(titles.0)
             .title_bottom(titles.1)
             .border_style(Style::default().fg(self.styles.border_color))
-            .fg(Color::Rgb(252, 252, 252))
+            .fg(TEXT_PRIMARY)
             .padding(self.styles.padding);
 
         let paragraph = Paragraph::new(wrapped.join("\n"))

@@ -1,38 +1,34 @@
 use super::confirm::ConfirmOption;
+use crate::app::utils::colors::theme::*;
 use ratatui::{style::Modifier, text::Line};
 
 // Render confirm buttons
 pub fn render_confirm_buttons(selected: ConfirmOption) -> Line<'static> {
-    use ratatui::style::{Color, Style};
+    use ratatui::style::Style;
     use ratatui::text::Span;
-
-    const TEXT_NORMAL: Color = Color::Rgb(252, 252, 252);
-    const TEXT_DIMMED: Color = Color::Rgb(150, 150, 150);
-    const YES_SELECTED: Color = Color::Rgb(155, 201, 166);
-    const CANCEL_SELECTED: Color = Color::Rgb(201, 155, 155);
 
     let (yes_style, cancel_style): (Style, Style) = match selected {
         ConfirmOption::Yes => (
             Style::default()
-                .fg(YES_SELECTED)
+                .fg(CONFIRM_YES_FG_ACTIVE)
                 .add_modifier(Modifier::BOLD),
             Style::default().fg(TEXT_DIMMED),
         ),
         ConfirmOption::Cancel => (
             Style::default().fg(TEXT_DIMMED),
             Style::default()
-                .fg(CANCEL_SELECTED)
+                .fg(CONFIRM_CANCEL_FG_ACTIVE)
                 .add_modifier(Modifier::BOLD),
         ),
     };
 
     Line::from(vec![
-        Span::styled("[ ", Style::default().fg(TEXT_NORMAL)),
+        Span::styled("[ ", Style::default().fg(TEXT_PRIMARY)),
         Span::styled("Yes", yes_style),
-        Span::styled(" ]", Style::default().fg(TEXT_NORMAL)),
+        Span::styled(" ]", Style::default().fg(TEXT_PRIMARY)),
         Span::raw("   "),
-        Span::styled("[ ", Style::default().fg(TEXT_NORMAL)),
+        Span::styled("[ ", Style::default().fg(TEXT_PRIMARY)),
         Span::styled("Cancel", cancel_style),
-        Span::styled(" ]", Style::default().fg(TEXT_NORMAL)),
+        Span::styled(" ]", Style::default().fg(TEXT_PRIMARY)),
     ])
 }

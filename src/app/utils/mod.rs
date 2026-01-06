@@ -1,3 +1,4 @@
+pub mod colors;
 pub mod layout;
 pub mod math;
 pub mod tests;

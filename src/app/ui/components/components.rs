@@ -1,5 +1,7 @@
-use crate::app::ui::dialogs::{confirm::confirm::Confirm, dialog::Dialog, popup::popup::Popup};
-use ratatui::style::Color;
+use crate::app::{
+    ui::dialogs::{confirm::confirm::Confirm, dialog::Dialog, popup::popup::Popup},
+    utils::colors::theme::*,
+};
 
 pub struct Components;
 
@@ -38,7 +40,7 @@ impl Components {
 
         Confirm::new()
             .with_message(message)
-            .with_border_color(Color::Rgb(249, 109, 109))
+            .with_border_color(COLOR_RED)
     }
 
     // Clear all todos in the list
@@ -48,6 +50,6 @@ impl Components {
                 "Are you sure to clear all tasks (todos count: {})?",
                 data
             ))
-            .with_border_color(Color::Rgb(249, 196, 109))
+            .with_border_color(COLOR_ORANGE)
     }
 }

@@ -1,13 +1,14 @@
 use super::popup::{PopupCloseBehavior, PopupKind};
+use crate::app::utils::colors::theme::*;
 use ratatui::{style::Color, text::Line};
 
 // Color based on popup kind (info, error, success, help)
 pub fn color_based_on_popup_kind(kind: PopupKind) -> Color {
     match kind {
-        PopupKind::Error => Color::Rgb(245, 161, 145),
-        PopupKind::Success => Color::Rgb(144, 185, 159),
-        PopupKind::Help => Color::Rgb(226, 158, 202),
-        PopupKind::Info => Color::Rgb(172, 161, 207),
+        PopupKind::Error => ERROR_POPUP_FG,
+        PopupKind::Success => SUCCESS_POPUP_FG,
+        PopupKind::Help => HELP_POPUP_FG,
+        PopupKind::Info => INFO_POPUP_FG,
     }
 }
 
@@ -28,7 +29,7 @@ pub fn lines_based_on_popup<'a>(
             Line::from(Span::styled(
                 format!(" {} ", title),
                 Style::default()
-                    .fg(Color::Rgb(252, 252, 252))
+                    .fg(TEXT_PRIMARY)
                     .add_modifier(Modifier::BOLD),
             ))
         } else {
@@ -41,7 +42,7 @@ pub fn lines_based_on_popup<'a>(
             Line::from(Span::styled(
                 defaults,
                 Style::default()
-                    .fg(Color::Rgb(252, 252, 252))
+                    .fg(TEXT_PRIMARY)
                     .add_modifier(Modifier::BOLD),
             ))
         }
@@ -57,17 +58,14 @@ pub fn lines_based_on_popup<'a>(
 
     let bottom_line: Line = if close_behavior != PopupCloseBehavior::None {
         Line::from(vec![
-            Span::styled(" Press ", Style::default().fg(Color::Rgb(252, 252, 252))),
+            Span::styled(" Press ", Style::default().fg(TEXT_PRIMARY)),
             Span::styled(
                 key,
                 Style::default()
-                    .fg(Color::Rgb(165, 252, 115))
+                    .fg(COLOR_GREEN)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(
-                " to close this popup. ",
-                Style::default().fg(Color::Rgb(252, 252, 252)),
-            ),
+            Span::styled(" to close this popup. ", Style::default().fg(TEXT_PRIMARY)),
         ])
     } else {
         Line::default()

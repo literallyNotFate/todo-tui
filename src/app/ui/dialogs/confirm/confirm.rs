@@ -1,7 +1,10 @@
 use super::utils::render_confirm_buttons;
-use crate::app::ui::{
-    dialogs::dialog::{Dialog, DialogResult},
-    renderer::state::WidgetPosition,
+use crate::app::{
+    ui::{
+        dialogs::dialog::{Dialog, DialogResult},
+        renderer::state::WidgetPosition,
+    },
+    utils::colors::theme::*,
 };
 use ratatui::{
     Frame,
@@ -43,7 +46,7 @@ impl Dialog for Confirm {
             position: WidgetPosition::Center,
 
             styles: ConfirmStyles {
-                border_color: Color::Rgb(252, 252, 252),
+                border_color: TEXT_PRIMARY,
                 padding: Padding {
                     top: 3,
                     bottom: 3,
@@ -86,7 +89,7 @@ impl Dialog for Confirm {
         };
 
         let confirm_block: Block = Block::bordered()
-            .fg(Color::Rgb(252, 252, 252))
+            .fg(TEXT_PRIMARY)
             .border_style(Style::default().fg(self.styles.border_color))
             .title_top(Line::from(" Confirm operation ").centered())
             .padding(self.styles.padding)

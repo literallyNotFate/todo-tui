@@ -1,4 +1,4 @@
-use crate::app::models::todo::Todo;
+use crate::app::{models::todo::Todo, utils::colors::theme::*};
 use ratatui::{
     Frame,
     widgets::{ListState, Widget},
@@ -13,7 +13,7 @@ impl TodoList {
         use super::utils::{generate_stateful_list, lines_based_on_list};
         use ratatui::{
             layout::{Constraint, Layout},
-            style::{Color, Stylize},
+            style::Stylize,
             text::Line,
             widgets::{Block, BorderType, List, Padding},
         };
@@ -27,8 +27,9 @@ impl TodoList {
             .areas(main_layout);
 
         Block::default()
+            .bg(BG_PRIMARY)
             .padding(Padding::uniform(2))
-            .fg(Color::Rgb(230, 185, 157))
+            .fg(COLOR_ORANGE)
             .render(main_layout, frame.buffer_mut());
 
         let (top_line, bottom_center, bottom_left): (Line, Line, Line) =

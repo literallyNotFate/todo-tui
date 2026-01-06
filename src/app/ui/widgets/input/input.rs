@@ -1,6 +1,5 @@
+use crate::app::{ui::renderer::state::WidgetPosition, utils::colors::theme::*};
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
-
-use crate::app::ui::renderer::state::WidgetPosition;
 
 // Defines the status of input (inserting the text, editing existing text)
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +50,7 @@ impl Input {
             mode: InputMode::Insert,
             position: WidgetPosition::Center,
             styles: InputStyles {
-                fg_color: Color::Rgb(245, 161, 145),
+                fg_color: INPUT_ADD_FG,
                 padding: Padding::new(1, 1, 0, 0),
                 show_title: true,
             },
@@ -70,7 +69,7 @@ impl Input {
             mode: InputMode::Edit,
             position: WidgetPosition::Center,
             styles: InputStyles {
-                fg_color: Color::Rgb(234, 141, 165),
+                fg_color: INPUT_EDIT_FG,
                 padding: Padding::new(1, 1, 0, 0),
                 show_title: true,
             },
@@ -85,15 +84,15 @@ impl Input {
 
     // Render
     pub fn render(self, frame: &mut Frame, area: Rect) {
-        use super::utils::get_input_titles;
+        use super::utils::render_input_titles;
         use ratatui::{
             layout::Position,
-            style::{Color, Style},
+            style::Style,
             text::Line,
             widgets::{Block, BorderType, Paragraph},
         };
 
-        let titles: (Line, Line) = get_input_titles(
+        let titles: (Line, Line) = render_input_titles(
             self.title,
             self.mode,
             self.styles.show_title,
@@ -107,7 +106,7 @@ impl Input {
             .padding(self.styles.padding)
             .title(titles.0)
             .title_bottom(titles.1)
-            .title_style(Style::default().fg(Color::Rgb(252, 252, 252)));
+            .title_style(Style::default().fg(TEXT_PRIMARY));
 
         let input = Paragraph::new(self.buffer)
             .style(Style::default().fg(self.styles.fg_color))

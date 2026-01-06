@@ -1,8 +1,8 @@
 use super::input::InputMode;
 use ratatui::text::Line;
 
-// Get input title (based on input type)
-pub fn get_input_titles<'a>(
+// Render input title (based on input type)
+pub fn render_input_titles<'a>(
     title: Option<String>,
     mode: InputMode,
     show_title: bool,

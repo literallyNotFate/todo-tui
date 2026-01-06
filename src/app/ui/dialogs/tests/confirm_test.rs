@@ -1,15 +1,18 @@
 // Unit-tests for confirm widget
 #[cfg(test)]
 mod tests {
-    use crate::app::ui::{
-        dialogs::{
-            confirm::{
-                confirm::{Confirm, ConfirmOption},
-                utils::render_confirm_buttons,
+    use crate::app::{
+        ui::{
+            dialogs::{
+                confirm::{
+                    confirm::{Confirm, ConfirmOption},
+                    utils::render_confirm_buttons,
+                },
+                dialog::{Dialog, DialogResult},
             },
-            dialog::{Dialog, DialogResult},
+            renderer::state::WidgetPosition,
         },
-        renderer::state::WidgetPosition,
+        utils::colors::theme::*,
     };
     use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
 
@@ -25,7 +28,7 @@ mod tests {
         assert_eq!(confirm.message, "");
         assert!(matches!(confirm.select, ConfirmOption::Cancel));
         assert!(matches!(confirm.position, WidgetPosition::Center));
-        assert_eq!(confirm.styles.border_color, Color::Rgb(252, 252, 252));
+        assert_eq!(confirm.styles.border_color, TEXT_PRIMARY);
         assert_eq!(confirm.styles.padding, Padding::new(2, 2, 3, 3));
     }
 
@@ -34,12 +37,12 @@ mod tests {
         let confirm: Confirm = Confirm::new()
             .with_message("Delete all tasks?")
             .position(WidgetPosition::BottomLeft)
-            .with_border_color(Color::Red)
+            .with_border_color(COLOR_RED)
             .with_padding(Padding::uniform(4));
 
         assert_eq!(confirm.message, "Delete all tasks?");
         assert!(matches!(confirm.position, WidgetPosition::BottomLeft));
-        assert_eq!(confirm.styles.border_color, Color::Red);
+        assert_eq!(confirm.styles.border_color, COLOR_RED);
         assert_eq!(confirm.styles.padding, Padding::uniform(4));
         assert!(matches!(confirm.select, ConfirmOption::Cancel));
     }
@@ -150,8 +153,8 @@ mod tests {
             .map(|span| span.style.fg.unwrap_or(Color::Reset))
             .collect();
 
-        assert!(matches!(colors[1], Color::Rgb(155, 201, 166)));
-        assert!(matches!(colors[5], Color::Rgb(150, 150, 150)));
+        assert!(matches!(colors[1], CONFIRM_YES_FG_ACTIVE));
+        assert!(matches!(colors[5], TEXT_DIMMED));
     }
 
     #[test]
@@ -164,6 +167,7 @@ mod tests {
             .map(|span| span.style.fg.unwrap_or(Color::Reset))
             .collect();
 
-        assert!(matches!(colors[5], Color::Rgb(201, 155, 155)));
+        assert!(matches!(colors[1], TEXT_DIMMED));
+        assert!(matches!(colors[5], CONFIRM_CANCEL_FG_ACTIVE));
     }
 }
