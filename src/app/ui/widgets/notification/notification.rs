@@ -6,6 +6,7 @@ use ratatui::{
 use std::time::{Duration, Instant};
 
 // Type of notification
+#[derive(Debug, PartialEq)]
 pub enum NotificationKind {
     Success,
     Error,

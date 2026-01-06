@@ -26,8 +26,8 @@ mod tests {
         let confirm: Confirm = Confirm::new();
 
         assert_eq!(confirm.message, "");
-        assert!(matches!(confirm.select, ConfirmOption::Cancel));
-        assert!(matches!(confirm.position, WidgetPosition::Center));
+        assert_eq!(confirm.select, ConfirmOption::Cancel);
+        assert_eq!(confirm.position, WidgetPosition::Center);
         assert_eq!(confirm.styles.border_color, TEXT_PRIMARY);
         assert_eq!(confirm.styles.padding, Padding::new(2, 2, 3, 3));
     }
@@ -41,10 +41,10 @@ mod tests {
             .with_padding(Padding::uniform(4));
 
         assert_eq!(confirm.message, "Delete all tasks?");
-        assert!(matches!(confirm.position, WidgetPosition::BottomLeft));
+        assert_eq!(confirm.position, WidgetPosition::BottomLeft);
         assert_eq!(confirm.styles.border_color, COLOR_RED);
         assert_eq!(confirm.styles.padding, Padding::uniform(4));
-        assert!(matches!(confirm.select, ConfirmOption::Cancel));
+        assert_eq!(confirm.select, ConfirmOption::Cancel);
     }
 
     #[test]
@@ -74,19 +74,19 @@ mod tests {
     fn should_handle_left_right_key_confirm() {
         let mut confirm: Confirm = Confirm::new();
 
-        assert!(matches!(confirm.select, ConfirmOption::Cancel));
+        assert_eq!(confirm.select, ConfirmOption::Cancel);
 
         confirm.handle_key(KeyCode::Left);
-        assert!(matches!(confirm.select, ConfirmOption::Yes));
+        assert_eq!(confirm.select, ConfirmOption::Yes);
 
         confirm.handle_key(KeyCode::Right);
-        assert!(matches!(confirm.select, ConfirmOption::Cancel));
+        assert_eq!(confirm.select, ConfirmOption::Cancel);
 
         confirm.handle_key(KeyCode::Char('h'));
-        assert!(matches!(confirm.select, ConfirmOption::Yes));
+        assert_eq!(confirm.select, ConfirmOption::Yes);
 
         confirm.handle_key(KeyCode::Char('l'));
-        assert!(matches!(confirm.select, ConfirmOption::Cancel));
+        assert_eq!(confirm.select, ConfirmOption::Cancel);
     }
 
     #[test]
@@ -122,7 +122,7 @@ mod tests {
 
         assert_eq!(confirm.handle_key(KeyCode::Char('a')), None);
         assert_eq!(confirm.handle_key(KeyCode::Down), None);
-        assert!(matches!(confirm.select, ConfirmOption::Cancel));
+        assert_eq!(confirm.select, ConfirmOption::Cancel);
 
         assert_eq!(
             confirm.handle_key(KeyCode::Char('y')),
@@ -153,8 +153,8 @@ mod tests {
             .map(|span| span.style.fg.unwrap_or(Color::Reset))
             .collect();
 
-        assert!(matches!(colors[1], CONFIRM_YES_FG_ACTIVE));
-        assert!(matches!(colors[5], TEXT_DIMMED));
+        assert_eq!(colors[1], CONFIRM_YES_FG_ACTIVE);
+        assert_eq!(colors[5], TEXT_DIMMED);
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
             .map(|span| span.style.fg.unwrap_or(Color::Reset))
             .collect();
 
-        assert!(matches!(colors[1], TEXT_DIMMED));
-        assert!(matches!(colors[5], CONFIRM_CANCEL_FG_ACTIVE));
+        assert_eq!(colors[1], TEXT_DIMMED);
+        assert_eq!(colors[5], CONFIRM_CANCEL_FG_ACTIVE);
     }
 }

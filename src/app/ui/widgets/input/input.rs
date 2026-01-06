@@ -10,6 +10,7 @@ pub enum InputMode {
 }
 
 // The result action
+#[derive(Debug, PartialEq)]
 pub enum InputResult {
     Continue,
     Submit(String),

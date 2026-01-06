@@ -1,6 +1,6 @@
 use crate::app::{models::todo::Todo, utils::colors::theme::*};
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::Line,
     widgets::{Block, List},
 };
@@ -32,49 +32,44 @@ pub fn lines_based_on_list<'a>(
 
     let todos_length: usize = todos.len();
 
-    let effective_index: usize = selected
-        .map(|i| i.min(todos_length.saturating_sub(1)))
-        .unwrap_or(0);
+    let bottom_left_line: Line = if selected.is_some() {
+        let effective_index: usize = selected
+            .map(|i| i.min(todos_length.saturating_sub(1)))
+            .unwrap_or(0);
+        let current_num = effective_index + 1;
 
-    let bottom_left_line: Line = if todos_length == 0 {
-        Line::from(Span::styled(" 0 / 0 ", Style::default().fg(TEXT_PRIMARY)))
-    } else {
-        let current_num = if todos_length == 0 {
-            0
-        } else {
-            effective_index + 1
-        };
+        let status_text = todos
+            .get(effective_index)
+            .map(|todo| if todo.done { "Done " } else { "Undone " })
+            .unwrap_or("");
 
-        let status_text = if todos_length == 0 {
-            ""
-        } else {
-            todos
-                .get(effective_index)
-                .map(|todo| if todo.done { "Done " } else { "Undone " })
-                .unwrap_or("")
-        };
-
-        let status_color: Color = if status_text == "Done " {
+        let status_color = if status_text == "Done " {
             COLOR_GREEN
         } else {
             COLOR_RED
         };
 
-        Line::from(vec![
-            Span::styled(
-                format!(" {} / {} ", current_num, todos_length),
-                Style::default().fg(TEXT_PRIMARY),
-            ),
-            Span::raw(" -> "),
-            Span::styled(
-                status_text,
-                Style::default()
-                    .fg(status_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ])
-    }
-    .left_aligned();
+        if todos_length != 0 {
+            Line::from(vec![
+                Span::styled(
+                    format!(" {current_num} / {todos_length} "),
+                    Style::default().fg(TEXT_PRIMARY),
+                ),
+                Span::raw(" -> "),
+                Span::styled(
+                    status_text,
+                    Style::default()
+                        .fg(status_color)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])
+            .left_aligned()
+        } else {
+            Line::default()
+        }
+    } else {
+        Line::default()
+    };
 
     (top_line, bottom_center_line, bottom_left_line)
 }

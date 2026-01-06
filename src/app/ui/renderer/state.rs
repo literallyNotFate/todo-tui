@@ -7,7 +7,7 @@ use crate::app::{
 };
 
 // Defines where widget is going to be rendered
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum WidgetPosition {
     #[default]
     Center,

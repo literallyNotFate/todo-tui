@@ -34,11 +34,11 @@ mod tests {
         assert_eq!(popup.kind, PopupKind::Info);
         assert_eq!(popup.message, "");
         assert_eq!(popup.title, None);
-        assert!(matches!(
+        assert_eq!(
             popup.close_behavior,
             PopupCloseBehavior::Specific(KeyCode::Esc)
-        ));
-        assert!(matches!(popup.position, WidgetPosition::Center));
+        );
+        assert_eq!(popup.position, WidgetPosition::Center);
         assert!(popup.styles.show_title);
         assert_eq!(popup.styles.padding, Padding::new(2, 2, 1, 1));
     }
@@ -55,8 +55,8 @@ mod tests {
         assert_eq!(popup.kind, PopupKind::Success);
         assert_eq!(popup.message, "Task completed!");
         assert_eq!(popup.title, Some("Great!".to_string()));
-        assert!(matches!(popup.close_behavior, PopupCloseBehavior::AnyKey));
-        assert!(matches!(popup.position, WidgetPosition::TopRight));
+        assert_eq!(popup.close_behavior, PopupCloseBehavior::AnyKey);
+        assert_eq!(popup.position, WidgetPosition::TopRight);
         assert_eq!(
             popup.styles.border_color,
             color_based_on_popup_kind(PopupKind::Success)
