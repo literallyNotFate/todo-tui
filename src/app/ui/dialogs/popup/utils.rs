@@ -1,5 +1,5 @@
 use super::popup::{PopupCloseBehavior, PopupKind};
-use crate::app::utils::colors::theme::*;
+use crate::app::utils::constants::theme::*;
 use ratatui::{style::Color, text::Line};
 
 // Color based on popup kind (info, error, success, help)

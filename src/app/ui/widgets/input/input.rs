@@ -1,7 +1,12 @@
-use crate::app::{ui::renderer::state::WidgetPosition, utils::colors::theme::*};
+use crate::app::{
+    ui::renderer::state::Anchor,
+    utils::constants::{
+        size::{INPUT_HEIGHT, INPUT_MAX_CHARS, INPUT_WIDTH},
+        theme::*,
+    },
+};
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
 
-// Defines the status of input (inserting the text, editing existing text)
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
     #[default]
@@ -9,7 +14,6 @@ pub enum InputMode {
     Edit,
 }
 
-// The result action
 #[derive(Debug, PartialEq)]
 pub enum InputResult {
     Continue,
@@ -17,60 +21,51 @@ pub enum InputResult {
     Cancel,
 }
 
-// Styles for input
 #[derive(Default, Clone)]
 pub struct InputStyles {
-    pub fg_color: Color,
+    pub border_color: Color,
     pub padding: Padding,
     pub show_title: bool,
 }
 
-// Main input modal window
 #[derive(Default, Clone)]
 pub struct Input {
     pub title: Option<String>,
     pub buffer: String,
     pub cursor: usize,
     pub mode: InputMode,
-    pub position: WidgetPosition,
-
+    pub anchor: Anchor,
     pub styles: InputStyles,
 }
 
-// Input methods inplementation
 impl Input {
-    // Maximum characters input value
-    pub const MAX_CHARS: usize = 46;
-
-    // Create insert input modal
     pub fn insert() -> Self {
         Self {
             buffer: "".to_string(),
             title: None,
             cursor: 0,
             mode: InputMode::Insert,
-            position: WidgetPosition::Center,
+            anchor: Anchor::Center,
             styles: InputStyles {
-                fg_color: INPUT_ADD_FG,
+                border_color: INPUT_ADD_FG,
                 padding: Padding::new(1, 1, 0, 0),
                 show_title: true,
             },
         }
     }
 
-    // Create edit input modal
-    pub fn edit(initial: impl Into<String>) -> Self {
-        let initial_string: String = initial.into();
-        let cursor_value: usize = initial_string.len();
+    pub fn edit(buffer: impl Into<String>) -> Self {
+        let initial_buffer: String = buffer.into();
+        let cursor_value: usize = initial_buffer.len();
 
         Self {
-            buffer: initial_string,
+            buffer: initial_buffer,
             title: None,
             cursor: cursor_value,
             mode: InputMode::Edit,
-            position: WidgetPosition::Center,
+            anchor: Anchor::Center,
             styles: InputStyles {
-                fg_color: INPUT_EDIT_FG,
+                border_color: INPUT_EDIT_FG,
                 padding: Padding::new(1, 1, 0, 0),
                 show_title: true,
             },
@@ -79,11 +74,11 @@ impl Input {
 
     // Calculate area for input
     pub fn area(&self, frame_area: Rect) -> Rect {
-        use crate::app::utils::layout::position_area;
-        position_area(frame_area, 50, 3, self.position.clone())
+        use crate::app::utils::layout::anchored;
+        anchored(frame_area, INPUT_WIDTH, INPUT_HEIGHT, self.anchor.clone())
     }
 
-    // Render
+    // Rendering
     pub fn render(self, frame: &mut Frame, area: Rect) {
         use super::utils::render_input_titles;
         use ratatui::{
@@ -98,19 +93,19 @@ impl Input {
             self.mode,
             self.styles.show_title,
             self.buffer.chars().count(),
-            Self::MAX_CHARS,
+            INPUT_MAX_CHARS,
         );
 
         let input_block = Block::bordered()
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(self.styles.fg_color))
+            .border_style(Style::default().fg(self.styles.border_color))
             .padding(self.styles.padding)
             .title(titles.0)
             .title_bottom(titles.1)
             .title_style(Style::default().fg(TEXT_PRIMARY));
 
         let input = Paragraph::new(self.buffer)
-            .style(Style::default().fg(self.styles.fg_color))
+            .style(Style::default().fg(self.styles.border_color))
             .block(input_block);
 
         frame.render_widget(input, area);
@@ -120,7 +115,7 @@ impl Input {
         ));
     }
 
-    // Key even handling
+    // Key event handling
     pub fn handle_key(&mut self, key: KeyCode) -> InputResult {
         match key {
             KeyCode::Enter => {
@@ -151,7 +146,7 @@ impl Input {
                 }
             }
             KeyCode::Char(c) => {
-                if self.buffer.len() < Self::MAX_CHARS {
+                if self.buffer.len() < INPUT_MAX_CHARS {
                     self.buffer.insert(self.cursor, c);
                     self.cursor += 1;
                 }
@@ -162,14 +157,13 @@ impl Input {
         InputResult::Continue
     }
 
-    // Chaining API
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
     }
 
-    pub fn position(mut self, position: WidgetPosition) -> Self {
-        self.position = position;
+    pub fn anchor(mut self, anchor: Anchor) -> Self {
+        self.anchor = anchor;
         self
     }
 
@@ -178,8 +172,8 @@ impl Input {
         self
     }
 
-    pub fn with_fg_color(mut self, color: Color) -> Self {
-        self.styles.fg_color = color;
+    pub fn with_border_color(mut self, color: Color) -> Self {
+        self.styles.border_color = color;
         self
     }
 

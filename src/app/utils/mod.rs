@@ -1,4 +1,4 @@
-pub mod colors;
+pub mod constants;
 pub mod layout;
 pub mod math;
 pub mod tests;

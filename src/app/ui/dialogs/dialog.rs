@@ -1,13 +1,18 @@
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect};
 
-// Dialog result (confirmed or cancelled for confirm)
 #[derive(Debug, PartialEq)]
 pub enum DialogResult {
     Confirmed,
     Cancelled,
 }
 
-// Basic dialog trait for popup/confirm
+// Dialog actions (remove todo, clear, save, load, none - for popup)
+pub enum DialogIntent {
+    None,
+    Remove,
+    Clear,
+}
+
 pub trait Dialog {
     fn new() -> Self
     where

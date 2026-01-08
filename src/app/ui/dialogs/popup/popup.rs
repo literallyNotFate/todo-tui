@@ -2,13 +2,12 @@ use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
 use crate::app::{
     ui::{
         dialogs::dialog::{Dialog, DialogResult},
-        renderer::state::WidgetPosition,
+        renderer::state::Anchor,
     },
-    utils::colors::theme::*,
+    utils::constants::{size::POPUP_PERCENTAGE_WIDTH, theme::*},
 };
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
 
-// Defines how popup closes (on key, on ESC or does not close)
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupCloseBehavior {
     AnyKey,
@@ -16,7 +15,6 @@ pub enum PopupCloseBehavior {
     None,
 }
 
-// Popup type (Help, Info, Error, Success)
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupKind {
     Help,
@@ -25,38 +23,31 @@ pub enum PopupKind {
     Success,
 }
 
-// Styles for popup
 #[derive(Debug, Clone, PartialEq)]
 pub struct PopupStyles {
     pub border_color: Color,
     pub padding: Padding,
-    pub max_width: Option<u16>,
     pub show_title: bool,
 }
 
-// Main popup window
 #[derive(Debug, Clone)]
 pub struct Popup {
     pub kind: PopupKind,
     pub message: String,
     pub title: Option<String>,
     pub close_behavior: PopupCloseBehavior,
-    pub position: WidgetPosition,
-
+    pub anchor: Anchor,
     pub styles: PopupStyles,
 }
 
-// Dialog trait implementation
 impl Dialog for Popup {
-    // Default constructor
     fn new() -> Self {
         Self {
             kind: PopupKind::Info,
             message: "".to_string(),
             title: None,
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
-            position: WidgetPosition::Center,
-
+            anchor: Anchor::Center,
             styles: PopupStyles {
                 border_color: color_based_on_popup_kind(PopupKind::Info),
                 padding: Padding {
@@ -65,7 +56,6 @@ impl Dialog for Popup {
                     top: 1,
                     bottom: 1,
                 },
-                max_width: None,
                 show_title: true,
             },
         }
@@ -73,7 +63,7 @@ impl Dialog for Popup {
 
     // Calculate area for popup
     fn area(&self, frame_area: Rect) -> Rect {
-        use crate::app::utils::layout::{calculate_content_size, position_area};
+        use crate::app::utils::layout::{anchored, calculate_content_size};
 
         let (top_len, bottom_len): (usize, usize) = self.titles_len();
         let (width, height): (u16, u16) = calculate_content_size(
@@ -82,10 +72,10 @@ impl Dialog for Popup {
             top_len,
             bottom_len,
             self.styles.padding,
-            70.0,
+            POPUP_PERCENTAGE_WIDTH,
         );
 
-        position_area(frame_area, width, height, self.position.clone())
+        anchored(frame_area, width, height, self.anchor.clone())
     }
 
     // Calculate titles length
@@ -148,7 +138,6 @@ impl Dialog for Popup {
 
 // Other methods implementation
 impl Popup {
-    // Chaining API
     pub fn kind(mut self, kind: PopupKind) -> Self {
         self.kind = kind.clone();
         self.styles.border_color = color_based_on_popup_kind(kind);
@@ -160,8 +149,8 @@ impl Popup {
         self
     }
 
-    pub fn position(mut self, position: WidgetPosition) -> Self {
-        self.position = position;
+    pub fn anchor(mut self, anchor: Anchor) -> Self {
+        self.anchor = anchor;
         self
     }
 
@@ -197,11 +186,6 @@ impl Popup {
 
     pub fn with_padding(mut self, padding: Padding) -> Self {
         self.styles.padding = padding;
-        self
-    }
-
-    pub fn with_max_width(mut self, width: u16) -> Self {
-        self.styles.max_width = Some(width);
         self
     }
 }

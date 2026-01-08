@@ -1,19 +1,17 @@
 // Unit-tests for notification widget
 #[cfg(test)]
 mod tests {
-    use std::{
-        thread::sleep,
-        time::{Duration, Instant},
-    };
-
-    use ratatui::layout::Rect;
-
     use crate::app::ui::{
-        renderer::state::WidgetPosition,
+        renderer::state::Anchor,
         widgets::notification::{
             notification::{Notification, NotificationKind},
             utils::lines_based_on_notifcation,
         },
+    };
+    use ratatui::layout::Rect;
+    use std::{
+        thread::sleep,
+        time::{Duration, Instant},
     };
 
     // Mock application for tick() and automatic notifcation closing
@@ -46,7 +44,7 @@ mod tests {
 
         assert_eq!(notification.message, "Success test");
         assert_eq!(notification.kind, NotificationKind::Success);
-        assert_eq!(notification.position, WidgetPosition::TopRight);
+        assert_eq!(notification.anchor, Anchor::TopRight);
         assert_eq!(notification.duration, Duration::from_secs(3));
         assert!(notification.created_at.elapsed().as_secs() < 1);
     }
@@ -57,7 +55,7 @@ mod tests {
 
         assert_eq!(notification.message, "");
         assert_eq!(notification.kind, NotificationKind::Success);
-        assert_eq!(notification.position, WidgetPosition::TopRight);
+        assert_eq!(notification.anchor, Anchor::TopRight);
         assert_eq!(notification.duration, Duration::from_secs(3));
         assert!(notification.created_at.elapsed().as_secs() < 1);
     }
@@ -68,7 +66,7 @@ mod tests {
 
         assert_eq!(notification.message, "Error test");
         assert_eq!(notification.kind, NotificationKind::Error);
-        assert_eq!(notification.position, WidgetPosition::TopRight);
+        assert_eq!(notification.anchor, Anchor::TopRight);
         assert_eq!(notification.duration, Duration::from_secs(3));
         assert!(notification.created_at.elapsed().as_secs() < 1);
     }
@@ -79,7 +77,7 @@ mod tests {
 
         assert_eq!(notification.message, "");
         assert_eq!(notification.kind, NotificationKind::Error);
-        assert_eq!(notification.position, WidgetPosition::TopRight);
+        assert_eq!(notification.anchor, Anchor::TopRight);
         assert_eq!(notification.duration, Duration::from_secs(3));
         assert!(notification.created_at.elapsed().as_secs() < 1);
     }
@@ -89,17 +87,16 @@ mod tests {
         let notification: Notification = Notification::success("Test")
             .with_message("Overridden")
             .duration(10)
-            .position(WidgetPosition::BottomLeft);
+            .anchor(Anchor::BottomLeft);
 
         assert_eq!(notification.message, "Overridden");
         assert_eq!(notification.duration, Duration::from_secs(10));
-        assert_eq!(notification.position, WidgetPosition::BottomLeft);
+        assert_eq!(notification.anchor, Anchor::BottomLeft);
     }
 
     #[test]
     fn should_create_area_for_notification() {
-        let notification: Notification =
-            Notification::success("Hello").position(WidgetPosition::TopRight);
+        let notification: Notification = Notification::success("Hello").anchor(Anchor::TopRight);
         let frame_area: Rect = create_helper_frame();
 
         let area: Rect = notification.area(frame_area);
@@ -116,7 +113,7 @@ mod tests {
         let notification: Notification = Notification {
             message: "Test".to_string(),
             kind: NotificationKind::Success,
-            position: WidgetPosition::TopRight,
+            anchor: Anchor::TopRight,
             duration: Duration::from_secs(5),
             created_at: now,
         };
@@ -132,7 +129,7 @@ mod tests {
         let notification: Notification = Notification {
             message: "Test".to_string(),
             kind: NotificationKind::Success,
-            position: WidgetPosition::TopRight,
+            anchor: Anchor::TopRight,
             duration: Duration::from_millis(100),
             created_at: Instant::now(),
         };
@@ -151,7 +148,7 @@ mod tests {
         let notification: Notification = Notification {
             message: "Expired".to_string(),
             kind: NotificationKind::Success,
-            position: WidgetPosition::TopRight,
+            anchor: Anchor::TopRight,
             duration: Duration::from_secs(3),
             created_at: past,
         };

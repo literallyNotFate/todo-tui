@@ -10,9 +10,9 @@ mod tests {
                     utils::{color_based_on_popup_kind, lines_based_on_popup},
                 },
             },
-            renderer::state::WidgetPosition,
+            renderer::state::Anchor,
         },
-        utils::colors::theme::*,
+        utils::constants::theme::*,
     };
     use ratatui::{
         crossterm::event::KeyCode,
@@ -38,7 +38,7 @@ mod tests {
             popup.close_behavior,
             PopupCloseBehavior::Specific(KeyCode::Esc)
         );
-        assert_eq!(popup.position, WidgetPosition::Center);
+        assert_eq!(popup.anchor, Anchor::Center);
         assert!(popup.styles.show_title);
         assert_eq!(popup.styles.padding, Padding::new(2, 2, 1, 1));
     }
@@ -50,13 +50,13 @@ mod tests {
             .with_message("Task completed!")
             .title("Great!")
             .close_on_any_key()
-            .position(WidgetPosition::TopRight);
+            .anchor(Anchor::TopRight);
 
         assert_eq!(popup.kind, PopupKind::Success);
         assert_eq!(popup.message, "Task completed!");
         assert_eq!(popup.title, Some("Great!".to_string()));
         assert_eq!(popup.close_behavior, PopupCloseBehavior::AnyKey);
-        assert_eq!(popup.position, WidgetPosition::TopRight);
+        assert_eq!(popup.anchor, Anchor::TopRight);
         assert_eq!(
             popup.styles.border_color,
             color_based_on_popup_kind(PopupKind::Success)

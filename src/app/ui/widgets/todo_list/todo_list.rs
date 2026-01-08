@@ -1,4 +1,4 @@
-use crate::app::{models::todo::Todo, utils::colors::theme::*};
+use crate::app::{models::todo::Todo, utils::constants::theme::*};
 use ratatui::{
     Frame,
     widgets::{ListState, Widget},
@@ -6,9 +6,7 @@ use ratatui::{
 
 pub struct TodoList;
 
-// Todo list methods implementation
 impl TodoList {
-    // Rendering
     pub fn render(frame: &mut Frame, todos: &[Todo], select_state: &mut ListState) {
         use super::utils::{generate_stateful_list, lines_based_on_list};
         use ratatui::{

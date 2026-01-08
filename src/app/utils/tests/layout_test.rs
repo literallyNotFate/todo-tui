@@ -2,8 +2,8 @@
 #[cfg(test)]
 mod tests {
     use crate::app::{
-        ui::renderer::state::WidgetPosition,
-        utils::layout::{calculate_content_size, center, position_area},
+        ui::renderer::state::Anchor,
+        utils::layout::{anchored, calculate_content_size, center},
     };
     use ratatui::{layout::Rect, widgets::Padding};
 
@@ -31,7 +31,7 @@ mod tests {
     #[test]
     fn should_create_area_based_on_center_position() {
         let frame: Rect = rect(0, 0, 80, 40);
-        let area: Rect = position_area(frame, 30, 10, WidgetPosition::Center);
+        let area: Rect = anchored(frame, 30, 10, Anchor::Center);
         let expected: Rect = center(frame, 30, 10);
         assert_eq!(area, expected);
     }
@@ -39,7 +39,7 @@ mod tests {
     #[test]
     fn should_create_area_based_on_top_right_position() {
         let frame: Rect = rect(10, 10, 100, 50);
-        let area: Rect = position_area(frame, 30, 10, WidgetPosition::TopRight);
+        let area: Rect = anchored(frame, 30, 10, Anchor::TopRight);
 
         assert_eq!(area.x, 10 + 100 - 30 - 2);
         assert_eq!(area.y, 10 + 1);
@@ -50,7 +50,7 @@ mod tests {
     #[test]
     fn should_create_area_based_on_top_left_position() {
         let frame: Rect = rect(10, 10, 100, 50);
-        let area: Rect = position_area(frame, 30, 10, WidgetPosition::TopLeft);
+        let area: Rect = anchored(frame, 30, 10, Anchor::TopLeft);
 
         assert_eq!(area.x, 10 + 2);
         assert_eq!(area.y, 10 + 1);
@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn should_create_area_based_on_bottom_right_position() {
         let frame: Rect = rect(10, 10, 100, 50);
-        let area: Rect = position_area(frame, 30, 10, WidgetPosition::BottomRight);
+        let area: Rect = anchored(frame, 30, 10, Anchor::BottomRight);
 
         assert_eq!(area.x, 10 + 100 - 30 - 2);
         assert_eq!(area.y, 10 + 50 - 10 - 1);
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn should_create_area_based_on_bottom_left_position() {
         let frame = rect(10, 10, 100, 50);
-        let area = position_area(frame, 30, 10, WidgetPosition::BottomLeft);
+        let area = anchored(frame, 30, 10, Anchor::BottomLeft);
 
         assert_eq!(area.x, 10 + 2);
         assert_eq!(area.y, 10 + 50 - 10 - 1);

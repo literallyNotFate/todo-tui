@@ -1,10 +1,8 @@
 use super::{
     state::state::ApplicationState,
-    ui::renderer::{
-        renderer::Renderer,
-        state::{DialogIntent, UIState},
-    },
+    ui::renderer::{renderer::Renderer, state::UIState},
 };
+use crate::app::{ui::dialogs::dialog::DialogIntent, utils::constants::text::*};
 use color_eyre::eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -59,12 +57,12 @@ impl Application {
 
                     DialogResult::Confirmed => {
                         match &active.intent {
-                            DialogIntent::Remove => self
-                                .ui
-                                .notify(self.state.remove_todo(), "Task was removed!"),
-                            DialogIntent::Clear => self
-                                .ui
-                                .notify(self.state.clear_todos(), "Tasks were cleared!"),
+                            DialogIntent::Remove => {
+                                self.ui.notify(self.state.remove_todo(), REMOVED_TASK_TEXT)
+                            }
+                            DialogIntent::Clear => {
+                                self.ui.notify(self.state.clear_todos(), CLEARED_TASKS_TEXT)
+                            }
                             DialogIntent::None => (),
                         }
 
@@ -158,13 +156,13 @@ impl Application {
     pub fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
         use std::time::{Duration, Instant};
 
-        let tick_rate = Duration::from_millis(100);
-        let mut last_tick = Instant::now();
+        let tick_rate: Duration = Duration::from_millis(100);
+        let mut last_tick: Instant = Instant::now();
 
         while self.running {
             terminal.draw(|frame| self.render(frame))?;
 
-            let timeout = tick_rate
+            let timeout: Duration = tick_rate
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or(Duration::ZERO);
 

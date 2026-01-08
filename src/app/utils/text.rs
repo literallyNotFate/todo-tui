@@ -1,6 +1,6 @@
 // Wrap content in widgets
 pub fn wrap_text(input: &str, max_width: usize) -> Vec<String> {
-    if input.trim().is_empty() {
+    if input.trim().is_empty() || max_width == 0 {
         return vec!["".to_string()];
     }
 

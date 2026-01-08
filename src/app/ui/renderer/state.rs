@@ -1,28 +1,19 @@
 use crate::app::{
     state::error::ApplicationStateError,
     ui::{
-        dialogs::dialog::Dialog,
+        dialogs::dialog::{Dialog, DialogIntent},
         widgets::{input::input::Input, notification::notification::Notification},
     },
 };
 
-// Defines where widget is going to be rendered
 #[derive(Default, Debug, Clone, PartialEq)]
-pub enum WidgetPosition {
+pub enum Anchor {
     #[default]
     Center,
-
     TopRight,
     TopLeft,
     BottomRight,
     BottomLeft,
-}
-
-// Dialog actions (remove todo, clear, save, load, none - for popup)
-pub enum DialogIntent {
-    None,
-    Remove,
-    Clear,
 }
 
 #[derive(Default)]
@@ -38,18 +29,6 @@ pub struct ActiveDialog {
 }
 
 impl UIState {
-    // Notify todo action w/error handling
-    pub fn notify<T>(&mut self, result: Result<T, ApplicationStateError>, success_message: &str) {
-        match result {
-            Ok(_) => {
-                self.show_notification(Notification::success(success_message));
-            }
-            Err(err) => {
-                self.show_notification(Notification::error(err.to_string()));
-            }
-        }
-    }
-
     // Dialog
     pub fn show_dialog<D: Dialog + 'static>(&mut self, dialog: D, intent: DialogIntent) {
         self.dialog = Some(ActiveDialog {
@@ -74,5 +53,16 @@ impl UIState {
     // Notification
     pub fn show_notification(&mut self, notification: Notification) {
         self.notification = Some(notification);
+    }
+
+    pub fn notify<T>(&mut self, result: Result<T, ApplicationStateError>, success_message: &str) {
+        match result {
+            Ok(_) => {
+                self.show_notification(Notification::success(success_message));
+            }
+            Err(err) => {
+                self.show_notification(Notification::error(err.to_string()));
+            }
+        }
     }
 }

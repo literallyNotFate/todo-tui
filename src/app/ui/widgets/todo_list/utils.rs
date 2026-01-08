@@ -1,4 +1,4 @@
-use crate::app::{models::todo::Todo, utils::colors::theme::*};
+use crate::app::{models::todo::Todo, utils::constants::theme::*};
 use ratatui::{
     style::{Modifier, Style},
     text::Line,

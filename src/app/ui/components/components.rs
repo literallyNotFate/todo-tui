@@ -1,6 +1,6 @@
 use crate::app::{
     ui::dialogs::{confirm::confirm::Confirm, dialog::Dialog, popup::popup::Popup},
-    utils::colors::theme::*,
+    utils::constants::{text::HELP_MESSAGE_TEXT, theme::*},
 };
 
 pub struct Components;
@@ -11,20 +11,8 @@ impl Components {
         use crate::app::ui::dialogs::popup::popup::PopupKind;
         use ratatui::crossterm::event::KeyCode;
 
-        let help_message: Vec<&str> = vec![
-            " a -> append a todo",
-            " r -> rename a todo",
-            " d -> delete a todo",
-            " x -> clear all todos",
-            " Enter -> mark as completed",
-            " k/Up -> go up",
-            " j/Down -> go down",
-            " q/Esc -> quit",
-            " ? -> toggle help",
-        ];
-
         Popup::new()
-            .with_message(help_message.join("\n"))
+            .with_message(HELP_MESSAGE_TEXT)
             .kind(PopupKind::Help)
             .title("Controls")
             .close_on(KeyCode::Char('?'))

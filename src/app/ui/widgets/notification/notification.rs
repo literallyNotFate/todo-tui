@@ -1,34 +1,33 @@
-use crate::app::{ui::renderer::state::WidgetPosition, utils::colors::theme::*};
+use crate::app::{
+    ui::renderer::state::Anchor,
+    utils::constants::{size::NOTIFICATION_PERCENTAGE_WIDTH, theme::*},
+};
 use ratatui::{
     Frame,
     layout::{Alignment, Margin, Rect},
 };
 use std::time::{Duration, Instant};
 
-// Type of notification
 #[derive(Debug, PartialEq)]
 pub enum NotificationKind {
     Success,
     Error,
 }
 
-// Notification widget
 pub struct Notification {
     pub message: String,
     pub kind: NotificationKind,
-    pub position: WidgetPosition,
+    pub anchor: Anchor,
     pub duration: Duration,
     pub created_at: Instant,
 }
 
-// Method implementation
 impl Notification {
-    // Success notification constructor
     pub fn success(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
             kind: NotificationKind::Success,
-            position: WidgetPosition::TopRight,
+            anchor: Anchor::TopRight,
             duration: Duration::from_secs(3),
             created_at: Instant::now(),
         }
@@ -38,12 +37,11 @@ impl Notification {
         Self::success("")
     }
 
-    // Error notification constructor
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
             kind: NotificationKind::Error,
-            position: WidgetPosition::TopRight,
+            anchor: Anchor::TopRight,
             duration: Duration::from_secs(3),
             created_at: Instant::now(),
         }
@@ -55,7 +53,7 @@ impl Notification {
 
     // Calculate area for notification
     pub fn area(&self, frame_area: Rect) -> Rect {
-        use crate::app::utils::layout::{calculate_content_size, position_area};
+        use crate::app::utils::layout::{anchored, calculate_content_size};
         use ratatui::widgets::Padding;
 
         let top_title_len: usize = " Notification ".chars().count();
@@ -67,10 +65,10 @@ impl Notification {
             top_title_len,
             bottom_title_len,
             Padding::uniform(1),
-            30.0,
+            NOTIFICATION_PERCENTAGE_WIDTH,
         );
 
-        position_area(frame_area, width, height, self.position.clone())
+        anchored(frame_area, width, height, self.anchor.clone())
     }
 
     // Rendering
@@ -112,7 +110,6 @@ impl Notification {
         self.created_at.elapsed() >= self.duration
     }
 
-    // Chaining API
     pub fn with_message(mut self, message: impl Into<String>) -> Self {
         self.message = message.into();
         self
@@ -123,8 +120,8 @@ impl Notification {
         self
     }
 
-    pub fn position(mut self, position: WidgetPosition) -> Self {
-        self.position = position;
+    pub fn anchor(mut self, anchor: Anchor) -> Self {
+        self.anchor = anchor;
         self
     }
 }

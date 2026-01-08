@@ -3,13 +3,13 @@
 mod tests {
     use crate::app::{
         ui::{
-            renderer::state::WidgetPosition,
+            renderer::state::Anchor,
             widgets::input::{
                 input::{Input, InputMode, InputResult},
                 utils::render_input_titles,
             },
         },
-        utils::colors::theme::*,
+        utils::constants::{size::INPUT_MAX_CHARS, theme::*},
     };
     use ratatui::{
         crossterm::event::KeyCode,
@@ -30,10 +30,10 @@ mod tests {
         assert_eq!(input.buffer, "");
         assert_eq!(input.cursor, 0);
         assert_eq!(input.mode, InputMode::Insert);
-        assert_eq!(input.position, WidgetPosition::Center);
+        assert_eq!(input.anchor, Anchor::Center);
         assert!(input.title.is_none());
         assert!(input.styles.show_title);
-        assert_eq!(input.styles.fg_color, INPUT_ADD_FG);
+        assert_eq!(input.styles.border_color, INPUT_ADD_FG);
     }
 
     #[test]
@@ -43,7 +43,7 @@ mod tests {
         assert_eq!(input.buffer, "Hello World");
         assert_eq!(input.cursor, 11);
         assert_eq!(input.mode, InputMode::Edit);
-        assert_eq!(input.styles.fg_color, INPUT_EDIT_FG);
+        assert_eq!(input.styles.border_color, INPUT_EDIT_FG);
     }
 
     #[test]
@@ -51,15 +51,15 @@ mod tests {
         let input: Input = Input::insert()
             .title("Custom Title")
             .no_title()
-            .with_fg_color(Color::Yellow)
+            .with_border_color(Color::Yellow)
             .with_padding(Padding::new(2, 3, 1, 1))
-            .position(WidgetPosition::TopLeft);
+            .anchor(Anchor::TopLeft);
 
         assert_eq!(input.title, Some("Custom Title".to_string()));
         assert!(!input.styles.show_title);
-        assert_eq!(input.styles.fg_color, Color::Yellow);
+        assert_eq!(input.styles.border_color, Color::Yellow);
         assert_eq!(input.styles.padding, Padding::new(2, 3, 1, 1));
-        assert_eq!(input.position, WidgetPosition::TopLeft);
+        assert_eq!(input.anchor, Anchor::TopLeft);
     }
 
     #[test]
@@ -118,16 +118,16 @@ mod tests {
     fn should_test_max_chars_limit_for_input() {
         let mut input: Input = Input::insert();
 
-        for _ in 0..Input::MAX_CHARS {
+        for _ in 0..INPUT_MAX_CHARS {
             input.handle_key(KeyCode::Char('x'));
         }
-        assert_eq!(input.buffer.len(), Input::MAX_CHARS);
-        assert_eq!(input.cursor, Input::MAX_CHARS);
+        assert_eq!(input.buffer.len(), INPUT_MAX_CHARS);
+        assert_eq!(input.cursor, INPUT_MAX_CHARS);
 
         let result = input.handle_key(KeyCode::Char('y'));
         assert_eq!(result, InputResult::Continue);
-        assert_eq!(input.buffer.len(), Input::MAX_CHARS);
-        assert_eq!(input.cursor, Input::MAX_CHARS);
+        assert_eq!(input.buffer.len(), INPUT_MAX_CHARS);
+        assert_eq!(input.cursor, INPUT_MAX_CHARS);
     }
 
     #[test]

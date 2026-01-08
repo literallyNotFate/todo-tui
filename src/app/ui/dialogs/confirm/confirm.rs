@@ -2,9 +2,9 @@ use super::utils::render_confirm_buttons;
 use crate::app::{
     ui::{
         dialogs::dialog::{Dialog, DialogResult},
-        renderer::state::WidgetPosition,
+        renderer::state::Anchor,
     },
-    utils::colors::theme::*,
+    utils::constants::{size::CONFIRM_PERCENTAGE_WIDTH, theme::*},
 };
 use ratatui::{
     Frame,
@@ -14,37 +14,30 @@ use ratatui::{
     widgets::Padding,
 };
 
-// Styles for confirm
 pub struct ConfirmStyles {
     pub border_color: Color,
     pub padding: Padding,
 }
 
-// Selection options
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfirmOption {
     Yes,
     Cancel,
 }
 
-// Main confirm window
 pub struct Confirm {
     pub message: String,
     pub select: ConfirmOption,
-    pub position: WidgetPosition,
-
+    pub anchor: Anchor,
     pub styles: ConfirmStyles,
 }
 
-// Dialog trait implementation
 impl Dialog for Confirm {
-    // Default constructor
     fn new() -> Self {
         Self {
             message: "".to_string(),
             select: ConfirmOption::Cancel,
-            position: WidgetPosition::Center,
-
+            anchor: Anchor::Center,
             styles: ConfirmStyles {
                 border_color: TEXT_PRIMARY,
                 padding: Padding {
@@ -59,7 +52,7 @@ impl Dialog for Confirm {
 
     // Calculate area for confirm
     fn area(&self, frame_area: Rect) -> Rect {
-        use crate::app::utils::layout::{calculate_content_size, position_area};
+        use crate::app::utils::layout::{anchored, calculate_content_size};
 
         let (top_len, bottom_len): (usize, usize) = self.titles_len();
         let (width, height): (u16, u16) = calculate_content_size(
@@ -68,10 +61,10 @@ impl Dialog for Confirm {
             top_len,
             bottom_len,
             self.styles.padding,
-            60.0,
+            CONFIRM_PERCENTAGE_WIDTH,
         );
 
-        position_area(frame_area, width, height, self.position.clone())
+        anchored(frame_area, width, height, self.anchor.clone())
     }
 
     // Calculate titles length
@@ -152,14 +145,13 @@ impl Dialog for Confirm {
 
 // Other methods implementation
 impl Confirm {
-    // Chaining API
     pub fn with_message(mut self, message: impl Into<String>) -> Self {
         self.message = message.into();
         self
     }
 
-    pub fn position(mut self, position: WidgetPosition) -> Self {
-        self.position = position;
+    pub fn anchor(mut self, anchor: Anchor) -> Self {
+        self.anchor = anchor;
         self
     }
 

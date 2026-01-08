@@ -3,7 +3,7 @@
 mod tests {
     use crate::app::{
         models::todo::Todo, ui::widgets::todo_list::utils::lines_based_on_list,
-        utils::colors::theme::*,
+        utils::constants::theme::*,
     };
     use ratatui::text::Line;
 

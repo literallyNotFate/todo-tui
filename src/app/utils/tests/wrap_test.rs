@@ -70,6 +70,12 @@ mod tests {
     }
 
     #[test]
+    fn should_return_nothing_if_max_width_is_0() {
+        let wrapped: Vec<String> = wrap_text("Some text", 0);
+        assert_eq!(wrapped, vec![""]);
+    }
+
+    #[test]
     fn should_wrap_with_long_word() {
         let input: &str = "supercalifragilisticexpialidocious and short words";
         let wrapped: Vec<String> = wrap_text(input, 20);

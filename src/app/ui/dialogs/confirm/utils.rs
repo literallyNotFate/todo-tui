@@ -1,5 +1,5 @@
 use super::confirm::ConfirmOption;
-use crate::app::utils::colors::theme::*;
+use crate::app::utils::constants::theme::*;
 use ratatui::{style::Modifier, text::Line};
 
 // Render confirm buttons

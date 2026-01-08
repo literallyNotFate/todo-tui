@@ -10,9 +10,9 @@ mod tests {
                 },
                 dialog::{Dialog, DialogResult},
             },
-            renderer::state::WidgetPosition,
+            renderer::state::Anchor,
         },
-        utils::colors::theme::*,
+        utils::constants::theme::*,
     };
     use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
 
@@ -27,7 +27,7 @@ mod tests {
 
         assert_eq!(confirm.message, "");
         assert_eq!(confirm.select, ConfirmOption::Cancel);
-        assert_eq!(confirm.position, WidgetPosition::Center);
+        assert_eq!(confirm.anchor, Anchor::Center);
         assert_eq!(confirm.styles.border_color, TEXT_PRIMARY);
         assert_eq!(confirm.styles.padding, Padding::new(2, 2, 3, 3));
     }
@@ -36,12 +36,12 @@ mod tests {
     fn should_create_confirm_with_chaining_api() {
         let confirm: Confirm = Confirm::new()
             .with_message("Delete all tasks?")
-            .position(WidgetPosition::BottomLeft)
+            .anchor(Anchor::BottomLeft)
             .with_border_color(COLOR_RED)
             .with_padding(Padding::uniform(4));
 
         assert_eq!(confirm.message, "Delete all tasks?");
-        assert_eq!(confirm.position, WidgetPosition::BottomLeft);
+        assert_eq!(confirm.anchor, Anchor::BottomLeft);
         assert_eq!(confirm.styles.border_color, COLOR_RED);
         assert_eq!(confirm.styles.padding, Padding::uniform(4));
         assert_eq!(confirm.select, ConfirmOption::Cancel);

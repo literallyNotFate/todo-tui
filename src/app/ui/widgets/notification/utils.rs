@@ -1,4 +1,4 @@
-use crate::app::utils::colors::theme::*;
+use crate::app::utils::constants::theme::*;
 use ratatui::text::Line;
 
 // Pre-rendered lines based on notifications

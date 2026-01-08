@@ -1,29 +1,35 @@
-use crate::app::ui::renderer::state::WidgetPosition;
-use ratatui::{layout::Rect, widgets::Padding};
+use crate::app::ui::renderer::state::Anchor;
+use ratatui::{
+    layout::{Constraint, Flex, Layout, Rect},
+    widgets::Padding,
+};
 
-// Calculate area based on widget position
-pub fn position_area(frame: Rect, width: u16, height: u16, position: WidgetPosition) -> Rect {
-    match position {
-        WidgetPosition::Center => center(frame, width, height),
-        WidgetPosition::TopRight => Rect {
+// Calculate area based on widget position (anchor)
+pub fn anchored(frame: Rect, mut width: u16, mut height: u16, anchor: Anchor) -> Rect {
+    width = width.min(frame.width.saturating_sub(2).max(1));
+    height = height.min(frame.height.saturating_sub(2).max(1));
+
+    match anchor {
+        Anchor::Center => center(frame, width, height),
+        Anchor::TopRight => Rect {
             x: frame.x + frame.width - width - 2,
             y: frame.y + 1,
             width,
             height,
         },
-        WidgetPosition::TopLeft => Rect {
+        Anchor::TopLeft => Rect {
             x: frame.x + 2,
             y: frame.y + 1,
             width,
             height,
         },
-        WidgetPosition::BottomRight => Rect {
+        Anchor::BottomRight => Rect {
             x: frame.x + frame.width - width - 2,
             y: frame.y + frame.height - height - 1,
             width,
             height,
         },
-        WidgetPosition::BottomLeft => Rect {
+        Anchor::BottomLeft => Rect {
             x: frame.x + 2,
             y: frame.y + frame.height - height - 1,
             width,
@@ -34,8 +40,6 @@ pub fn position_area(frame: Rect, width: u16, height: u16, position: WidgetPosit
 
 // Center a widget
 pub fn center(area: Rect, width: u16, height: u16) -> Rect {
-    use ratatui::layout::{Constraint, Flex, Layout};
-
     let vertical = Layout::vertical([Constraint::Max(height)]).flex(Flex::Center);
     let [vert_area] = vertical.areas(area);
 
