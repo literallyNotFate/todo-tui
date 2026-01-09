@@ -8,7 +8,7 @@ pub struct TodoList;
 
 impl TodoList {
     pub fn render(frame: &mut Frame, todos: &[Todo], select_state: &mut ListState) {
-        use super::utils::{generate_stateful_list, lines_based_on_list};
+        use super::utils::*;
         use ratatui::{
             layout::{Constraint, Layout},
             style::Stylize,
@@ -27,11 +27,11 @@ impl TodoList {
         Block::default()
             .bg(BG_PRIMARY)
             .padding(Padding::uniform(2))
-            .fg(COLOR_ORANGE)
+            .fg(ITEM_LIST_PRIMARY)
             .render(main_layout, frame.buffer_mut());
 
         let (top_line, bottom_center, bottom_left): (Line, Line, Line) =
-            lines_based_on_list(todos, select_state.selected());
+            render_lines_based_on_list(todos, select_state.selected());
 
         let list_block: Block = Block::bordered()
             .border_type(BorderType::Rounded)
@@ -40,7 +40,19 @@ impl TodoList {
             .title_bottom(bottom_left)
             .padding(Padding::uniform(1));
 
-        let list_widget: List = generate_stateful_list(todos, list_block, ">");
+        let list_widget: List = generate_stateful_list(todos, list_block, ">").scroll_padding(0);
+
         frame.render_stateful_widget(list_widget, inner_layout, select_state);
+
+        let visible_lines: usize = inner_layout.height.saturating_sub(3) as usize;
+        let content_lines: usize = todos.len();
+
+        render_scrollbar_if_needed(
+            frame,
+            inner_layout,
+            content_lines,
+            visible_lines,
+            select_state.offset(),
+        );
     }
 }

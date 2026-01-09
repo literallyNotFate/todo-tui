@@ -7,7 +7,7 @@ mod tests {
                 dialog::{Dialog, DialogResult},
                 popup::{
                     popup::{Popup, PopupCloseBehavior, PopupKind},
-                    utils::{color_based_on_popup_kind, lines_based_on_popup},
+                    utils::{color_based_on_popup_kind, render_lines_based_on_popup},
                 },
             },
             renderer::state::Anchor,
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn should_return_corresponding_lines_for_popup_with_title() {
-        let lines: (Line, Line) = lines_based_on_popup(
+        let lines: (Line, Line) = render_lines_based_on_popup(
             Some("Test".to_string()),
             PopupKind::Info,
             PopupCloseBehavior::Specific(KeyCode::Enter),
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn should_return_corresponding_lines_for_popup_without_title() {
         let lines: (Line, Line) =
-            lines_based_on_popup(None, PopupKind::Info, PopupCloseBehavior::AnyKey, false);
+            render_lines_based_on_popup(None, PopupKind::Info, PopupCloseBehavior::AnyKey, false);
         assert_eq!(lines.0, Line::default());
 
         let expected_bottom_line: Line = Line::from(vec![
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn should_return_corresponding_lines_for_popup_defaults() {
         let lines: (Line, Line) =
-            lines_based_on_popup(None, PopupKind::Error, PopupCloseBehavior::None, true);
+            render_lines_based_on_popup(None, PopupKind::Error, PopupCloseBehavior::None, true);
 
         let expected_top_line: Line = Line::from(Span::styled(
             " Error ",

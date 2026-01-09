@@ -3,7 +3,7 @@
 mod tests {
     use crate::app::{
         ui::renderer::state::Anchor,
-        utils::layout::{anchored, calculate_content_size, center},
+        utils::layout::{anchored, calculate_content_size, centered},
     };
     use ratatui::{layout::Rect, widgets::Padding};
 
@@ -20,7 +20,7 @@ mod tests {
     #[test]
     fn should_create_rect_in_center() {
         let frame: Rect = rect(0, 0, 100, 50);
-        let widget: Rect = center(frame, 40, 10);
+        let widget: Rect = centered(frame, 40, 10);
 
         assert_eq!(widget.x, (100 - 40) / 2);
         assert_eq!(widget.y, (50 - 10) / 2);
@@ -32,7 +32,7 @@ mod tests {
     fn should_create_area_based_on_center_position() {
         let frame: Rect = rect(0, 0, 80, 40);
         let area: Rect = anchored(frame, 30, 10, Anchor::Center);
-        let expected: Rect = center(frame, 30, 10);
+        let expected: Rect = centered(frame, 30, 10);
         assert_eq!(area, expected);
     }
 

@@ -5,7 +5,7 @@ mod tests {
         renderer::state::Anchor,
         widgets::notification::{
             notification::{Notification, NotificationKind},
-            utils::lines_based_on_notifcation,
+            utils::render_lines_based_on_notifcation,
         },
     };
     use ratatui::layout::Rect;
@@ -174,7 +174,7 @@ mod tests {
     // Utils
     #[test]
     fn should_render_lines_based_on_notifcation() {
-        let (top, bottom) = lines_based_on_notifcation(3);
+        let (top, bottom) = render_lines_based_on_notifcation(3);
         assert_eq!(top.spans[0].content, " Notification ");
         assert!(bottom.spans[0].content.contains("Closes in "));
     }

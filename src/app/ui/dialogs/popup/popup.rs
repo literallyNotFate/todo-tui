@@ -1,10 +1,10 @@
-use super::utils::{color_based_on_popup_kind, lines_based_on_popup};
+use super::utils::{color_based_on_popup_kind, render_lines_based_on_popup};
 use crate::app::{
     ui::{
         dialogs::dialog::{Dialog, DialogResult},
         renderer::state::Anchor,
     },
-    utils::constants::{size::POPUP_PERCENTAGE_WIDTH, theme::*},
+    utils::constants::{size::*, theme::*},
 };
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
 
@@ -82,7 +82,7 @@ impl Dialog for Popup {
     fn titles_len(&self) -> (usize, usize) {
         use ratatui::text::Line;
 
-        let titles: (Line, Line) = lines_based_on_popup(
+        let titles: (Line, Line) = render_lines_based_on_popup(
             self.title.clone(),
             self.kind.clone(),
             self.close_behavior.clone(),
@@ -103,7 +103,7 @@ impl Dialog for Popup {
 
         let content_width = area.width.saturating_sub(4) as usize;
         let wrapped = wrap_text(&self.message, content_width);
-        let titles = lines_based_on_popup(
+        let titles = render_lines_based_on_popup(
             self.title.clone(),
             self.kind.clone(),
             self.close_behavior.clone(),

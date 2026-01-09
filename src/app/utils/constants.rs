@@ -41,7 +41,9 @@ pub mod theme {
 
     pub const TEXT_PRIMARY: Color = Color::Rgb(252, 252, 252);
     pub const TEXT_DIMMED: Color = Color::Rgb(120, 120, 120);
-    pub const TEXT_SELECTED: Color = Color::Rgb(229, 218, 156);
+
+    pub const ITEM_LIST_PRIMARY: Color = Color::Rgb(249, 192, 122);
+    pub const ITEM_LIST_SELECTED: Color = Color::Rgb(249, 158, 47);
 
     pub const SUCCESS_POPUP_FG: Color = Color::Rgb(144, 185, 159);
     pub const ERROR_POPUP_FG: Color = Color::Rgb(245, 161, 145);

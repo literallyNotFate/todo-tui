@@ -1,12 +1,14 @@
 use crate::app::{models::todo::Todo, utils::constants::theme::*};
 use ratatui::{
+    Frame,
+    layout::Rect,
     style::{Modifier, Style},
     text::Line,
     widgets::{Block, List},
 };
 
 // Pre-rendered lines based on todo list
-pub fn lines_based_on_list<'a>(
+pub fn render_lines_based_on_list<'a>(
     todos: &[Todo],
     selected: Option<usize>,
 ) -> (Line<'a>, Line<'a>, Line<'a>) {
@@ -90,7 +92,36 @@ pub fn generate_stateful_list<'a>(
     .highlight_symbol(highlight_symbol)
     .highlight_style(
         Style::default()
-            .fg(TEXT_SELECTED)
+            .fg(ITEM_LIST_SELECTED)
             .add_modifier(Modifier::BOLD),
     )
+}
+
+// Generate scrollbar for list if too many items (or small screen)
+pub fn render_scrollbar_if_needed(
+    frame: &mut Frame,
+    area: Rect,
+    content_lines: usize,
+    visible_lines: usize,
+    offset: usize,
+) {
+    use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
+
+    if content_lines < visible_lines {
+        return;
+    }
+
+    let mut scrollbar_state = ScrollbarState::default()
+        .content_length(content_lines)
+        .viewport_content_length(visible_lines)
+        .position(offset);
+
+    let scrollbar = Scrollbar::default()
+        .orientation(ScrollbarOrientation::VerticalRight)
+        .begin_symbol(Some("↑"))
+        .end_symbol(Some("↓"))
+        .track_symbol(Some("│"))
+        .thumb_symbol("▉");
+
+    frame.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
 }

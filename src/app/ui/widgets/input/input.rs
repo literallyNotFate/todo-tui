@@ -1,9 +1,6 @@
 use crate::app::{
     ui::renderer::state::Anchor,
-    utils::constants::{
-        size::{INPUT_HEIGHT, INPUT_MAX_CHARS, INPUT_WIDTH},
-        theme::*,
-    },
+    utils::constants::{size::*, theme::*},
 };
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Color, widgets::Padding};
 

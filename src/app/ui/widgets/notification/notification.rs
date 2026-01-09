@@ -1,6 +1,6 @@
 use crate::app::{
     ui::renderer::state::Anchor,
-    utils::constants::{size::NOTIFICATION_PERCENTAGE_WIDTH, theme::*},
+    utils::constants::{size::*, theme::*},
 };
 use ratatui::{
     Frame,
@@ -73,14 +73,14 @@ impl Notification {
 
     // Rendering
     pub fn render(&self, frame: &mut Frame, area: Rect) {
-        use super::utils::lines_based_on_notifcation;
+        use super::utils::render_lines_based_on_notifcation;
         use ratatui::{
             style::Style,
             text::Line,
             widgets::{Block, BorderType, Paragraph, Wrap},
         };
 
-        let titles: (Line, Line) = lines_based_on_notifcation(self.remaining_secs() + 1);
+        let titles: (Line, Line) = render_lines_based_on_notifcation(self.remaining_secs() + 1);
 
         let block = Block::bordered()
             .border_type(BorderType::Rounded)

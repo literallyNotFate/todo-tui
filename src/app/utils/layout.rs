@@ -10,7 +10,7 @@ pub fn anchored(frame: Rect, mut width: u16, mut height: u16, anchor: Anchor) ->
     height = height.min(frame.height.saturating_sub(2).max(1));
 
     match anchor {
-        Anchor::Center => center(frame, width, height),
+        Anchor::Center => centered(frame, width, height),
         Anchor::TopRight => Rect {
             x: frame.x + frame.width - width - 2,
             y: frame.y + 1,
@@ -39,7 +39,7 @@ pub fn anchored(frame: Rect, mut width: u16, mut height: u16, anchor: Anchor) ->
 }
 
 // Center a widget
-pub fn center(area: Rect, width: u16, height: u16) -> Rect {
+pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let vertical = Layout::vertical([Constraint::Max(height)]).flex(Flex::Center);
     let [vert_area] = vertical.areas(area);
 

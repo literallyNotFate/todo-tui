@@ -13,7 +13,7 @@ pub fn color_based_on_popup_kind(kind: PopupKind) -> Color {
 }
 
 // Pre-rendered lines based on popup
-pub fn lines_based_on_popup<'a>(
+pub fn render_lines_based_on_popup<'a>(
     title: Option<String>,
     kind: PopupKind,
     close_behavior: PopupCloseBehavior,

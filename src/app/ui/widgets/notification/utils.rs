@@ -2,7 +2,7 @@ use crate::app::utils::constants::theme::*;
 use ratatui::text::Line;
 
 // Pre-rendered lines based on notifications
-pub fn lines_based_on_notifcation<'a>(seconds: u64) -> (Line<'a>, Line<'a>) {
+pub fn render_lines_based_on_notifcation<'a>(seconds: u64) -> (Line<'a>, Line<'a>) {
     use ratatui::{
         style::{Modifier, Style},
         text::Span,
