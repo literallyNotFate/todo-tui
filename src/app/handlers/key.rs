@@ -4,16 +4,25 @@ use crate::app::{
         dialogs::dialog::DialogIntent,
         widgets::input::input::{Input, InputResult},
     },
+    utils::constants::terminal::is_terminal_small,
 };
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 // Main key event handler for Application
-pub fn handle_key_event(app: &mut Application, event: KeyEvent) {
+pub fn handle_key_event(app: &mut Application, event: KeyEvent, terminal_size: (u16, u16)) {
     use crate::app::handlers::action::*;
-    use ratatui::crossterm::event::KeyModifiers;
+
+    // Dont block exit keys while fallback active
+    if is_terminal_small(terminal_size.0, terminal_size.1) {
+        if is_exit_key(&event) {
+            app.running = false;
+        }
+
+        return;
+    }
 
     // Exiting with Ctrl+C
-    if event.code == KeyCode::Char('c') && event.modifiers.contains(KeyModifiers::CONTROL) {
+    if is_kill_process_key(&event) {
         app.running = false;
         return;
     }
@@ -79,4 +88,15 @@ pub fn handle_global_key(app: &mut Application, key: KeyCode) {
             .show_dialog(Components::help_popup(), DialogIntent::None),
         _ => {}
     }
+}
+
+// If its kill process key
+fn is_kill_process_key(key_event: &KeyEvent) -> bool {
+    key_event.code == KeyCode::Char('c') && key_event.modifiers.contains(KeyModifiers::CONTROL)
+}
+
+fn is_exit_key(key_event: &KeyEvent) -> bool {
+    matches!(key_event.code, KeyCode::Char('q') | KeyCode::Esc)
+        || (key_event.code == KeyCode::Char('c')
+            && key_event.modifiers.contains(KeyModifiers::CONTROL))
 }
