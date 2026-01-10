@@ -1,5 +1,8 @@
 use super::error::ApplicationStateError;
-use crate::app::models::todo::Todo;
+use crate::app::{
+    models::todo::Todo,
+    utils::constants::text::{CLEARED_TASKS_TEXT, REMOVED_TASK_TEXT},
+};
 use ratatui::widgets::ListState;
 
 #[derive(Debug, Default)]
@@ -19,7 +22,7 @@ impl ApplicationState {
     }
 
     // Main service todo
-    pub fn append_todo(&mut self, new_title: impl Into<String>) -> ApplicationResult<()> {
+    pub fn append_todo(&mut self, new_title: impl Into<String>) -> ApplicationResult<String> {
         let title: String = new_title.into();
 
         if title.is_empty() {
@@ -30,13 +33,13 @@ impl ApplicationState {
             return Err(ApplicationStateError::TaskAlreadyExists(title));
         }
 
-        self.todos.push(Todo::new(title));
+        self.todos.push(Todo::new(&title));
         self.select_state.select(Some(self.todos.len() - 1));
 
-        Ok(())
+        Ok(format!("Task {} was added to the list!", title))
     }
 
-    pub fn rename_todo(&mut self, new_title: impl Into<String>) -> ApplicationResult<()> {
+    pub fn rename_todo(&mut self, new_title: impl Into<String>) -> ApplicationResult<String> {
         let new_title: String = new_title.into();
 
         if new_title.is_empty() {
@@ -54,11 +57,17 @@ impl ApplicationState {
             return Err(ApplicationStateError::TaskAlreadyExists(new_title));
         }
 
-        self.todos[index].rename(new_title);
-        Ok(())
+        self.todos[index].rename(&new_title);
+
+        Ok(format!(
+            "Task ({} / {}) was renamed to {}!",
+            index,
+            self.todos.len(),
+            new_title
+        ))
     }
 
-    pub fn remove_todo(&mut self) -> ApplicationResult<()> {
+    pub fn remove_todo(&mut self) -> ApplicationResult<String> {
         if self.todos.is_empty() {
             return Err(ApplicationStateError::CannotRemoveFromEmpty);
         }
@@ -77,7 +86,7 @@ impl ApplicationState {
             self.select_state.select(Some(new_index));
         }
 
-        Ok(())
+        Ok(String::from(REMOVED_TASK_TEXT))
     }
 
     pub fn toggle_current(&mut self) {
@@ -86,13 +95,13 @@ impl ApplicationState {
         }
     }
 
-    pub fn clear_todos(&mut self) -> ApplicationResult<()> {
+    pub fn clear_todos(&mut self) -> ApplicationResult<String> {
         if self.todos.is_empty() {
             return Err(ApplicationStateError::ListEmpty);
         }
 
         self.todos = Vec::new();
-        Ok(())
+        Ok(String::from(CLEARED_TASKS_TEXT))
     }
 
     // Other actions

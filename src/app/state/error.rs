@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter, Result};
 
 // Errors in application
+#[derive(Debug, PartialEq)]
 pub enum ApplicationStateError {
     TaskNotSelected,
     TaskAlreadyExists(String),

@@ -1,5 +1,5 @@
 use crate::app::{
-    state::error::ApplicationStateError,
+    state::state::ApplicationResult,
     ui::{
         dialogs::dialog::{Dialog, DialogIntent},
         widgets::{input::input::Input, notification::notification::Notification},
@@ -55,14 +55,18 @@ impl UIState {
         self.notification = Some(notification);
     }
 
-    pub fn notify<T>(&mut self, result: Result<T, ApplicationStateError>, success_message: &str) {
+    pub fn expire_notification(&mut self) {
+        if let Some(n) = &self.notification
+            && n.is_expired()
+        {
+            self.notification = None;
+        }
+    }
+
+    pub fn notify(&mut self, result: ApplicationResult<String>) {
         match result {
-            Ok(_) => {
-                self.show_notification(Notification::success(success_message));
-            }
-            Err(err) => {
-                self.show_notification(Notification::error(err.to_string()));
-            }
+            Ok(msg) => self.show_notification(Notification::success(msg)),
+            Err(err) => self.show_notification(Notification::error(err.to_string())),
         }
     }
 }
