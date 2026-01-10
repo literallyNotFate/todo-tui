@@ -11,8 +11,8 @@ pub mod terminal {
     pub const MIN_WIDTH: u16 = 80;
     pub const MIN_HEIGHT: u16 = 24;
 
-    pub fn is_terminal_small(area: Rect) -> bool {
-        area.width < MIN_WIDTH || area.height < MIN_HEIGHT
+    pub fn is_terminal_small(width: u16, height: u16) -> bool {
+        width < MIN_WIDTH || height < MIN_HEIGHT
     }
 
     pub fn dimension_colors(area: Rect) -> (Color, Color) {

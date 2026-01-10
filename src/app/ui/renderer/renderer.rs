@@ -22,7 +22,7 @@ impl Renderer {
         };
 
         let area: Rect = frame.area();
-        if is_terminal_small(area) {
+        if is_terminal_small(area.width, area.height) {
             Fallback::render(frame, area);
             return;
         }

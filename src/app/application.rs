@@ -2,7 +2,7 @@ use super::{
     state::state::ApplicationState,
     ui::renderer::{renderer::Renderer, state::UIState},
 };
-use crate::app::handlers::key::handle_key_event;
+use crate::app::{handlers::key::handle_key_event, utils::constants::terminal::is_terminal_small};
 use color_eyre::eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -38,9 +38,15 @@ impl Application {
             let timeout: Duration = TICK_RATE.saturating_sub(last_tick.elapsed());
 
             if event::poll(timeout)?
-                && let Event::Key(key) = event::read()?
+                && let Event::Key(key_event) = event::read()?
             {
-                handle_key_event(self, key);
+                if let Ok(size) = terminal.size()
+                    && is_terminal_small(size.width, size.height)
+                {
+                    continue;
+                }
+
+                handle_key_event(self, key_event);
             }
 
             if last_tick.elapsed() >= TICK_RATE {
