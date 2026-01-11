@@ -91,11 +91,11 @@ pub fn handle_global_key(app: &mut Application, key: KeyCode) {
 }
 
 // If its kill process key
-fn is_kill_process_key(key_event: &KeyEvent) -> bool {
+pub fn is_kill_process_key(key_event: &KeyEvent) -> bool {
     key_event.code == KeyCode::Char('c') && key_event.modifiers.contains(KeyModifiers::CONTROL)
 }
 
-fn is_exit_key(key_event: &KeyEvent) -> bool {
+pub fn is_exit_key(key_event: &KeyEvent) -> bool {
     matches!(key_event.code, KeyCode::Char('q') | KeyCode::Esc)
         || (key_event.code == KeyCode::Char('c')
             && key_event.modifiers.contains(KeyModifiers::CONTROL))

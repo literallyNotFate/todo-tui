@@ -7,7 +7,7 @@ pub enum DialogResult {
 }
 
 // Dialog actions (remove todo, clear, save, load, none - for popup)
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DialogIntent {
     None,
     Remove,
