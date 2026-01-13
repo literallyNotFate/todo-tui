@@ -1,9 +1,14 @@
 mod app;
+mod handlers;
+mod models;
+mod state;
+mod ui;
+mod utils;
 
 use color_eyre::Result;
 
 fn main() -> Result<()> {
-    use app::application::Application;
+    use app::Application;
     use ratatui::DefaultTerminal;
 
     color_eyre::install()?;
