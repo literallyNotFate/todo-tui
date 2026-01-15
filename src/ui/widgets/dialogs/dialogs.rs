@@ -13,6 +13,7 @@ pub enum DialogIntent {
     Remove,
     Clear,
     Save,
+    UnsavedExit,
 }
 
 pub trait Dialog {

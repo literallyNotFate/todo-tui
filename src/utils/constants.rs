@@ -56,11 +56,12 @@ pub mod theme {
     pub const CONFIRM_YES_FG_ACTIVE: Color = Color::Rgb(180, 230, 190);
     pub const CONFIRM_CANCEL_FG_ACTIVE: Color = Color::Rgb(230, 180, 180);
 
-    pub const COLOR_GREEN: Color = Color::Rgb(165, 252, 115);
+    pub const COLOR_GREEN: Color = Color::Rgb(152, 195, 121);
     pub const COLOR_ORANGE: Color = Color::Rgb(252, 223, 108);
     pub const COLOR_RED: Color = Color::Rgb(255, 180, 180);
     pub const COLOR_YELLOW: Color = Color::Rgb(252, 244, 0);
-    pub const COLOR_BLUE: Color = Color::Rgb(47, 182, 249);
+    pub const COLOR_BLUE: Color = Color::Rgb(130, 117, 249);
+    pub const COLOR_PURPLE: Color = Color::Rgb(196, 117, 249);
 }
 
 // Prepared text for components
@@ -79,6 +80,7 @@ q/Esc -> quit
     pub const REMOVED_TASK_TEXT: &str = "Task was removed!";
     pub const CLEARED_TASKS_TEXT: &str = "Task were cleared!";
     pub const SAVED_TASKS_TEXT: &str = "Tasks were saved!";
+    pub const UNSAVED_EXIT_TEXT: &str = "You have unsaved changes. Save before exit?";
 }
 
 // Default sizes

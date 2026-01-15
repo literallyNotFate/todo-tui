@@ -1,9 +1,10 @@
 use super::{
     handle_dialog_result, handle_input_submit, open_clear_confirm, open_edit_current,
-    open_remove_confirm, open_save_confirm,
+    open_remove_confirm, open_save_confirm, open_unsaved_exit_confirm,
 };
 use crate::{
     app::Application,
+    state::{ApplicationState, UIState},
     ui::{DialogIntent, Input, InputResult, help_popup},
     utils::constants::terminal::is_terminal_small,
 };
@@ -35,7 +36,13 @@ pub fn handle_key_event(app: &mut Application, event: KeyEvent, terminal_size: (
 
         if let Some(result) = result {
             let intent: DialogIntent = app.ui.dialog.as_ref().unwrap().intent.clone();
-            handle_dialog_result(&mut app.state, &mut app.ui, &result, &intent);
+            handle_dialog_result(
+                &mut app.state,
+                &mut app.ui,
+                &mut app.running,
+                &result,
+                &intent,
+            );
             app.ui.close_dialog();
             return;
         }
@@ -72,7 +79,9 @@ pub fn handle_global_key(app: &mut Application, key_event: &KeyEvent) {
     let mode: KeyModifiers = key_event.modifiers;
 
     match code {
-        KeyCode::Char('q') | KeyCode::Esc => app.running = false,
+        KeyCode::Char('q') | KeyCode::Esc => {
+            handle_close(&mut app.state, &mut app.ui, &mut app.running)
+        }
         KeyCode::Char('k') | KeyCode::Up => app.state.select_state.select_previous(),
         KeyCode::Char('j') | KeyCode::Down => app.state.select_state.select_next(),
         KeyCode::Enter => app.state.toggle_current(),
@@ -85,6 +94,15 @@ pub fn handle_global_key(app: &mut Application, key_event: &KeyEvent) {
             open_save_confirm(&mut app.state, &mut app.ui)
         }
         _ => {}
+    }
+}
+
+// Handle application closing (with unsaved changes)
+pub fn handle_close(app_state: &mut ApplicationState, ui_state: &mut UIState, running: &mut bool) {
+    if app_state.any_unsaved_changes() {
+        open_unsaved_exit_confirm(ui_state);
+    } else {
+        *running = false;
     }
 }
 
@@ -104,9 +122,16 @@ pub fn is_exit_key(key_event: &KeyEvent) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        state::{ActiveDialog, ApplicationState, UIState},
+        state::{ActiveDialog, ApplicationResult, ApplicationState, UIState},
         ui::{Dialog, Popup},
     };
+    use std::{
+        fs::{self, File},
+        hash::{DefaultHasher, Hash, Hasher},
+        io::BufWriter,
+        path::{Path, PathBuf},
+    };
+    use tempdir::TempDir;
 
     // Mock application structure
     struct MockApplication {
@@ -129,13 +154,27 @@ mod tests {
                 self.state.append_todo(format!("Task {}", i + 1)).unwrap();
             }
         }
+
+        pub fn save(&mut self, path: &Path) {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+
+            let file: File = File::create(path).unwrap();
+            let writer: BufWriter<File> = BufWriter::new(file);
+
+            serde_json::to_writer_pretty(writer, &self.state.todos).unwrap();
+            let mut hasher = DefaultHasher::new();
+            self.state.todos.hash(&mut hasher);
+            self.state.saved_todos_hash = hasher.finish();
+        }
     }
 
     // Macro to test handle_global_key() function
     macro_rules! mock_handle_global_key {
         (&mut $app:expr, $key_event:expr) => {
             match $key_event.code {
-                KeyCode::Char('q') | KeyCode::Esc => $app.running = false,
+                KeyCode::Char('q') | KeyCode::Esc => {
+                    handle_close(&mut $app.state, &mut $app.ui, &mut $app.running)
+                }
                 KeyCode::Char('k') | KeyCode::Up => $app.state.select_state.select_previous(),
                 KeyCode::Char('j') | KeyCode::Down => $app.state.select_state.select_next(),
                 KeyCode::Enter => $app.state.toggle_current(),
@@ -171,7 +210,13 @@ mod tests {
                     };
                     if let Some(result) = result {
                         let intent = $app.ui.dialog.as_ref().unwrap().intent.clone();
-                        handle_dialog_result(&mut $app.state, &mut $app.ui, &result, &intent);
+                        handle_dialog_result(
+                            &mut $app.state,
+                            &mut $app.ui,
+                            &mut $app.running,
+                            &result,
+                            &intent,
+                        );
                         $app.ui.close_dialog();
                     }
                 } else if $app.ui.input.is_some() {
@@ -225,18 +270,54 @@ mod tests {
     }
 
     #[test]
-    fn should_handle_global_key_exit() {
+    fn should_handle_close_open_confirm_when_unsaved_changes() {
         let mut app = MockApplication::new();
+        app.state.append_todo("Test task").unwrap();
 
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)
+        handle_close(&mut app.state, &mut app.ui, &mut app.running);
+
+        assert!(app.running, "Running should NOT be false yet");
+        assert!(
+            app.ui.dialog.is_some(),
+            "Unsaved exit confirm dialog should be opened"
         );
-        assert!(!app.running);
+        assert_eq!(
+            app.ui.dialog.as_ref().unwrap().intent,
+            DialogIntent::UnsavedExit,
+            "Intent should be UnsavedExit"
+        );
+    }
+
+    #[test]
+    fn should_handle_close_when_no_changes_made() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
 
         let mut app = MockApplication::new();
-        mock_handle_global_key!(&mut app, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(!app.running);
+        app.save(&path);
+        assert!(!app.state.any_unsaved_changes());
+
+        handle_close(&mut app.state, &mut app.ui, &mut app.running);
+
+        assert!(!app.running, "Running should be set to false");
+        assert!(app.ui.dialog.is_none(), "No dialog should be opened");
+    }
+
+    #[test]
+    fn should_handle_close_when_save_made() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        let mut app = MockApplication::new();
+        app.state.append_todo("Test task").unwrap();
+        assert!(app.state.any_unsaved_changes());
+
+        app.save(&path);
+
+        handle_close(&mut app.state, &mut app.ui, &mut app.running);
+
+        assert!(!app.running, "Running should be false");
+        assert!(app.ui.dialog.is_none(), "No dialog after save");
     }
 
     #[test]
@@ -302,6 +383,15 @@ mod tests {
             KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)
         );
         assert!(app.ui.dialog.is_some(), "Should open save confirm");
+
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)
+        );
+        assert!(
+            app.ui.dialog.is_some(),
+            "Should open unsaved changes confirm"
+        );
     }
 
     #[test]

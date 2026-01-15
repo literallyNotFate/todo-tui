@@ -6,6 +6,7 @@ use crate::{
 use ratatui::widgets::ListState;
 use std::{
     fs::{self, File},
+    hash::{DefaultHasher, Hash, Hasher},
     io::BufWriter,
     path::{Path, PathBuf},
 };
@@ -14,17 +15,23 @@ use std::{
 pub struct ApplicationState {
     pub todos: Vec<Todo>,
     pub select_state: ListState,
+    pub saved_todos_hash: u64,
 }
 
 pub type ApplicationResult<T> = Result<T, ApplicationError>;
 
 impl ApplicationState {
     pub fn new() -> Self {
-        let state = Self::load().unwrap_or_default();
+        let mut state = Self::load().unwrap_or_default();
         if state.todos.is_empty() {
             let _ = state.save();
         }
         state
+    }
+
+    // Check if there any unsaved changes by comparing hash
+    pub fn any_unsaved_changes(&self) -> bool {
+        self.calculate_todos_hash() != self.saved_todos_hash
     }
 
     // Main service todo
@@ -115,7 +122,7 @@ impl ApplicationState {
         Self::load_from_path(&path)
     }
 
-    pub fn save(&self) -> ApplicationResult<String> {
+    pub fn save(&mut self) -> ApplicationResult<String> {
         let path = Self::get_data_path()?;
         Self::save_to_path(self, &path)
     }
@@ -142,6 +149,7 @@ impl ApplicationState {
             return Ok(Self {
                 todos: Vec::new(),
                 select_state: ListState::default(),
+                saved_todos_hash: 0,
             });
         }
 
@@ -152,19 +160,22 @@ impl ApplicationState {
         let mut state = Self {
             todos,
             select_state: ListState::default(),
+            saved_todos_hash: 0,
         };
 
         state.select_state.select_last();
+        state.saved_todos_hash = state.calculate_todos_hash();
         Ok(state)
     }
 
-    fn save_to_path(&self, path: &Path) -> ApplicationResult<String> {
+    fn save_to_path(&mut self, path: &Path) -> ApplicationResult<String> {
         fs::create_dir_all(path.parent().unwrap()).map_err(|_| StorageError::IOError)?;
 
         let file: File = File::create(path).map_err(|_| StorageError::IOError)?;
         let writer: BufWriter<File> = BufWriter::new(file);
 
         serde_json::to_writer_pretty(writer, &self.todos).map_err(|_| StorageError::JSONError)?;
+        self.saved_todos_hash = self.calculate_todos_hash();
         Ok(String::from(SAVED_TASKS_TEXT))
     }
 
@@ -172,6 +183,13 @@ impl ApplicationState {
         dirs::data_dir()
             .ok_or(StorageError::PathNotFound.into())
             .map(|dir| dir.join("todo-tui").join("todos.json"))
+    }
+
+    // Get todos hash to compare to current (to track unsaved changes)
+    fn calculate_todos_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.todos.hash(&mut hasher);
+        hasher.finish()
     }
 }
 
@@ -198,7 +216,7 @@ mod tests {
 
         assert!(!path.exists(), "File should not exist initially");
 
-        let state = ApplicationState::load_from_path(&path).unwrap();
+        let mut state = ApplicationState::load_from_path(&path).unwrap();
 
         if state.todos.is_empty() {
             let result = state.save_to_path(&path);
@@ -528,7 +546,7 @@ mod tests {
         perms.set_mode(0o444);
         fs::set_permissions(temp_dir.path(), perms).unwrap();
 
-        let state: ApplicationState = ApplicationState::default();
+        let mut state: ApplicationState = ApplicationState::default();
         let result: ApplicationResult<String> = state.save_to_path(&path);
 
         assert!(result.is_err());

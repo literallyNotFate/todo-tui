@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Hash)]
 pub struct Todo {
     pub title: String,
     pub done: bool,

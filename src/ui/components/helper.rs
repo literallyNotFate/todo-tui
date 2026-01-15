@@ -1,8 +1,8 @@
 use crate::{
     ui::{Confirm, Dialog, Popup, PopupKind},
     utils::constants::{
-        text::HELP_MESSAGE_TEXT,
-        theme::{COLOR_BLUE, COLOR_ORANGE, COLOR_RED},
+        text::{HELP_MESSAGE_TEXT, UNSAVED_EXIT_TEXT},
+        theme::{COLOR_BLUE, COLOR_ORANGE, COLOR_PURPLE, COLOR_RED},
     },
 };
 use ratatui::crossterm::event::KeyCode;
@@ -46,6 +46,13 @@ pub fn save_todos_confirm(data: usize) -> Confirm {
             data
         ))
         .with_border_color(COLOR_BLUE)
+}
+
+// Unsaved exit confirm
+pub fn unsaved_exit_confirm() -> Confirm {
+    Confirm::new()
+        .with_message(UNSAVED_EXIT_TEXT)
+        .with_border_color(COLOR_PURPLE)
 }
 
 // Unit-tests for components

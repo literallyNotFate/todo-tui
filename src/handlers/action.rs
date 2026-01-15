@@ -7,6 +7,7 @@ use crate::{
 pub fn handle_dialog_result(
     app_state: &mut ApplicationState,
     ui_state: &mut UIState,
+    running: &mut bool,
     result: &DialogResult,
     intent: &DialogIntent,
 ) {
@@ -16,6 +17,7 @@ pub fn handle_dialog_result(
             DialogIntent::Remove => ui_state.notify(app_state.remove_todo()),
             DialogIntent::Clear => ui_state.notify(app_state.clear_todos()),
             DialogIntent::Save => ui_state.notify(app_state.save()),
+            DialogIntent::UnsavedExit => handle_unsaved_exit(app_state, running),
             DialogIntent::None => {}
         },
     }
@@ -32,6 +34,12 @@ pub fn handle_input_submit(
         InputMode::Insert => ui_state.notify(app_state.append_todo(text)),
         InputMode::Edit => ui_state.notify(app_state.rename_todo(text)),
     }
+}
+
+// Handle unsaved changes (confirm and save)
+pub fn handle_unsaved_exit(app_state: &mut ApplicationState, running: &mut bool) {
+    let _ = app_state.save().unwrap_or_default();
+    *running = false;
 }
 
 pub fn open_edit_current(app_state: &mut ApplicationState, ui_state: &mut UIState) {
@@ -72,6 +80,11 @@ pub fn open_save_confirm(app_state: &mut ApplicationState, ui_state: &mut UIStat
     );
 }
 
+pub fn open_unsaved_exit_confirm(ui_state: &mut UIState) {
+    use crate::ui::unsaved_exit_confirm;
+    ui_state.show_dialog(unsaved_exit_confirm(), DialogIntent::UnsavedExit);
+}
+
 // Unit-tests for action handler
 #[cfg(test)]
 mod tests {
@@ -81,10 +94,12 @@ mod tests {
     fn should_handle_dialog_result_cancelled() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
+        let mut running = true;
 
         handle_dialog_result(
             &mut app_state,
             &mut ui_state,
+            &mut running,
             &DialogResult::Cancelled,
             &DialogIntent::Remove,
         );
@@ -96,10 +111,12 @@ mod tests {
     fn should_handle_dialog_result_confirmed_remove() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
+        let mut running = true;
 
         handle_dialog_result(
             &mut app_state,
             &mut ui_state,
+            &mut running,
             &DialogResult::Confirmed,
             &DialogIntent::Remove,
         );
@@ -111,10 +128,12 @@ mod tests {
     fn should_handle_dialog_result_confirmed_clear() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
+        let mut running = true;
 
         handle_dialog_result(
             &mut app_state,
             &mut ui_state,
+            &mut running,
             &DialogResult::Confirmed,
             &DialogIntent::Clear,
         );
@@ -126,10 +145,12 @@ mod tests {
     fn should_handle_dialog_result_confirmed_save() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
+        let mut running = true;
 
         handle_dialog_result(
             &mut app_state,
             &mut ui_state,
+            &mut running,
             &DialogResult::Confirmed,
             &DialogIntent::Save,
         );
@@ -141,10 +162,12 @@ mod tests {
     fn should_handle_dialog_result_none() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
+        let mut running = true;
 
         handle_dialog_result(
             &mut app_state,
             &mut ui_state,
+            &mut running,
             &DialogResult::Confirmed,
             &DialogIntent::None,
         );
@@ -216,5 +239,15 @@ mod tests {
 
         assert!(ui_state.dialog.is_some());
         assert_eq!(ui_state.dialog.unwrap().intent, DialogIntent::Save);
+    }
+
+    #[test]
+    fn should_open_unsaved_confirm_exit() {
+        let mut ui_state = UIState::default();
+
+        open_unsaved_exit_confirm(&mut ui_state);
+
+        assert!(ui_state.dialog.is_some());
+        assert_eq!(ui_state.dialog.unwrap().intent, DialogIntent::UnsavedExit);
     }
 }
