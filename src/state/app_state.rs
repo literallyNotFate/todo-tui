@@ -7,7 +7,7 @@ use ratatui::widgets::ListState;
 use std::{
     fs::{self, File},
     io::BufWriter,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 #[derive(Debug, Default)]
@@ -22,9 +22,8 @@ impl ApplicationState {
     pub fn new() -> Self {
         let state = Self::load().unwrap_or_default();
         if state.todos.is_empty() {
-            state.save().ok();
+            let _ = state.save();
         }
-
         state
     }
 
@@ -110,14 +109,43 @@ impl ApplicationState {
         Ok(String::from(CLEARED_TASKS_TEXT))
     }
 
+    // Save and load
     pub fn load() -> ApplicationResult<Self> {
         let path = Self::get_data_path()?;
-        if !path.exists() {
-            return Ok(Self::default());
+        Self::load_from_path(&path)
+    }
+
+    pub fn save(&self) -> ApplicationResult<String> {
+        let path = Self::get_data_path()?;
+        Self::save_to_path(self, &path)
+    }
+
+    // Other actions/helper functions
+    pub fn current_todo(&self) -> Option<&Todo> {
+        self.select_state.selected().and_then(|i| self.todos.get(i))
+    }
+
+    pub fn todo_by_title(&self, target: impl Into<String>) -> Option<&Todo> {
+        let title: String = target.into();
+        self.todos.iter().find(|todo| todo.title == title)
+    }
+
+    fn load_from_path(path: &Path) -> ApplicationResult<Self> {
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)
+                    .map_err(|_| ApplicationError::Storage(StorageError::IOError))?;
+            }
         }
 
-        let file = File::open(&path).map_err(|_| StorageError::IOError)?;
+        if !path.exists() {
+            return Ok(Self {
+                todos: Vec::new(),
+                select_state: ListState::default(),
+            });
+        }
 
+        let file: File = File::open(&path).map_err(|_| StorageError::IOError)?;
         let todos: Vec<Todo> =
             serde_json::from_reader(file).map_err(|_| StorageError::JSONError)?;
 
@@ -130,29 +158,17 @@ impl ApplicationState {
         Ok(state)
     }
 
-    pub fn save(&self) -> ApplicationResult<String> {
-        let path = Self::get_data_path()?;
+    fn save_to_path(&self, path: &Path) -> ApplicationResult<String> {
         fs::create_dir_all(path.parent().unwrap()).map_err(|_| StorageError::IOError)?;
 
-        let file = File::create(&path).map_err(|_| StorageError::IOError)?;
-        let writer = BufWriter::new(file);
+        let file: File = File::create(path).map_err(|_| StorageError::IOError)?;
+        let writer: BufWriter<File> = BufWriter::new(file);
 
         serde_json::to_writer_pretty(writer, &self.todos).map_err(|_| StorageError::JSONError)?;
-
         Ok(String::from(SAVED_TASKS_TEXT))
     }
 
-    // Other actions
-    pub fn current_todo(&self) -> Option<&Todo> {
-        self.select_state.selected().and_then(|i| self.todos.get(i))
-    }
-
-    pub fn todo_by_title(&self, target: impl Into<String>) -> Option<&Todo> {
-        let title: String = target.into();
-        self.todos.iter().find(|todo| todo.title == title)
-    }
-
-    fn get_data_path() -> ApplicationResult<PathBuf> {
+    pub fn get_data_path() -> ApplicationResult<PathBuf> {
         dirs::data_dir()
             .ok_or(StorageError::PathNotFound.into())
             .map(|dir| dir.join("todo-tui").join("todos.json"))
@@ -163,10 +179,11 @@ impl ApplicationState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempdir::TempDir;
 
     // Helper function to setup list with multiple tasks (non empty)
     fn setup_with_n_todos(n: usize) -> ApplicationState {
-        let mut state: ApplicationState = ApplicationState::new();
+        let mut state: ApplicationState = ApplicationState::default();
         for i in 1..=n {
             let _: ApplicationResult<String> = state.append_todo(format!("Task {}", i));
         }
@@ -175,8 +192,56 @@ mod tests {
     }
 
     #[test]
+    fn should_create_new_state_empty_todos() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        assert!(!path.exists(), "File should not exist initially");
+
+        let state = ApplicationState::load_from_path(&path).unwrap();
+
+        if state.todos.is_empty() {
+            let result = state.save_to_path(&path);
+            assert!(result.is_ok(), "Save should succeed");
+        }
+
+        assert!(path.exists(), "Empty file should be created after save");
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert_eq!(content.trim(), "[]", "File should contain empty JSON array");
+        assert!(state.todos.is_empty());
+    }
+
+    #[test]
+    fn should_create_new_state_with_saved_todos() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        fs::write(&path, r#"[{"title":"Test","done":false}]"#).unwrap();
+        let state = ApplicationState::load_from_path(&path).unwrap();
+
+        assert_eq!(state.todos.len(), 1);
+        assert_eq!(state.todos[0].title, "Test");
+        assert!(!state.todos[0].done);
+    }
+
+    #[test]
+    fn should_create_new_state_default_if_path_not_found() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("non_existent_dir").join("todos.json");
+        assert!(!path.exists());
+
+        let result: ApplicationResult<ApplicationState> = ApplicationState::load_from_path(&path);
+        assert!(result.is_ok());
+
+        let state: ApplicationState = result.unwrap();
+        assert!(state.todos.is_empty());
+        assert_eq!(state.select_state.selected(), None);
+    }
+
+    #[test]
     fn should_append_todo() {
-        let mut state: ApplicationState = ApplicationState::new();
+        let mut state: ApplicationState = ApplicationState::default();
         let result: ApplicationResult<String> = state.append_todo("Test");
 
         assert_eq!(result, Ok(String::from("Task Test was added to the list!")));
@@ -188,7 +253,7 @@ mod tests {
 
     #[test]
     fn should_invoke_empty_title_error_on_append() {
-        let mut state: ApplicationState = ApplicationState::new();
+        let mut state: ApplicationState = ApplicationState::default();
         let result: ApplicationResult<String> = state.append_todo("");
 
         assert_eq!(result, Err(ApplicationError::Todo(TodoError::EmptyTitle)));
@@ -260,7 +325,7 @@ mod tests {
 
     #[test]
     fn should_invoke_not_selected_error_on_rename() {
-        let mut state: ApplicationState = ApplicationState::new();
+        let mut state: ApplicationState = ApplicationState::default();
         state.select_state.select(None);
         let result: ApplicationResult<String> = state.rename_todo("Should fail");
 
@@ -307,7 +372,7 @@ mod tests {
 
     #[test]
     fn should_invoke_cannot_remove_empty_error_on_remove() {
-        let mut state: ApplicationState = ApplicationState::new();
+        let mut state: ApplicationState = ApplicationState::default();
         let result: ApplicationResult<String> = state.remove_todo();
 
         assert_eq!(
@@ -344,7 +409,7 @@ mod tests {
 
     #[test]
     fn should_toggle_current_on_empty() {
-        let mut state: ApplicationState = ApplicationState::new();
+        let mut state: ApplicationState = ApplicationState::default();
         state.select_state.select(None);
         state.toggle_current();
 
@@ -362,7 +427,7 @@ mod tests {
 
     #[test]
     fn should_invoke_list_empty_on_clear() {
-        let mut state: ApplicationState = ApplicationState::new();
+        let mut state: ApplicationState = ApplicationState::default();
         let result: ApplicationResult<String> = state.clear_todos();
 
         assert_eq!(result, Err(ApplicationError::Todo(TodoError::ListEmpty)));
@@ -389,7 +454,7 @@ mod tests {
 
     #[test]
     fn should_return_none_if_list_empty() {
-        let state: ApplicationState = ApplicationState::new();
+        let state: ApplicationState = ApplicationState::default();
         assert!(state.current_todo().is_none());
     }
 
@@ -399,5 +464,77 @@ mod tests {
         state.select_state.select(Some(999));
 
         assert!(state.current_todo().is_none());
+    }
+
+    #[test]
+    fn should_save_and_load_todos_successfully() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        let mut state = ApplicationState::default();
+        state.append_todo("Task 1").unwrap();
+        state.append_todo("Task 2").unwrap();
+
+        let result: ApplicationResult<String> = state.save_to_path(&path);
+        assert_eq!(result, Ok(String::from(SAVED_TASKS_TEXT)));
+
+        let loaded: ApplicationState = ApplicationState::load_from_path(&path).unwrap();
+
+        assert_eq!(loaded.todos.len(), 2);
+        assert_eq!(loaded.todos[0].title, "Task 1");
+        assert_eq!(loaded.todos[1].title, "Task 2");
+    }
+
+    #[test]
+    fn should_create_directory_on_load_if_missing_and_return_default() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("new_subdir").join("todos.json");
+
+        assert!(!path.parent().unwrap().exists());
+
+        let state: ApplicationState = ApplicationState::load_from_path(&path).unwrap();
+
+        assert!(
+            path.parent().unwrap().exists(),
+            "Directory should be created"
+        );
+        assert!(state.todos.is_empty());
+    }
+
+    #[test]
+    fn should_invoke_jsonerror_on_load_if_json_not_valid() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        fs::write(&path, "invalid json {").unwrap();
+        let result: ApplicationResult<ApplicationState> = ApplicationState::load_from_path(&path);
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Storage(StorageError::JSONError))
+        ));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn should_invoke_ioerror_on_save_when_no_write_permission() {
+        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        let mut perms: Permissions = fs::metadata(temp_dir.path()).unwrap().permissions();
+        perms.set_mode(0o444);
+        fs::set_permissions(temp_dir.path(), perms).unwrap();
+
+        let state: ApplicationState = ApplicationState::default();
+        let result: ApplicationResult<String> = state.save_to_path(&path);
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Storage(StorageError::IOError))
+        ));
     }
 }
