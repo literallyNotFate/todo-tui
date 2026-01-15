@@ -1,6 +1,6 @@
 use super::{
     handle_dialog_result, handle_input_submit, open_clear_confirm, open_edit_current,
-    open_remove_confirm,
+    open_remove_confirm, open_save_confirm,
 };
 use crate::{
     app::Application,
@@ -63,12 +63,15 @@ pub fn handle_key_event(app: &mut Application, event: KeyEvent, terminal_size: (
         }
     }
 
-    handle_global_key(app, event.code);
+    handle_global_key(app, &event);
 }
 
 // Handle global keys
-pub fn handle_global_key(app: &mut Application, key: KeyCode) {
-    match key {
+pub fn handle_global_key(app: &mut Application, key_event: &KeyEvent) {
+    let code: KeyCode = key_event.code;
+    let mode: KeyModifiers = key_event.modifiers;
+
+    match code {
         KeyCode::Char('q') | KeyCode::Esc => app.running = false,
         KeyCode::Char('k') | KeyCode::Up => app.state.select_state.select_previous(),
         KeyCode::Char('j') | KeyCode::Down => app.state.select_state.select_next(),
@@ -78,6 +81,9 @@ pub fn handle_global_key(app: &mut Application, key: KeyCode) {
         KeyCode::Char('d') => open_remove_confirm(&mut app.state, &mut app.ui),
         KeyCode::Char('x') => open_clear_confirm(&mut app.state, &mut app.ui),
         KeyCode::Char('?') => app.ui.show_dialog(help_popup(), DialogIntent::None),
+        KeyCode::Char('s') if mode.contains(KeyModifiers::CONTROL) => {
+            open_save_confirm(&mut app.state, &mut app.ui)
+        }
         _ => {}
     }
 }
@@ -127,8 +133,8 @@ mod tests {
 
     // Macro to test handle_global_key() function
     macro_rules! mock_handle_global_key {
-        (&mut $app:expr, $key:expr) => {
-            match $key {
+        (&mut $app:expr, $key_event:expr) => {
+            match $key_event.code {
                 KeyCode::Char('q') | KeyCode::Esc => $app.running = false,
                 KeyCode::Char('k') | KeyCode::Up => $app.state.select_state.select_previous(),
                 KeyCode::Char('j') | KeyCode::Down => $app.state.select_state.select_next(),
@@ -138,6 +144,9 @@ mod tests {
                 KeyCode::Char('d') => open_remove_confirm(&mut $app.state, &mut $app.ui),
                 KeyCode::Char('x') => open_clear_confirm(&mut $app.state, &mut $app.ui),
                 KeyCode::Char('?') => $app.ui.show_dialog(help_popup(), DialogIntent::None),
+                KeyCode::Char('s') if $key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                    open_save_confirm(&mut $app.state, &mut $app.ui)
+                }
                 _ => {}
             }
         };
@@ -182,7 +191,7 @@ mod tests {
                         }
                     }
                 } else {
-                    mock_handle_global_key!(&mut $app, $event.code);
+                    mock_handle_global_key!(&mut $app, $event);
                 }
             }
         }};
@@ -219,11 +228,14 @@ mod tests {
     fn should_handle_global_key_exit() {
         let mut app = MockApplication::new();
 
-        mock_handle_global_key!(&mut app, KeyCode::Char('q'));
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)
+        );
         assert!(!app.running);
 
         let mut app = MockApplication::new();
-        mock_handle_global_key!(&mut app, KeyCode::Esc);
+        mock_handle_global_key!(&mut app, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(!app.running);
     }
 
@@ -234,10 +246,16 @@ mod tests {
 
         assert_eq!(app.state.select_state.selected(), Some(3));
 
-        mock_handle_global_key!(&mut app, KeyCode::Char('k'));
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE)
+        );
         assert_eq!(app.state.select_state.selected(), Some(2));
 
-        mock_handle_global_key!(&mut app, KeyCode::Char('j'));
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)
+        );
         assert_eq!(app.state.select_state.selected(), Some(3));
     }
 
@@ -246,23 +264,44 @@ mod tests {
         let mut app = MockApplication::new();
         app.set_n_todos(3);
 
-        mock_handle_global_key!(&mut app, KeyCode::Enter);
+        mock_handle_global_key!(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(app.state.todos[3].done, "Should be toggled");
 
-        mock_handle_global_key!(&mut app, KeyCode::Char('a'));
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)
+        );
         assert!(app.ui.input.is_some(), "Should show input on 'a'");
 
-        mock_handle_global_key!(&mut app, KeyCode::Char('r'));
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)
+        );
         assert!(app.ui.input.is_some(), "Should open edit on 'r'");
 
-        mock_handle_global_key!(&mut app, KeyCode::Char('d'));
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)
+        );
         assert!(app.ui.dialog.is_some(), "Should open remove confirm on 'd'");
 
-        mock_handle_global_key!(&mut app, KeyCode::Char('x'));
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE)
+        );
         assert!(app.ui.dialog.is_some(), "Should open clear confirm on 'x'");
 
-        mock_handle_global_key!(&mut app, KeyCode::Char('?'));
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE)
+        );
         assert!(app.ui.dialog.is_some(), "Should show help on '?'");
+
+        mock_handle_global_key!(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)
+        );
+        assert!(app.ui.dialog.is_some(), "Should open save confirm");
     }
 
     #[test]

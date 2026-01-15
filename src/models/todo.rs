@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Todo {
     pub title: String,
     pub done: bool,

@@ -15,6 +15,7 @@ pub fn handle_dialog_result(
         DialogResult::Confirmed => match intent {
             DialogIntent::Remove => ui_state.notify(app_state.remove_todo()),
             DialogIntent::Clear => ui_state.notify(app_state.clear_todos()),
+            DialogIntent::Save => ui_state.notify(app_state.save()),
             DialogIntent::None => {}
         },
     }
@@ -63,6 +64,14 @@ pub fn open_clear_confirm(app_state: &mut ApplicationState, ui_state: &mut UISta
     );
 }
 
+pub fn open_save_confirm(app_state: &mut ApplicationState, ui_state: &mut UIState) {
+    use crate::ui::save_todos_confirm;
+    ui_state.show_dialog(
+        save_todos_confirm(app_state.todos.len()),
+        DialogIntent::Save,
+    );
+}
+
 // Unit-tests for action handler
 #[cfg(test)]
 mod tests {
@@ -95,7 +104,7 @@ mod tests {
             &DialogIntent::Remove,
         );
 
-        assert!(ui_state.notification.is_some(),);
+        assert!(ui_state.notification.is_some());
     }
 
     #[test]
@@ -108,6 +117,21 @@ mod tests {
             &mut ui_state,
             &DialogResult::Confirmed,
             &DialogIntent::Clear,
+        );
+
+        assert!(ui_state.notification.is_some());
+    }
+
+    #[test]
+    fn should_handle_dialog_result_confirmed_save() {
+        let mut app_state = ApplicationState::default();
+        let mut ui_state = UIState::default();
+
+        handle_dialog_result(
+            &mut app_state,
+            &mut ui_state,
+            &DialogResult::Confirmed,
+            &DialogIntent::Save,
         );
 
         assert!(ui_state.notification.is_some());
@@ -147,7 +171,7 @@ mod tests {
 
         handle_input_submit(&mut app_state, &mut ui_state, InputMode::Edit, text);
 
-        assert!(ui_state.notification.is_some(),);
+        assert!(ui_state.notification.is_some());
     }
 
     #[test]
@@ -179,7 +203,18 @@ mod tests {
 
         open_clear_confirm(&mut app_state, &mut ui_state);
 
-        assert!(ui_state.dialog.is_some(),);
+        assert!(ui_state.dialog.is_some());
         assert_eq!(ui_state.dialog.unwrap().intent, DialogIntent::Clear);
+    }
+
+    #[test]
+    fn should_open_save_confirm() {
+        let mut app_state = ApplicationState::default();
+        let mut ui_state = UIState::default();
+
+        open_save_confirm(&mut app_state, &mut ui_state);
+
+        assert!(ui_state.dialog.is_some());
+        assert_eq!(ui_state.dialog.unwrap().intent, DialogIntent::Save);
     }
 }

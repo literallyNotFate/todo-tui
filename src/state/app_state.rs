@@ -1,9 +1,14 @@
 use crate::{
     models::Todo,
-    state::ApplicationStateError,
-    utils::constants::text::{CLEARED_TASKS_TEXT, REMOVED_TASK_TEXT},
+    state::{ApplicationError, StorageError, TodoError},
+    utils::constants::text::{CLEARED_TASKS_TEXT, REMOVED_TASK_TEXT, SAVED_TASKS_TEXT},
 };
 use ratatui::widgets::ListState;
+use std::{
+    fs::{self, File},
+    io::BufWriter,
+    path::PathBuf,
+};
 
 #[derive(Debug, Default)]
 pub struct ApplicationState {
@@ -11,14 +16,16 @@ pub struct ApplicationState {
     pub select_state: ListState,
 }
 
-pub type ApplicationResult<T> = Result<T, ApplicationStateError>;
+pub type ApplicationResult<T> = Result<T, ApplicationError>;
 
 impl ApplicationState {
     pub fn new() -> Self {
-        Self {
-            todos: Vec::new(),
-            select_state: ListState::default().with_selected(Some(0)),
+        let state = Self::load().unwrap_or_default();
+        if state.todos.is_empty() {
+            state.save().ok();
         }
+
+        state
     }
 
     // Main service todo
@@ -26,16 +33,15 @@ impl ApplicationState {
         let title: String = new_title.into();
 
         if title.is_empty() {
-            return Err(ApplicationStateError::EmptyTitle);
+            return Err(TodoError::EmptyTitle.into());
         }
 
         if self.todo_by_title(&title).is_some() {
-            return Err(ApplicationStateError::TaskAlreadyExists(title));
+            return Err(TodoError::TaskAlreadyExists(title).into());
         }
 
         self.todos.push(Todo::new(&title));
         self.select_state.select(Some(self.todos.len() - 1));
-
         Ok(format!("Task {} was added to the list!", title))
     }
 
@@ -43,25 +49,23 @@ impl ApplicationState {
         let new_title: String = new_title.into();
 
         if new_title.is_empty() {
-            return Err(ApplicationStateError::EmptyTitle);
+            return Err(TodoError::EmptyTitle.into());
         }
 
         let index: usize = self
             .select_state
             .selected()
-            .ok_or(ApplicationStateError::TaskNotSelected)?;
+            .ok_or(TodoError::TaskNotSelected)?;
 
         let current_title: &String = &self.todos[index].title;
-
         if new_title != *current_title && self.todo_by_title(&new_title).is_some() {
-            return Err(ApplicationStateError::TaskAlreadyExists(new_title));
+            return Err(TodoError::TaskAlreadyExists(new_title).into());
         }
 
         self.todos[index].rename(&new_title);
-
         Ok(format!(
             "Task ({} / {}) was renamed to {}!",
-            index,
+            index + 1,
             self.todos.len(),
             new_title
         ))
@@ -69,13 +73,13 @@ impl ApplicationState {
 
     pub fn remove_todo(&mut self) -> ApplicationResult<String> {
         if self.todos.is_empty() {
-            return Err(ApplicationStateError::CannotRemoveFromEmpty);
+            return Err(TodoError::CannotRemoveFromEmpty.into());
         }
 
         let index: usize = self
             .select_state
             .selected()
-            .ok_or(ApplicationStateError::TaskNotSelected)?;
+            .ok_or(TodoError::TaskNotSelected)?;
 
         self.todos.remove(index);
 
@@ -97,11 +101,45 @@ impl ApplicationState {
 
     pub fn clear_todos(&mut self) -> ApplicationResult<String> {
         if self.todos.is_empty() {
-            return Err(ApplicationStateError::ListEmpty);
+            return Err(TodoError::ListEmpty.into());
         }
 
         self.todos = Vec::new();
+        self.select_state.select(None);
+
         Ok(String::from(CLEARED_TASKS_TEXT))
+    }
+
+    pub fn load() -> ApplicationResult<Self> {
+        let path = Self::get_data_path()?;
+        if !path.exists() {
+            return Ok(Self::default());
+        }
+
+        let file = File::open(&path).map_err(|_| StorageError::IOError)?;
+
+        let todos: Vec<Todo> =
+            serde_json::from_reader(file).map_err(|_| StorageError::JSONError)?;
+
+        let mut state = Self {
+            todos,
+            select_state: ListState::default(),
+        };
+
+        state.select_state.select_last();
+        Ok(state)
+    }
+
+    pub fn save(&self) -> ApplicationResult<String> {
+        let path = Self::get_data_path()?;
+        fs::create_dir_all(path.parent().unwrap()).map_err(|_| StorageError::IOError)?;
+
+        let file = File::create(&path).map_err(|_| StorageError::IOError)?;
+        let writer = BufWriter::new(file);
+
+        serde_json::to_writer_pretty(writer, &self.todos).map_err(|_| StorageError::JSONError)?;
+
+        Ok(String::from(SAVED_TASKS_TEXT))
     }
 
     // Other actions
@@ -112,6 +150,12 @@ impl ApplicationState {
     pub fn todo_by_title(&self, target: impl Into<String>) -> Option<&Todo> {
         let title: String = target.into();
         self.todos.iter().find(|todo| todo.title == title)
+    }
+
+    fn get_data_path() -> ApplicationResult<PathBuf> {
+        dirs::data_dir()
+            .ok_or(StorageError::PathNotFound.into())
+            .map(|dir| dir.join("todo-tui").join("todos.json"))
     }
 }
 
@@ -131,13 +175,6 @@ mod tests {
     }
 
     #[test]
-    fn should_create_new_state() {
-        let state: ApplicationState = ApplicationState::new();
-        assert!(state.todos.is_empty());
-        assert_eq!(state.select_state.selected(), Some(0));
-    }
-
-    #[test]
     fn should_append_todo() {
         let mut state: ApplicationState = ApplicationState::new();
         let result: ApplicationResult<String> = state.append_todo("Test");
@@ -154,7 +191,7 @@ mod tests {
         let mut state: ApplicationState = ApplicationState::new();
         let result: ApplicationResult<String> = state.append_todo("");
 
-        assert_eq!(result, Err(ApplicationStateError::EmptyTitle));
+        assert_eq!(result, Err(ApplicationError::Todo(TodoError::EmptyTitle)));
         assert!(state.todos.is_empty());
     }
 
@@ -164,7 +201,10 @@ mod tests {
         let title: String = String::from("Task 1");
         let result: ApplicationResult<String> = state.append_todo(&title);
 
-        assert_eq!(result, Err(ApplicationStateError::TaskAlreadyExists(title)));
+        assert_eq!(
+            result,
+            Err(ApplicationError::Todo(TodoError::TaskAlreadyExists(title)))
+        );
         assert_eq!(state.todos.len(), 2);
     }
 
@@ -189,7 +229,7 @@ mod tests {
             result,
             Ok(format!(
                 "Task ({} / {}) was renamed to {}!",
-                1, 2, new_title
+                2, 2, new_title
             )),
         );
         assert_eq!(state.todos[1].title, new_title);
@@ -201,7 +241,7 @@ mod tests {
         let mut state: ApplicationState = setup_with_n_todos(1);
         let result: ApplicationResult<String> = state.rename_todo("");
 
-        assert_eq!(result, Err(ApplicationStateError::EmptyTitle));
+        assert_eq!(result, Err(ApplicationError::Todo(TodoError::EmptyTitle)));
         assert_eq!(state.todos[0].title, "Task 1");
     }
 
@@ -211,7 +251,10 @@ mod tests {
         let title: String = "Task 1".to_string();
         let result: ApplicationResult<String> = state.rename_todo(&title);
 
-        assert_eq!(result, Err(ApplicationStateError::TaskAlreadyExists(title)));
+        assert_eq!(
+            result,
+            Err(ApplicationError::Todo(TodoError::TaskAlreadyExists(title)))
+        );
         assert_eq!(state.todos[2].title, "Task 3");
     }
 
@@ -221,7 +264,10 @@ mod tests {
         state.select_state.select(None);
         let result: ApplicationResult<String> = state.rename_todo("Should fail");
 
-        assert_eq!(result, Err(ApplicationStateError::TaskNotSelected));
+        assert_eq!(
+            result,
+            Err(ApplicationError::Todo(TodoError::TaskNotSelected))
+        );
     }
 
     #[test]
@@ -264,7 +310,10 @@ mod tests {
         let mut state: ApplicationState = ApplicationState::new();
         let result: ApplicationResult<String> = state.remove_todo();
 
-        assert_eq!(result, Err(ApplicationStateError::CannotRemoveFromEmpty));
+        assert_eq!(
+            result,
+            Err(ApplicationError::Todo(TodoError::CannotRemoveFromEmpty))
+        );
     }
 
     #[test]
@@ -273,7 +322,10 @@ mod tests {
         state.select_state.select(None);
         let result: ApplicationResult<String> = state.remove_todo();
 
-        assert_eq!(result, Err(ApplicationStateError::TaskNotSelected));
+        assert_eq!(
+            result,
+            Err(ApplicationError::Todo(TodoError::TaskNotSelected))
+        );
     }
 
     #[test]
@@ -313,7 +365,7 @@ mod tests {
         let mut state: ApplicationState = ApplicationState::new();
         let result: ApplicationResult<String> = state.clear_todos();
 
-        assert_eq!(result, Err(ApplicationStateError::ListEmpty));
+        assert_eq!(result, Err(ApplicationError::Todo(TodoError::ListEmpty)));
         assert!(state.todos.is_empty());
     }
 

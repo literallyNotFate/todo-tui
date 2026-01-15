@@ -60,6 +60,7 @@ pub mod theme {
     pub const COLOR_ORANGE: Color = Color::Rgb(252, 223, 108);
     pub const COLOR_RED: Color = Color::Rgb(255, 180, 180);
     pub const COLOR_YELLOW: Color = Color::Rgb(252, 244, 0);
+    pub const COLOR_BLUE: Color = Color::Rgb(47, 182, 249);
 }
 
 // Prepared text for components
@@ -71,11 +72,13 @@ x -> clear all todos
 Enter -> mark as completed
 k/Up -> go up
 j/Down -> go down
+<C-s> -> save todos
 q/Esc -> quit
 ? -> toggle help";
 
     pub const REMOVED_TASK_TEXT: &str = "Task was removed!";
     pub const CLEARED_TASKS_TEXT: &str = "Task were cleared!";
+    pub const SAVED_TASKS_TEXT: &str = "Tasks were saved!";
 }
 
 // Default sizes

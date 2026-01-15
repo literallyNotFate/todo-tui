@@ -6,12 +6,13 @@ pub enum DialogResult {
     Cancelled,
 }
 
-// Dialog actions (remove todo, clear, save, load, none - for popup)
+// Dialog actions (remove todo, clear, save, none - for popup)
 #[derive(Debug, Clone, PartialEq)]
 pub enum DialogIntent {
     None,
     Remove,
     Clear,
+    Save,
 }
 
 pub trait Dialog {

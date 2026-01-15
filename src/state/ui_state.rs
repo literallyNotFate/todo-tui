@@ -73,7 +73,7 @@ impl UIState {
 mod tests {
     use super::*;
     use crate::{
-        state::ApplicationStateError,
+        state::{ApplicationError, TodoError},
         ui::{NotificationKind, Popup},
     };
     use std::{
@@ -135,7 +135,7 @@ mod tests {
         assert_eq!(success_notification.message, "Success");
         assert_eq!(success_notification.kind, NotificationKind::Success);
 
-        ui.notify(Err(ApplicationStateError::TaskNotSelected));
+        ui.notify(Err(ApplicationError::Todo(TodoError::TaskNotSelected)));
 
         let error_notification: Notification = ui.notification.unwrap();
         assert_eq!(error_notification.message, "No task was selected!");

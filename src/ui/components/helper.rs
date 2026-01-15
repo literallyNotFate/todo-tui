@@ -2,7 +2,7 @@ use crate::{
     ui::{Confirm, Dialog, Popup, PopupKind},
     utils::constants::{
         text::HELP_MESSAGE_TEXT,
-        theme::{COLOR_ORANGE, COLOR_RED},
+        theme::{COLOR_BLUE, COLOR_ORANGE, COLOR_RED},
     },
 };
 use ratatui::crossterm::event::KeyCode;
@@ -36,6 +36,16 @@ pub fn clear_todos_confirm(data: usize) -> Confirm {
             data
         ))
         .with_border_color(COLOR_ORANGE)
+}
+
+// Save all todos to json file
+pub fn save_todos_confirm(data: usize) -> Confirm {
+    Confirm::new()
+        .with_message(format!(
+            "Do you want to save tasks (todos count: {})?",
+            data
+        ))
+        .with_border_color(COLOR_BLUE)
 }
 
 // Unit-tests for components
@@ -93,5 +103,19 @@ mod tests {
         assert_eq!(clear_confirm.select, ConfirmOption::Cancel);
         assert_eq!(clear_confirm.anchor, Anchor::Center);
         assert_eq!(clear_confirm.styles.border_color, COLOR_ORANGE);
+    }
+
+    #[test]
+    fn should_return_save_confirm() {
+        let count: usize = 3;
+        let save_confirm: Confirm = save_todos_confirm(count);
+
+        assert_eq!(
+            save_confirm.message,
+            format!("Do you want to save tasks (todos count: {})?", count)
+        );
+        assert_eq!(save_confirm.select, ConfirmOption::Cancel);
+        assert_eq!(save_confirm.anchor, Anchor::Center);
+        assert_eq!(save_confirm.styles.border_color, COLOR_BLUE);
     }
 }
