@@ -1,88 +1,80 @@
 use crate::{
     state::{ApplicationState, UIState},
-    ui::{DialogIntent, DialogResult, InputMode},
+    traits::{ModalAction, ModalResult},
+    ui::Confirm,
 };
 
-// Perform action based on dialog result enum
-pub fn handle_dialog_result(
+// Perform action based on modal result enum
+pub fn handle_modal_result(
     app_state: &mut ApplicationState,
     ui_state: &mut UIState,
     running: &mut bool,
-    result: &DialogResult,
-    intent: &DialogIntent,
+    result: &ModalResult,
+    action: &ModalAction,
 ) {
     match result {
-        DialogResult::Cancelled => {}
-        DialogResult::Confirmed => match intent {
-            DialogIntent::Remove => ui_state.notify(app_state.remove_todo()),
-            DialogIntent::Clear => ui_state.notify(app_state.clear_todos()),
-            DialogIntent::Save => ui_state.notify(app_state.save()),
-            DialogIntent::UnsavedExit => handle_unsaved_exit(app_state, running),
-            DialogIntent::None => {}
+        ModalResult::Cancelled => {}
+        ModalResult::Confirmed => match action {
+            ModalAction::Remove => {
+                let result =
+                    app_state.remove(&ui_state.current_filter, app_state.select_state.selected());
+                app_state.notify(result);
+            }
+            ModalAction::Clear => {
+                let result = app_state.clear(&ui_state.current_filter);
+                app_state.notify(result);
+            }
+            ModalAction::Save => ui_state.handle_save_with_popup(app_state.save()),
+            ModalAction::UnsavedExit => handle_unsaved_exit(result, app_state, ui_state, running),
+            ModalAction::None => {}
         },
     }
 }
 
-// Perform action after input submit (either edit or append)
-pub fn handle_input_submit(
+// Handle unsaved changes (confirm and save)
+pub fn handle_unsaved_exit(
+    result: &ModalResult,
     app_state: &mut ApplicationState,
     ui_state: &mut UIState,
-    mode: InputMode,
-    text: String,
+    running: &mut bool,
 ) {
-    match mode {
-        InputMode::Insert => ui_state.notify(app_state.append_todo(text)),
-        InputMode::Edit => ui_state.notify(app_state.rename_todo(text)),
+    match result {
+        ModalResult::Confirmed => {
+            ui_state.handle_save_with_popup(app_state.save());
+            *running = false;
+        }
+        ModalResult::Cancelled => {
+            *running = false;
+        }
     }
 }
 
-// Handle unsaved changes (confirm and save)
-pub fn handle_unsaved_exit(app_state: &mut ApplicationState, running: &mut bool) {
-    let _ = app_state.save().unwrap_or_default();
-    *running = false;
-}
-
-pub fn open_edit_current(app_state: &mut ApplicationState, ui_state: &mut UIState) {
-    use crate::ui::Input;
-
-    let title: String = app_state
-        .current_todo()
-        .map(|t| t.title.clone())
-        .unwrap_or_default();
-
-    ui_state.show_input(Input::edit(title));
-}
-
-pub fn open_remove_confirm(app_state: &mut ApplicationState, ui_state: &mut UIState) {
-    use crate::ui::remove_todo_confirm;
-
-    let title: String = app_state
-        .current_todo()
-        .map(|t| t.title.clone())
-        .unwrap_or_default();
-
-    ui_state.show_dialog(remove_todo_confirm(title), DialogIntent::Remove);
-}
-
-pub fn open_clear_confirm(app_state: &mut ApplicationState, ui_state: &mut UIState) {
-    use crate::ui::clear_todos_confirm;
-    ui_state.show_dialog(
-        clear_todos_confirm(app_state.todos.len()),
-        DialogIntent::Clear,
+pub fn open_remove_confirm(ui_state: &mut UIState) {
+    ui_state.show_modal(
+        Confirm::new("Are you sure to remove selected task?"),
+        ModalAction::Remove,
     );
 }
 
-pub fn open_save_confirm(app_state: &mut ApplicationState, ui_state: &mut UIState) {
-    use crate::ui::save_todos_confirm;
-    ui_state.show_dialog(
-        save_todos_confirm(app_state.todos.len()),
-        DialogIntent::Save,
+pub fn open_clear_confirm(ui_state: &mut UIState) {
+    ui_state.show_modal(
+        Confirm::new("Are you sure to clear all tasks?"),
+        ModalAction::Clear,
+    );
+}
+
+pub fn open_save_confirm(ui_state: &mut UIState) {
+    ui_state.show_modal(
+        Confirm::new("Do you want to save tasks?"),
+        ModalAction::Save,
     );
 }
 
 pub fn open_unsaved_exit_confirm(ui_state: &mut UIState) {
-    use crate::ui::unsaved_exit_confirm;
-    ui_state.show_dialog(unsaved_exit_confirm(), DialogIntent::UnsavedExit);
+    ui_state.show_modal(
+        Confirm::new("You have unsaved changes. Save before exit?"),
+        ModalAction::UnsavedExit,
+    );
 }
 
 // Unit-tests for action handler
@@ -91,154 +83,118 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_handle_dialog_result_cancelled() {
+    fn should_handle_modal_result_cancelled() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
         let mut running = true;
 
-        handle_dialog_result(
+        handle_modal_result(
             &mut app_state,
             &mut ui_state,
             &mut running,
-            &DialogResult::Cancelled,
-            &DialogIntent::Remove,
+            &ModalResult::Cancelled,
+            &ModalAction::Remove,
         );
 
-        assert!(ui_state.notification.is_none());
+        assert!(app_state.notification.is_none());
     }
 
     #[test]
-    fn should_handle_dialog_result_confirmed_remove() {
+    fn should_handle_modal_result_confirmed_remove() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
         let mut running = true;
 
-        handle_dialog_result(
+        handle_modal_result(
             &mut app_state,
             &mut ui_state,
             &mut running,
-            &DialogResult::Confirmed,
-            &DialogIntent::Remove,
+            &ModalResult::Confirmed,
+            &ModalAction::Remove,
         );
 
-        assert!(ui_state.notification.is_some());
+        assert!(app_state.notification.is_some());
     }
 
     #[test]
-    fn should_handle_dialog_result_confirmed_clear() {
+    fn should_handle_modal_result_confirmed_clear() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
         let mut running = true;
 
-        handle_dialog_result(
+        handle_modal_result(
             &mut app_state,
             &mut ui_state,
             &mut running,
-            &DialogResult::Confirmed,
-            &DialogIntent::Clear,
+            &ModalResult::Confirmed,
+            &ModalAction::Clear,
         );
 
-        assert!(ui_state.notification.is_some());
+        assert!(app_state.notification.is_some());
     }
 
     #[test]
-    fn should_handle_dialog_result_confirmed_save() {
+    fn should_handle_modal_result_confirmed_save() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
         let mut running = true;
 
-        handle_dialog_result(
+        handle_modal_result(
             &mut app_state,
             &mut ui_state,
             &mut running,
-            &DialogResult::Confirmed,
-            &DialogIntent::Save,
+            &ModalResult::Confirmed,
+            &ModalAction::Save,
         );
 
-        assert!(ui_state.notification.is_some());
+        assert!(ui_state.modal.is_some());
     }
 
     #[test]
-    fn should_handle_dialog_result_none() {
+    fn should_handle_modal_result_none() {
         let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
         let mut running = true;
 
-        handle_dialog_result(
+        handle_modal_result(
             &mut app_state,
             &mut ui_state,
             &mut running,
-            &DialogResult::Confirmed,
-            &DialogIntent::None,
+            &ModalResult::Confirmed,
+            &ModalAction::None,
         );
 
-        assert!(ui_state.notification.is_none());
-    }
-
-    #[test]
-    fn should_handle_input_submit_insert() {
-        let mut app_state = ApplicationState::default();
-        let mut ui_state = UIState::default();
-        let text = "New task".to_string();
-
-        handle_input_submit(&mut app_state, &mut ui_state, InputMode::Insert, text);
-
-        assert!(ui_state.notification.is_some());
-    }
-
-    #[test]
-    fn should_handle_input_submit_edit() {
-        let mut app_state = ApplicationState::default();
-        let mut ui_state = UIState::default();
-        let text: String = "Edited task".to_string();
-
-        handle_input_submit(&mut app_state, &mut ui_state, InputMode::Edit, text);
-
-        assert!(ui_state.notification.is_some());
-    }
-
-    #[test]
-    fn should_open_edit_current() {
-        let mut app_state = ApplicationState::default();
-        let mut ui_state = UIState::default();
-
-        open_edit_current(&mut app_state, &mut ui_state);
-
-        assert!(ui_state.input.is_some());
-        assert_eq!(ui_state.input.unwrap().mode, InputMode::Edit);
+        assert!(ui_state.modal.is_none());
     }
 
     #[test]
     fn should_open_remove_confirm() {
-        let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
 
-        open_remove_confirm(&mut app_state, &mut ui_state);
+        open_remove_confirm(&mut ui_state);
 
-        assert!(ui_state.dialog.is_some());
-        assert_eq!(ui_state.dialog.unwrap().intent, DialogIntent::Remove);
+        assert!(ui_state.modal.is_some());
+        assert_eq!(ui_state.modal.unwrap().action, ModalAction::Remove);
     }
 
     #[test]
     fn should_open_clear_confirm() {
-        let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
 
-        open_clear_confirm(&mut app_state, &mut ui_state);
+        open_clear_confirm(&mut ui_state);
 
-        assert!(ui_state.dialog.is_some());
-        assert_eq!(ui_state.dialog.unwrap().intent, DialogIntent::Clear);
+        assert!(ui_state.modal.is_some());
+        assert_eq!(ui_state.modal.unwrap().action, ModalAction::Clear);
     }
 
     #[test]
     fn should_open_save_confirm() {
-        let mut app_state = ApplicationState::default();
         let mut ui_state = UIState::default();
 
-        open_save_confirm(&mut app_state, &mut ui_state);
+        open_save_confirm(&mut ui_state);
 
-        assert!(ui_state.dialog.is_some());
-        assert_eq!(ui_state.dialog.unwrap().intent, DialogIntent::Save);
+        assert!(ui_state.modal.is_some());
+        assert_eq!(ui_state.modal.unwrap().action, ModalAction::Save);
     }
 
     #[test]
@@ -247,7 +203,7 @@ mod tests {
 
         open_unsaved_exit_confirm(&mut ui_state);
 
-        assert!(ui_state.dialog.is_some());
-        assert_eq!(ui_state.dialog.unwrap().intent, DialogIntent::UnsavedExit);
+        assert!(ui_state.modal.is_some());
+        assert_eq!(ui_state.modal.unwrap().action, ModalAction::UnsavedExit);
     }
 }

@@ -1,12 +1,12 @@
-use super::{
-    handle_dialog_result, handle_input_submit, open_clear_confirm, open_edit_current,
-    open_remove_confirm, open_save_confirm, open_unsaved_exit_confirm,
-};
+use super::{handle_modal_result, open_save_confirm, open_unsaved_exit_confirm};
 use crate::{
     app::Application,
+    enums::{ApplicationMode, FocusArea},
+    handlers::{action::open_remove_confirm, open_clear_confirm},
+    models::Filter,
     state::{ApplicationState, UIState},
-    ui::{DialogIntent, Input, InputResult, help_popup},
-    utils::constants::terminal::is_terminal_small,
+    traits::ModalAction,
+    ui::{Form, Notification, WidgetResponse, is_terminal_small},
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -28,72 +28,139 @@ pub fn handle_key_event(app: &mut Application, event: KeyEvent, terminal_size: (
     }
 
     // Dialog handling
-    if app.ui.dialog.is_some() {
+    if app.ui.modal.is_some() {
         let result = {
-            let dialog = app.ui.dialog.as_mut().unwrap();
+            let dialog = app.ui.modal.as_mut().unwrap();
             dialog.modal.handle_key(event.code)
         };
 
         if let Some(result) = result {
-            let intent: DialogIntent = app.ui.dialog.as_ref().unwrap().intent.clone();
-            handle_dialog_result(
+            let intent: ModalAction = app.ui.modal.as_ref().unwrap().action.clone();
+            app.ui.close_modal();
+
+            handle_modal_result(
                 &mut app.state,
                 &mut app.ui,
                 &mut app.running,
                 &result,
                 &intent,
             );
-            app.ui.close_dialog();
-            return;
-        }
-    }
 
-    // Input handling
-    if app.ui.input.is_some() {
-        let result = {
-            let input = app.ui.input.as_mut().unwrap();
-            input.handle_key(event.code)
-        };
-
-        match result {
-            InputResult::Continue => return,
-            InputResult::Cancel => {
-                app.ui.close_input();
-                return;
-            }
-            InputResult::Submit(text) => {
-                let mode = app.ui.input.as_ref().unwrap().mode;
-                handle_input_submit(&mut app.state, &mut app.ui, mode, text);
-                app.ui.close_input();
-                return;
-            }
+            app.sync_ui();
         }
+
+        return;
     }
 
     handle_global_key(app, &event);
 }
 
 // Handle global keys
-pub fn handle_global_key(app: &mut Application, key_event: &KeyEvent) {
-    let code: KeyCode = key_event.code;
-    let mode: KeyModifiers = key_event.modifiers;
+pub fn handle_global_key(app: &mut Application, event: &KeyEvent) {
+    let code: KeyCode = event.code;
+    let mode: KeyModifiers = event.modifiers;
 
     match code {
-        KeyCode::Char('q') | KeyCode::Esc => {
-            handle_close(&mut app.state, &mut app.ui, &mut app.running)
+        KeyCode::Char('s') if mode == KeyModifiers::CONTROL => {
+            open_save_confirm(&mut app.ui);
+            return;
         }
-        KeyCode::Char('k') | KeyCode::Up => app.state.select_state.select_previous(),
-        KeyCode::Char('j') | KeyCode::Down => app.state.select_state.select_next(),
-        KeyCode::Enter => app.state.toggle_current(),
-        KeyCode::Char('a') => app.ui.show_input(Input::insert()),
-        KeyCode::Char('r') => open_edit_current(&mut app.state, &mut app.ui),
-        KeyCode::Char('d') => open_remove_confirm(&mut app.state, &mut app.ui),
-        KeyCode::Char('x') => open_clear_confirm(&mut app.state, &mut app.ui),
-        KeyCode::Char('?') => app.ui.show_dialog(help_popup(), DialogIntent::None),
-        KeyCode::Char('s') if mode.contains(KeyModifiers::CONTROL) => {
-            open_save_confirm(&mut app.state, &mut app.ui)
+        KeyCode::Esc => {
+            if app.mode == ApplicationMode::Task {
+                app.ui.task_form = None;
+                app.mode = ApplicationMode::Browsing;
+            } else {
+                handle_close(&mut app.state, &mut app.ui, &mut app.running);
+            }
+
+            return;
         }
         _ => {}
+    }
+
+    match app.mode {
+        ApplicationMode::Browsing => handle_browsing_keys(app, &event.code),
+        ApplicationMode::Task => handle_form_keys(app, &event.code),
+    }
+}
+
+// Handle browsing mode keys
+pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
+    match app.ui.focus_area {
+        FocusArea::LeftPanel => match code {
+            KeyCode::Char('j') | KeyCode::Down => app.ui.next_tab_filter(),
+            KeyCode::Char('k') | KeyCode::Up => app.ui.prev_tab_filter(),
+            KeyCode::Char('1') => app.ui.change_filter(Filter::All),
+            KeyCode::Char('2') => app.ui.change_filter(Filter::Active),
+            KeyCode::Char('3') => app.ui.change_filter(Filter::Completed),
+            KeyCode::Char('4') => app.ui.change_filter(Filter::HighPriority),
+            _ => {}
+        },
+
+        FocusArea::MainContent => match code {
+            KeyCode::Char('j') | KeyCode::Down => app.state.next_task(),
+            KeyCode::Char('k') | KeyCode::Up => app.state.prev_task(),
+            KeyCode::Enter => app
+                .state
+                .toggle(&app.ui.current_filter, app.state.select_state.selected()),
+            KeyCode::Char('d') => open_remove_confirm(&mut app.ui),
+            KeyCode::Char('e') => {
+                if let Some(ui_index) = app.state.select_state.selected() {
+                    if let Some((_, task)) = app
+                        .state
+                        .filtered_stream(&app.ui.current_filter)
+                        .nth(ui_index)
+                    {
+                        app.ui.task_form = Some(Form::from(task));
+                        app.mode = ApplicationMode::Task;
+                    }
+                }
+            }
+            _ => {}
+        },
+    }
+
+    match code {
+        KeyCode::Char('q') => handle_close(&mut app.state, &mut app.ui, &mut app.running),
+        KeyCode::Char('h') | KeyCode::Char('l') => app.ui.toggle_focus(),
+        KeyCode::Char('a') => {
+            app.ui.task_form = Some(Form::new());
+            app.mode = ApplicationMode::Task;
+        }
+        KeyCode::Char('x') => open_clear_confirm(&mut app.ui),
+        _ => {}
+    }
+
+    app.sync_ui();
+}
+
+// Handle task form keys
+pub fn handle_form_keys(app: &mut Application, code: &KeyCode) {
+    if let Some(form) = &mut app.ui.task_form {
+        let response: WidgetResponse = form.handle_key(code);
+        match response {
+            WidgetResponse::Continue => return,
+            WidgetResponse::Submit => {
+                let result = form.apply(&mut app.state);
+                let is_ok: bool = result.is_ok();
+
+                match result {
+                    Ok(msg) => app.state.notification = Some(Notification::success(msg)),
+                    Err(e) => app.state.notification = Some(Notification::error(e.to_string())),
+                }
+
+                if is_ok {
+                    app.ui.task_form = None;
+                    app.mode = ApplicationMode::Browsing;
+                } else {
+                    return;
+                }
+            }
+            WidgetResponse::Cancel => {
+                app.ui.task_form = None;
+                app.mode = ApplicationMode::Browsing;
+            }
+        }
     }
 }
 
@@ -122,8 +189,9 @@ pub fn is_exit_key(key_event: &KeyEvent) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        state::{ActiveDialog, ApplicationResult, ApplicationState, UIState},
-        ui::{Dialog, Popup},
+        models::Todo,
+        state::{ApplicationResult, ApplicationState},
+        ui::{FieldType, Popup},
     };
     use std::{
         fs::{self, File},
@@ -133,113 +201,33 @@ mod tests {
     };
     use tempdir::TempDir;
 
-    // Mock application structure
-    struct MockApplication {
-        running: bool,
-        state: ApplicationState,
-        ui: UIState,
+    // Setup application
+    fn setup_app() -> Application {
+        Application::test()
     }
 
-    impl MockApplication {
-        pub fn new() -> Self {
-            Self {
-                running: true,
-                state: ApplicationState::default(),
-                ui: UIState::default(),
-            }
+    // Setup some todos
+    fn setup_with_n_todos(n: usize) -> ApplicationState {
+        let mut state: ApplicationState = ApplicationState::default();
+        for i in 1..=n {
+            let todo: Todo = Todo::new(format!("Task {}", i), "Description", None);
+            let _: ApplicationResult<String> = state.append(todo);
         }
 
-        pub fn set_n_todos(&mut self, n: u8) {
-            for i in 0..=n {
-                self.state.append_todo(format!("Task {}", i + 1)).unwrap();
-            }
-        }
-
-        pub fn save(&mut self, path: &Path) {
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-
-            let file: File = File::create(path).unwrap();
-            let writer: BufWriter<File> = BufWriter::new(file);
-
-            serde_json::to_writer_pretty(writer, &self.state.todos).unwrap();
-            let mut hasher = DefaultHasher::new();
-            self.state.todos.hash(&mut hasher);
-            self.state.saved_todos_hash = hasher.finish();
-        }
+        state
     }
 
-    // Macro to test handle_global_key() function
-    macro_rules! mock_handle_global_key {
-        (&mut $app:expr, $key_event:expr) => {
-            match $key_event.code {
-                KeyCode::Char('q') | KeyCode::Esc => {
-                    handle_close(&mut $app.state, &mut $app.ui, &mut $app.running)
-                }
-                KeyCode::Char('k') | KeyCode::Up => $app.state.select_state.select_previous(),
-                KeyCode::Char('j') | KeyCode::Down => $app.state.select_state.select_next(),
-                KeyCode::Enter => $app.state.toggle_current(),
-                KeyCode::Char('a') => $app.ui.show_input(Input::insert()),
-                KeyCode::Char('r') => open_edit_current(&mut $app.state, &mut $app.ui),
-                KeyCode::Char('d') => open_remove_confirm(&mut $app.state, &mut $app.ui),
-                KeyCode::Char('x') => open_clear_confirm(&mut $app.state, &mut $app.ui),
-                KeyCode::Char('?') => $app.ui.show_dialog(help_popup(), DialogIntent::None),
-                KeyCode::Char('s') if $key_event.modifiers.contains(KeyModifiers::CONTROL) => {
-                    open_save_confirm(&mut $app.state, &mut $app.ui)
-                }
-                _ => {}
-            }
-        };
-    }
+    // Mock save method to save in temp directory
+    fn save(app_state: &mut ApplicationState, path: &Path) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
 
-    // Macro to test handle_key_event() function
-    macro_rules! mock_handle_key_event {
-        (&mut $app:expr, $event:expr, $terminal_size:expr) => {{
-            let is_small = is_terminal_small($terminal_size.0, $terminal_size.1);
+        let file: File = File::create(path).unwrap();
+        let writer: BufWriter<File> = BufWriter::new(file);
 
-            if is_small {
-                if is_exit_key(&$event) {
-                    $app.running = false;
-                }
-            } else {
-                if is_kill_process_key(&$event) {
-                    $app.running = false;
-                } else if $app.ui.dialog.is_some() {
-                    let result = {
-                        let dialog = $app.ui.dialog.as_mut().unwrap();
-                        dialog.modal.handle_key($event.code)
-                    };
-                    if let Some(result) = result {
-                        let intent = $app.ui.dialog.as_ref().unwrap().intent.clone();
-                        handle_dialog_result(
-                            &mut $app.state,
-                            &mut $app.ui,
-                            &mut $app.running,
-                            &result,
-                            &intent,
-                        );
-                        $app.ui.close_dialog();
-                    }
-                } else if $app.ui.input.is_some() {
-                    let result = {
-                        let input = $app.ui.input.as_mut().unwrap();
-                        input.handle_key($event.code)
-                    };
-                    match result {
-                        InputResult::Continue => {}
-                        InputResult::Cancel => {
-                            $app.ui.close_input();
-                        }
-                        InputResult::Submit(text) => {
-                            let mode = $app.ui.input.as_ref().unwrap().mode;
-                            handle_input_submit(&mut $app.state, &mut $app.ui, mode, text);
-                            $app.ui.close_input();
-                        }
-                    }
-                } else {
-                    mock_handle_global_key!(&mut $app, $event);
-                }
-            }
-        }};
+        serde_json::to_writer_pretty(writer, &app_state.todos).unwrap();
+        let mut hasher = DefaultHasher::new();
+        app_state.todos.hash(&mut hasher);
+        app_state.saved_todos_hash = hasher.finish();
     }
 
     #[test]
@@ -271,20 +259,20 @@ mod tests {
 
     #[test]
     fn should_handle_close_open_confirm_when_unsaved_changes() {
-        let mut app = MockApplication::new();
-        app.state.append_todo("Test task").unwrap();
+        let mut app = setup_app();
+        app.state.append(Todo::new("Test", "Test", None)).unwrap();
 
         handle_close(&mut app.state, &mut app.ui, &mut app.running);
 
         assert!(app.running, "Running should NOT be false yet");
         assert!(
-            app.ui.dialog.is_some(),
+            app.ui.modal.is_some(),
             "Unsaved exit confirm dialog should be opened"
         );
         assert_eq!(
-            app.ui.dialog.as_ref().unwrap().intent,
-            DialogIntent::UnsavedExit,
-            "Intent should be UnsavedExit"
+            app.ui.modal.as_ref().unwrap().action,
+            ModalAction::UnsavedExit,
+            "Action should be UnsavedExit"
         );
     }
 
@@ -293,14 +281,14 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        let mut app = MockApplication::new();
-        app.save(&path);
+        let mut app = setup_app();
+        save(&mut app.state, &path);
         assert!(!app.state.any_unsaved_changes());
 
         handle_close(&mut app.state, &mut app.ui, &mut app.running);
 
         assert!(!app.running, "Running should be set to false");
-        assert!(app.ui.dialog.is_none(), "No dialog should be opened");
+        assert!(app.ui.modal.is_none(), "No modal should be opened");
     }
 
     #[test]
@@ -308,153 +296,183 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        let mut app = MockApplication::new();
-        app.state.append_todo("Test task").unwrap();
+        let mut app = setup_app();
+        app.state.append(Todo::new("Test", "Test", None)).unwrap();
         assert!(app.state.any_unsaved_changes());
 
-        app.save(&path);
+        save(&mut app.state, &path);
 
         handle_close(&mut app.state, &mut app.ui, &mut app.running);
 
         assert!(!app.running, "Running should be false");
-        assert!(app.ui.dialog.is_none(), "No dialog after save");
+        assert!(app.ui.modal.is_none(), "No modal shown after save");
     }
 
     #[test]
-    fn should_handle_global_key_navigation() {
-        let mut app = MockApplication::new();
-        app.set_n_todos(3);
+    fn should_toggle_focus_area() {
+        let mut app = setup_app();
+        app.ui.focus_area = FocusArea::LeftPanel;
 
-        assert_eq!(app.state.select_state.selected(), Some(3));
+        let key = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE);
+        handle_global_key(&mut app, &key);
+        assert_eq!(app.ui.focus_area, FocusArea::MainContent);
 
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE)
-        );
-        assert_eq!(app.state.select_state.selected(), Some(2));
+        let key = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE);
+        handle_global_key(&mut app, &key);
+        assert_eq!(app.ui.focus_area, FocusArea::LeftPanel);
+    }
 
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)
-        );
-        assert_eq!(app.state.select_state.selected(), Some(3));
+    #[test]
+    fn should_test_esc_logic_in_different_modes() {
+        let mut app = setup_app();
+
+        app.mode = ApplicationMode::Task;
+        app.ui.task_form = Some(crate::ui::Form::new());
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        handle_global_key(&mut app, &esc);
+
+        assert_eq!(app.mode, ApplicationMode::Browsing);
+        assert!(app.ui.task_form.is_none());
+
+        app.mode = ApplicationMode::Browsing;
+        handle_global_key(&mut app, &esc);
+        assert!(app.ui.modal.is_some(), "Unsaved dialog must be active");
     }
 
     #[test]
     fn should_handle_global_key_actions() {
-        let mut app = MockApplication::new();
-        app.set_n_todos(3);
+        let mut app = setup_app();
+        app.state = setup_with_n_todos(5);
 
-        mock_handle_global_key!(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(app.state.todos[3].done, "Should be toggled");
+        assert_eq!(app.ui.current_filter, Filter::All);
+        assert_eq!(app.mode, ApplicationMode::Browsing);
+        assert_eq!(app.ui.focus_area, FocusArea::LeftPanel);
 
-        mock_handle_global_key!(
+        handle_global_key(
             &mut app,
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)
+            &KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
         );
-        assert!(app.ui.input.is_some(), "Should show input on 'a'");
+        assert_eq!(app.ui.current_filter, Filter::Active);
 
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)
-        );
-        assert!(app.ui.input.is_some(), "Should open edit on 'r'");
-
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)
-        );
-        assert!(app.ui.dialog.is_some(), "Should open remove confirm on 'd'");
-
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE)
-        );
-        assert!(app.ui.dialog.is_some(), "Should open clear confirm on 'x'");
-
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE)
-        );
-        assert!(app.ui.dialog.is_some(), "Should show help on '?'");
-
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)
-        );
-        assert!(app.ui.dialog.is_some(), "Should open save confirm");
-
-        mock_handle_global_key!(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)
-        );
+        handle_global_key(&mut app, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.ui.current_filter, Filter::Completed);
         assert!(
-            app.ui.dialog.is_some(),
-            "Should open unsaved changes confirm"
+            app.state
+                .filtered_stream(&Filter::Completed)
+                .next()
+                .is_none(),
+            "Filter 'Completed' must contain no todos"
         );
+
+        handle_global_key(&mut app, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.ui.current_filter, Filter::HighPriority);
+        assert!(
+            app.state
+                .filtered_stream(&Filter::Completed)
+                .next()
+                .is_none(),
+            "Filter 'HighPriority' must contain no todos"
+        );
+
+        handle_global_key(&mut app, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.ui.current_filter, Filter::All);
+
+        handle_global_key(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+        );
+        assert_eq!(app.ui.focus_area, FocusArea::MainContent);
+        assert_eq!(app.state.select_state.selected(), Some(0));
+
+        handle_global_key(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+        );
+        assert_eq!(app.state.select_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn should_test_edit_and_create_task_keys() {
+        let mut app = setup_app();
+
+        app.state.append(Todo::new("Task 1", "Desc", None)).unwrap();
+        app.state.append(Todo::new("Task 2", "Desc", None)).unwrap();
+        app.state.append(Todo::new("Task 3", "Desc", None)).unwrap();
+
+        app.ui.focus_area = FocusArea::MainContent;
+        app.ui.current_filter = Filter::All;
+        app.state.select_state.select(Some(1));
+
+        handle_global_key(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+        );
+        assert_eq!(app.mode, ApplicationMode::Task);
+        assert!(app.ui.task_form.is_some(), "Form must be create");
+
+        if let Some(form) = &app.ui.task_form {
+            assert_eq!(form.fields[0].name, "title", "First field must be title");
+
+            if let FieldType::Text { input } = &form.fields[0].field_type {
+                assert_eq!(
+                    input.buffer, "Task 2",
+                    "First field buffer must contain title value"
+                );
+            };
+        }
+
+        app.mode = ApplicationMode::Browsing;
+        app.ui.task_form = None;
+
+        handle_global_key(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE),
+        );
+
+        assert_eq!(app.mode, ApplicationMode::Task);
+        assert!(app.ui.task_form.is_some());
+
+        if let Some(form) = &app.ui.task_form {
+            assert_eq!(form.fields[0].name, "title", "First field must be title");
+
+            if let FieldType::Text { input } = &form.fields[0].field_type {
+                assert_eq!(input.buffer, "", "First field must be empty (new form)");
+            };
+        }
     }
 
     #[test]
     fn should_handle_key_event_small_terminal_exit() {
-        let mut app = MockApplication::new();
+        let mut app = setup_app();
         let key_q = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
         let terminal_size = (30, 10);
 
-        mock_handle_key_event!(&mut app, key_q, terminal_size);
+        handle_key_event(&mut app, key_q, terminal_size);
         assert!(!app.running, "Should exit on 'q' even in small terminal");
     }
 
     #[test]
     fn should_handle_key_event_small_terminal_ignore_other() {
-        let mut app = MockApplication::new();
+        let mut app = setup_app();
         let key_enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         let terminal_size = (30, 10);
 
-        mock_handle_key_event!(&mut app, key_enter, terminal_size);
+        handle_key_event(&mut app, key_enter, terminal_size);
         assert!(app.running, "Should ignore non-exit keys in small terminal");
     }
 
     #[test]
     fn should_handle_key_event_dialog_priority() {
-        let mut app = MockApplication::new();
-        app.ui.dialog = Some(ActiveDialog {
-            modal: Box::new(Popup::new()),
-            intent: DialogIntent::None,
-        });
+        let mut app = setup_app();
+        app.ui.show_modal(Popup::info("test"), ModalAction::None);
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         let terminal_size = (80, 24);
 
-        mock_handle_key_event!(&mut app, key, terminal_size);
+        handle_key_event(&mut app, key, terminal_size);
         assert!(
-            app.ui.dialog.is_none(),
-            "Dialog should be closed after handling"
+            app.ui.modal.is_none(),
+            "Modal should be closed after handling"
         );
-    }
-
-    #[test]
-    fn should_handle_key_event_input_priority() {
-        let mut app = MockApplication::new();
-        app.ui.input = Some(Input::insert());
-
-        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
-        let terminal_size = (80, 24);
-
-        mock_handle_key_event!(&mut app, key, terminal_size);
-        assert!(
-            app.ui.input.is_none(),
-            "Input should be closed after submit"
-        );
-    }
-
-    #[test]
-    fn should_handle_key_event_global_fallback() {
-        let mut app = MockApplication::new();
-
-        let key_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
-        let terminal_size = (80, 24);
-
-        mock_handle_key_event!(&mut app, key_a, terminal_size);
-        assert!(app.ui.input.is_some(), "Should handle global 'a' key");
     }
 }
