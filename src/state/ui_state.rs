@@ -1,69 +1,81 @@
 use crate::{
+    enums::FocusArea,
+    models::Filter,
     state::ApplicationResult,
-    ui::{Dialog, DialogIntent, Input, Notification},
+    traits::{InteractableEnum, Modal, ModalAction},
+    ui::{Form, Notification, Popup},
 };
 
-#[derive(Default, Debug, Clone, PartialEq)]
-pub enum Anchor {
-    #[default]
-    Center,
-    TopRight,
-    TopLeft,
-    BottomRight,
-    BottomLeft,
+pub struct ActiveModal {
+    pub modal: Box<dyn Modal>,
+    pub action: ModalAction,
 }
 
 #[derive(Default)]
 pub struct UIState {
-    pub dialog: Option<ActiveDialog>,
-    pub input: Option<Input>,
-    pub notification: Option<Notification>,
-}
+    pub current_filter: Filter,
+    pub focus_area: FocusArea,
 
-pub struct ActiveDialog {
-    pub modal: Box<dyn Dialog>,
-    pub intent: DialogIntent,
+    pub modal: Option<ActiveModal>,
+    pub task_form: Option<Form>,
 }
 
 impl UIState {
-    // Dialog
-    pub fn show_dialog<D: Dialog + 'static>(&mut self, dialog: D, intent: DialogIntent) {
-        self.dialog = Some(ActiveDialog {
-            modal: Box::new(dialog),
-            intent,
+    // Next tab filter
+    pub fn next_tab_filter(&mut self) {
+        self.current_filter = self.current_filter.next();
+    }
+
+    // Prev tab filter
+    pub fn prev_tab_filter(&mut self) {
+        self.current_filter = self.current_filter.prev();
+    }
+
+    // Change to specific filter
+    pub fn change_filter(&mut self, filter: Filter) {
+        self.current_filter = filter;
+    }
+
+    // Toggle main menu focus (filters/tasks + form)
+    pub fn toggle_focus(&mut self) {
+        self.focus_area = match self.focus_area {
+            FocusArea::LeftPanel => FocusArea::MainContent,
+            FocusArea::MainContent => FocusArea::LeftPanel,
+        };
+    }
+
+    // Modal
+    pub fn show_modal<M: Modal + 'static>(&mut self, modal: M, action: ModalAction) {
+        self.modal = Some(ActiveModal {
+            modal: Box::new(modal),
+            action,
         });
     }
 
-    pub fn close_dialog(&mut self) {
-        self.dialog = None;
+    pub fn close_modal(&mut self) {
+        self.modal = None;
     }
 
-    // Input
-    pub fn show_input(&mut self, input: Input) {
-        self.input = Some(input);
-    }
-
-    pub fn close_input(&mut self) {
-        self.input = None;
-    }
-
-    // Notification
-    pub fn show_notification(&mut self, notification: Notification) {
-        self.notification = Some(notification);
-    }
-
-    pub fn expire_notification(&mut self) {
-        if let Some(n) = &self.notification
-            && n.is_expired()
-        {
-            self.notification = None;
+    // Handle save result with popup
+    pub fn handle_save_with_popup(&mut self, result: ApplicationResult<String>) {
+        match result {
+            Ok(msg) => {
+                let popup: Popup = Popup::success(msg).close_on_any_key();
+                self.show_modal(popup, ModalAction::None);
+            }
+            Err(e) => {
+                let popup: Popup = Popup::error(e.to_string()).close_on_any_key();
+                self.show_modal(popup, ModalAction::None);
+            }
         }
     }
 
-    pub fn notify(&mut self, result: ApplicationResult<String>) {
-        match result {
-            Ok(msg) => self.show_notification(Notification::success(msg)),
-            Err(err) => self.show_notification(Notification::error(err.to_string())),
+    // Expire notification (close after duration)
+    pub fn expire_notification(&self, notification: &mut Option<Notification>) {
+        if let Some(n) = notification
+            && n.is_expired()
+        {
+            *notification = None;
         }
     }
 }
@@ -72,73 +84,86 @@ impl UIState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        state::{ApplicationError, TodoError},
-        ui::{NotificationKind, Popup},
-    };
-    use std::{
-        thread::sleep,
-        time::{Duration, Instant},
-    };
+    use crate::{state::StorageError, ui::Popup};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn should_navigate_through_filters() {
+        let mut ui = UIState::default();
+        ui.current_filter = Filter::All;
+
+        ui.next_tab_filter();
+        assert_eq!(ui.current_filter, Filter::Active);
+
+        ui.next_tab_filter();
+        assert_eq!(ui.current_filter, Filter::Completed);
+
+        ui.prev_tab_filter();
+        assert_eq!(ui.current_filter, Filter::Active);
+
+        ui.change_filter(Filter::HighPriority);
+        assert_eq!(ui.current_filter, Filter::HighPriority);
+    }
+
+    #[test]
+    fn should_toggle_focus_properly() {
+        let mut ui = UIState::default();
+        ui.focus_area = FocusArea::LeftPanel;
+
+        ui.toggle_focus();
+        assert_eq!(ui.focus_area, FocusArea::MainContent);
+
+        ui.toggle_focus();
+        assert_eq!(ui.focus_area, FocusArea::LeftPanel);
+    }
 
     #[test]
     fn should_show_close_dialog_with_ui_state() {
         let mut ui = UIState::default();
 
-        ui.show_dialog(Popup::new(), DialogIntent::Remove);
+        ui.show_modal(Popup::info("Test"), ModalAction::Remove);
 
-        assert!(ui.dialog.is_some());
-        assert_eq!(ui.dialog.as_ref().unwrap().intent, DialogIntent::Remove);
+        assert!(ui.modal.is_some());
+        assert_eq!(ui.modal.as_ref().unwrap().action, ModalAction::Remove);
 
-        ui.close_dialog();
-        assert!(ui.dialog.is_none());
+        ui.close_modal();
+        assert!(ui.modal.is_none());
     }
 
     #[test]
-    fn should_show_close_input_with_ui_state() {
+    fn should_handle_save_result_with_popup() {
         let mut ui = UIState::default();
 
-        ui.show_input(Input::insert());
-        assert!(ui.input.is_some());
+        ui.handle_save_with_popup(Ok("Saved!".to_string()));
+        assert!(ui.modal.is_some());
+        assert_eq!(ui.modal.as_ref().unwrap().action, ModalAction::None);
 
-        ui.close_input();
-        assert!(ui.input.is_none());
+        ui.close_modal();
+
+        ui.handle_save_with_popup(Err(StorageError::JSONError.into()));
+        assert!(ui.modal.is_some());
     }
 
     #[test]
-    fn should_expire_notification_with_ui_state() {
-        let mut ui = UIState::default();
+    fn test_notification_expiration() {
+        let ui = UIState::default();
 
-        let expired: Notification = Notification {
-            created_at: Instant::now(),
-            duration: Duration::from_millis(100),
-            anchor: Anchor::TopRight,
-            kind: NotificationKind::Success,
-            message: String::from("Test"),
-        };
-        ui.notification = Some(expired);
+        let mut expired_notification = Some(Notification {
+            created_at: Instant::now() - Duration::from_secs(10),
+            ..Notification::success("Test")
+        });
 
-        sleep(Duration::from_millis(100));
+        ui.expire_notification(&mut expired_notification);
+        assert!(
+            expired_notification.is_none(),
+            "Expired notification must be removed from UIState"
+        );
 
-        ui.expire_notification();
-        assert!(ui.notification.is_none());
-    }
-
-    #[test]
-    fn should_notify_with_ui_state() {
-        let mut ui = UIState::default();
-
-        ui.notify(Ok("Success".to_string()));
-
-        let success_notification: Notification =
-            ui.notification.take().expect("Could not get notification");
-        assert_eq!(success_notification.message, "Success");
-        assert_eq!(success_notification.kind, NotificationKind::Success);
-
-        ui.notify(Err(ApplicationError::Todo(TodoError::TaskNotSelected)));
-
-        let error_notification: Notification = ui.notification.unwrap();
-        assert_eq!(error_notification.message, "No task was selected!");
-        assert_eq!(error_notification.kind, NotificationKind::Error);
+        let mut fresh_notification = Some(Notification::success("Hello"));
+        ui.expire_notification(&mut fresh_notification);
+        assert!(
+            fresh_notification.is_some(),
+            "Fresh notification must remain active"
+        );
     }
 }

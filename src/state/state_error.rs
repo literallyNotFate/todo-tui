@@ -13,14 +13,12 @@ pub enum ApplicationError {
 pub enum TodoError {
     #[error("No task was selected!")]
     TaskNotSelected,
-    #[error("Task with title \"{0}\" already exists!")]
-    TaskAlreadyExists(String),
+    #[error("Task was not found by the provided id!")]
+    TaskNotFound,
     #[error("Task title cannot be empty!")]
     EmptyTitle,
     #[error("Cannot clear the tasks! The list is already empty!")]
     ListEmpty,
-    #[error("Cannot remove the task from the empty list!")]
-    CannotRemoveFromEmpty,
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -73,6 +71,14 @@ mod tests {
     }
 
     #[test]
+    fn should_return_text_for_task_not_found_error() {
+        let error = TodoError::TaskNotFound;
+        let mut s = String::new();
+        write!(&mut s, "{}", error).unwrap();
+        assert_eq!(s, "Task was not found by the provided id!");
+    }
+
+    #[test]
     fn should_return_text_for_empty_title_error() {
         let error = TodoError::EmptyTitle;
         let mut s = String::new();
@@ -86,27 +92,6 @@ mod tests {
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
         assert_eq!(s, "Cannot clear the tasks! The list is already empty!");
-    }
-
-    #[test]
-    fn should_return_text_for_cannot_remove_from_empty_error() {
-        let error = TodoError::CannotRemoveFromEmpty;
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Cannot remove the task from the empty list!");
-    }
-
-    #[test]
-    fn should_return_text_for_task_already_exists_error() {
-        let error = TodoError::TaskAlreadyExists("Some task".to_string());
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Task with title \"Some task\" already exists!");
-
-        let error = TodoError::TaskAlreadyExists("".to_string());
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Task with title \"\" already exists!");
     }
 
     #[test]

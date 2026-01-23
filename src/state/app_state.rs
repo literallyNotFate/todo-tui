@@ -1,7 +1,7 @@
 use crate::{
-    models::Todo,
+    models::{Filter, Priority, Todo},
     state::{ApplicationError, StorageError, TodoError},
-    utils::constants::text::{CLEARED_TASKS_TEXT, REMOVED_TASK_TEXT, SAVED_TASKS_TEXT},
+    ui::Notification,
 };
 use ratatui::widgets::ListState;
 use std::{
@@ -10,11 +10,14 @@ use std::{
     io::BufWriter,
     path::{Path, PathBuf},
 };
+use uuid::Uuid;
 
 #[derive(Debug, Default)]
 pub struct ApplicationState {
     pub todos: Vec<Todo>,
     pub select_state: ListState,
+
+    pub notification: Option<Notification>,
     pub saved_todos_hash: u64,
 }
 
@@ -26,7 +29,60 @@ impl ApplicationState {
         if state.todos.is_empty() {
             let _ = state.save();
         }
+
         state
+    }
+
+    // Create default state (for testing usually)
+    pub fn default() -> Self {
+        Self {
+            todos: Vec::new(),
+            select_state: ListState::default(),
+            notification: None,
+            saved_todos_hash: 0,
+        }
+    }
+
+    // Next task
+    pub fn next_task(&mut self) {
+        if self.todos.is_empty() {
+            self.select_state.select(None);
+            return;
+        }
+
+        let i = match self.select_state.selected() {
+            Some(i) => {
+                if i >= self.todos.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+
+        self.select_state.select(Some(i));
+    }
+
+    // Previous task
+    pub fn prev_task(&mut self) {
+        if self.todos.is_empty() {
+            self.select_state.select(None);
+            return;
+        }
+
+        let i = match self.select_state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.todos.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+
+        self.select_state.select(Some(i));
     }
 
     // Check if there any unsaved changes by comparing hash
@@ -34,27 +90,27 @@ impl ApplicationState {
         self.calculate_todos_hash() != self.saved_todos_hash
     }
 
+    //
     // Main service todo
-    pub fn append_todo(&mut self, new_title: impl Into<String>) -> ApplicationResult<String> {
-        let title: String = new_title.into();
+    //
 
-        if title.is_empty() {
+    // Add new task to the end of list
+    pub fn append(&mut self, new_task: Todo) -> ApplicationResult<String> {
+        let title: String = new_task.title.clone();
+
+        if title.trim().is_empty() {
             return Err(TodoError::EmptyTitle.into());
         }
 
-        if self.todo_by_title(&title).is_some() {
-            return Err(TodoError::TaskAlreadyExists(title).into());
-        }
-
-        self.todos.push(Todo::new(&title));
+        self.todos.push(new_task);
         self.select_state.select(Some(self.todos.len() - 1));
-        Ok(format!("Task {} was added to the list!", title))
+
+        Ok(format!("Task '{}' was added to the list!", title))
     }
 
-    pub fn rename_todo(&mut self, new_title: impl Into<String>) -> ApplicationResult<String> {
-        let new_title: String = new_title.into();
-
-        if new_title.is_empty() {
+    // Update selected task
+    pub fn update(&mut self, id: &Uuid, updated_data: Todo) -> ApplicationResult<String> {
+        if updated_data.title.trim().is_empty() {
             return Err(TodoError::EmptyTitle.into());
         }
 
@@ -62,82 +118,92 @@ impl ApplicationState {
             .select_state
             .selected()
             .ok_or(TodoError::TaskNotSelected)?;
+        let task: &mut Todo = self.todo_by_id_mut(id).ok_or(TodoError::TaskNotFound)?;
 
-        let current_title: &String = &self.todos[index].title;
-        if new_title != *current_title && self.todo_by_title(&new_title).is_some() {
-            return Err(TodoError::TaskAlreadyExists(new_title).into());
-        }
+        task.title = updated_data.title;
+        task.description = updated_data.description;
+        task.priority = updated_data.priority;
 
-        self.todos[index].rename(&new_title);
         Ok(format!(
-            "Task ({} / {}) was renamed to {}!",
+            "Task {} / {} was updated",
             index + 1,
-            self.todos.len(),
-            new_title
+            self.todos.len()
         ))
     }
 
-    pub fn remove_todo(&mut self) -> ApplicationResult<String> {
-        if self.todos.is_empty() {
-            return Err(TodoError::CannotRemoveFromEmpty.into());
-        }
+    // Remove task selected by id
+    pub fn remove(
+        &mut self,
+        filter: &Filter,
+        ui_index: Option<usize>,
+    ) -> ApplicationResult<String> {
+        let ui_index: usize = ui_index.ok_or(TodoError::TaskNotSelected)?;
 
-        let index: usize = self
-            .select_state
-            .selected()
+        let real_index: usize = self
+            .filtered_stream(filter)
+            .nth(ui_index)
+            .map(|(index, _)| index)
             .ok_or(TodoError::TaskNotSelected)?;
 
-        self.todos.remove(index);
-
-        if self.todos.is_empty() {
-            self.select_state.select(None);
-        } else {
-            let new_index = index.min(self.todos.len() - 1);
-            self.select_state.select(Some(new_index));
-        }
-
-        Ok(String::from(REMOVED_TASK_TEXT))
+        let removed: Todo = self.todos.remove(real_index);
+        Ok(format!("Task '{}' was removed!", removed.title))
     }
 
-    pub fn toggle_current(&mut self) {
-        if let Some(index) = self.select_state.selected() {
-            self.todos[index].toggle_done();
+    // Toggle selected task as completed
+    pub fn toggle(&mut self, filter: &Filter, ui_index: Option<usize>) {
+        let ui_index: usize = match ui_index {
+            Some(index) => index,
+            None => return,
+        };
+
+        let real_index: Option<usize> = self
+            .filtered_stream(filter)
+            .nth(ui_index)
+            .map(|(idx, _)| idx);
+
+        if let Some(idx) = real_index {
+            if let Some(todo) = self.todos.get_mut(idx) {
+                todo.toggle_completed();
+            }
         }
     }
 
-    pub fn clear_todos(&mut self) -> ApplicationResult<String> {
-        if self.todos.is_empty() {
+    // Clear todos with selected filter
+    pub fn clear(&mut self, filter: &Filter) -> ApplicationResult<String> {
+        let old_count: usize = self.todos.len();
+
+        match filter {
+            Filter::All => self.todos.clear(),
+            Filter::Completed => self.todos.retain(|t| !t.completed),
+            Filter::Active => self.todos.retain(|t| t.completed),
+            Filter::HighPriority => self.todos.retain(|t| t.priority != Priority::High),
+        }
+
+        let removed_count: usize = old_count - self.todos.len();
+        if removed_count == 0 {
             return Err(TodoError::ListEmpty.into());
         }
 
-        self.todos = Vec::new();
-        self.select_state.select(None);
-
-        Ok(String::from(CLEARED_TASKS_TEXT))
+        Ok(format!("Cleared {} tasks from current view", removed_count))
     }
 
     // Save and load
     pub fn load() -> ApplicationResult<Self> {
-        let path = Self::get_data_path()?;
+        let path = Self::data_path()?;
         Self::load_from_path(&path)
     }
 
     pub fn save(&mut self) -> ApplicationResult<String> {
-        let path = Self::get_data_path()?;
+        let path = Self::data_path()?;
         Self::save_to_path(self, &path)
     }
 
     // Other actions/helper functions
-    pub fn current_todo(&self) -> Option<&Todo> {
-        self.select_state.selected().and_then(|i| self.todos.get(i))
+    pub fn todo_by_id_mut(&mut self, id: &Uuid) -> Option<&mut Todo> {
+        self.todos.iter_mut().find(|t| t.id == *id)
     }
 
-    pub fn todo_by_title(&self, target: impl Into<String>) -> Option<&Todo> {
-        let title: String = target.into();
-        self.todos.iter().find(|todo| todo.title == title)
-    }
-
-    fn load_from_path(path: &Path) -> ApplicationResult<Self> {
+    pub(crate) fn load_from_path(path: &Path) -> ApplicationResult<Self> {
         if let Some(parent) = path.parent() {
             if !parent.exists() {
                 fs::create_dir_all(parent)
@@ -146,11 +212,7 @@ impl ApplicationState {
         }
 
         if !path.exists() {
-            return Ok(Self {
-                todos: Vec::new(),
-                select_state: ListState::default(),
-                saved_todos_hash: 0,
-            });
+            return Ok(Self::default());
         }
 
         let file: File = File::open(&path).map_err(|_| StorageError::IOError)?;
@@ -159,8 +221,7 @@ impl ApplicationState {
 
         let mut state = Self {
             todos,
-            select_state: ListState::default(),
-            saved_todos_hash: 0,
+            ..Self::default()
         };
 
         state.select_state.select_last();
@@ -168,7 +229,7 @@ impl ApplicationState {
         Ok(state)
     }
 
-    fn save_to_path(&mut self, path: &Path) -> ApplicationResult<String> {
+    pub(crate) fn save_to_path(&mut self, path: &Path) -> ApplicationResult<String> {
         fs::create_dir_all(path.parent().unwrap()).map_err(|_| StorageError::IOError)?;
 
         let file: File = File::create(path).map_err(|_| StorageError::IOError)?;
@@ -176,20 +237,48 @@ impl ApplicationState {
 
         serde_json::to_writer_pretty(writer, &self.todos).map_err(|_| StorageError::JSONError)?;
         self.saved_todos_hash = self.calculate_todos_hash();
-        Ok(String::from(SAVED_TASKS_TEXT))
+        Ok(String::from("Tasks were saved!"))
     }
 
-    pub fn get_data_path() -> ApplicationResult<PathBuf> {
+    pub(crate) fn data_path() -> ApplicationResult<PathBuf> {
         dirs::data_dir()
             .ok_or(StorageError::PathNotFound.into())
             .map(|dir| dir.join("todo-tui").join("todos.json"))
     }
 
     // Get todos hash to compare to current (to track unsaved changes)
-    fn calculate_todos_hash(&self) -> u64 {
+    pub(crate) fn calculate_todos_hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.todos.hash(&mut hasher);
         hasher.finish()
+    }
+
+    // Get stats for bottom bar
+    pub fn stats(&self) -> (usize, usize) {
+        let total: usize = self.todos.len();
+        let active: usize = self.todos.iter().filter(|t| !t.completed).count();
+        (total, active)
+    }
+
+    // Filter tasks by filter
+    pub(crate) fn filtered_stream(&self, filter: &Filter) -> impl Iterator<Item = (usize, &Todo)> {
+        self.todos
+            .iter()
+            .enumerate()
+            .filter(move |(_, todo)| match filter {
+                Filter::All => true,
+                Filter::Active => !todo.completed,
+                Filter::Completed => todo.completed,
+                Filter::HighPriority => todo.priority == Priority::High,
+            })
+    }
+
+    // Show notification after action made
+    pub fn notify(&mut self, result: ApplicationResult<String>) {
+        match result {
+            Ok(msg) => self.notification = Some(Notification::success(msg)),
+            Err(e) => self.notification = Some(Notification::error(e.to_string())),
+        }
     }
 }
 
@@ -199,14 +288,18 @@ mod tests {
     use super::*;
     use tempdir::TempDir;
 
-    // Helper function to setup list with multiple tasks (non empty)
-    fn setup_with_n_todos(n: usize) -> ApplicationState {
-        let mut state: ApplicationState = ApplicationState::default();
-        for i in 1..=n {
-            let _: ApplicationResult<String> = state.append_todo(format!("Task {}", i));
-        }
+    #[test]
+    fn should_navigate_through_todos() {
+        let mut state = ApplicationState::default();
+        state.append(Todo::new("T1", "", None)).unwrap();
+        state.append(Todo::new("T2", "", None)).unwrap();
 
-        state
+        state.select_state.select(Some(1));
+        state.next_task();
+        assert_eq!(state.select_state.selected(), Some(0));
+
+        state.prev_task();
+        assert_eq!(state.select_state.selected(), Some(1));
     }
 
     #[test]
@@ -235,12 +328,17 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        fs::write(&path, r#"[{"title":"Test","done":false}]"#).unwrap();
+        let task: Todo = Todo::new("Test Title", "Test Desc", Some(Priority::High));
+        let json_data: String = serde_json::to_string(&vec![task.clone()]).unwrap();
+
+        fs::write(&path, json_data).unwrap();
         let state = ApplicationState::load_from_path(&path).unwrap();
 
         assert_eq!(state.todos.len(), 1);
-        assert_eq!(state.todos[0].title, "Test");
-        assert!(!state.todos[0].done);
+        assert_eq!(state.todos[0].id, task.id);
+        assert_eq!(state.todos[0].title, "Test Title");
+        assert_eq!(state.todos[0].description, "Test Desc");
+        assert_eq!(state.todos[0].priority, Priority::High);
     }
 
     #[test]
@@ -260,40 +358,40 @@ mod tests {
     #[test]
     fn should_append_todo() {
         let mut state: ApplicationState = ApplicationState::default();
-        let result: ApplicationResult<String> = state.append_todo("Test");
+        let result: ApplicationResult<String> = state.append(Todo::new(
+            "Buy stuff",
+            "Just buy stuff",
+            Some(Priority::High),
+        ));
 
-        assert_eq!(result, Ok(String::from("Task Test was added to the list!")));
+        assert_eq!(
+            result,
+            Ok(String::from("Task 'Buy stuff' was added to the list!"))
+        );
         assert_eq!(state.todos.len(), 1);
-        assert_eq!(state.todos[0].title, "Test");
-        assert!(!state.todos[0].done);
+        assert_eq!(state.todos[0].title, "Buy stuff");
+        assert_eq!(state.todos[0].description, "Just buy stuff");
+        assert!(!state.todos[0].completed);
+        assert_eq!(state.todos[0].priority, Priority::High);
         assert_eq!(state.select_state.selected(), Some(0));
     }
 
     #[test]
     fn should_invoke_empty_title_error_on_append() {
         let mut state: ApplicationState = ApplicationState::default();
-        let result: ApplicationResult<String> = state.append_todo("");
+        let result: ApplicationResult<String> = state.append(Todo::new("", "", None));
 
         assert_eq!(result, Err(ApplicationError::Todo(TodoError::EmptyTitle)));
         assert!(state.todos.is_empty());
     }
 
     #[test]
-    fn should_invoke_task_exists_on_append() {
-        let mut state: ApplicationState = setup_with_n_todos(2);
-        let title: String = String::from("Task 1");
-        let result: ApplicationResult<String> = state.append_todo(&title);
-
-        assert_eq!(
-            result,
-            Err(ApplicationError::Todo(TodoError::TaskAlreadyExists(title)))
-        );
-        assert_eq!(state.todos.len(), 2);
-    }
-
-    #[test]
     fn should_select_last_after_multiple_append() {
-        let state: ApplicationState = setup_with_n_todos(3);
+        let mut state: ApplicationState = ApplicationState::default();
+
+        state.append(Todo::new("Task 1", "Desc 1", None)).unwrap();
+        state.append(Todo::new("Task 2", "Desc 2", None)).unwrap();
+        state.append(Todo::new("Task 3", "Desc 3", None)).unwrap();
 
         assert_eq!(state.todos.len(), 3);
         assert_eq!(state.select_state.selected(), Some(2));
@@ -301,52 +399,49 @@ mod tests {
     }
 
     #[test]
-    fn should_rename_todo() {
-        let mut state: ApplicationState = setup_with_n_todos(2);
-        assert_eq!(state.todos[1].title, "Task 2");
+    fn should_update_todo() {
+        let mut state = ApplicationState::default();
+        state
+            .append(Todo::new("Task", "Desc", Some(Priority::Low)))
+            .unwrap();
+        let id: Uuid = state.todos[0].id;
 
-        let new_title: &str = "Renamed task";
-        let result: ApplicationResult<String> = state.rename_todo(new_title);
+        let updated: Todo = Todo::new("New Title", "New Desc", Some(Priority::High));
+        let result: ApplicationResult<String> = state.update(&id, updated);
 
-        assert_eq!(
-            result,
-            Ok(format!(
-                "Task ({} / {}) was renamed to {}!",
-                2, 2, new_title
-            )),
-        );
-        assert_eq!(state.todos[1].title, new_title);
-        assert_eq!(state.todos[0].title, "Task 1");
+        assert_eq!(result, Ok(String::from("Task 1 / 1 was updated")));
+
+        assert_eq!(state.todos[0].title, "New Title");
+        assert_eq!(state.todos[0].description, "New Desc");
+        assert_eq!(state.todos[0].priority, Priority::High);
     }
 
     #[test]
-    fn should_invoke_empty_title_error_on_rename() {
-        let mut state: ApplicationState = setup_with_n_todos(1);
-        let result: ApplicationResult<String> = state.rename_todo("");
+    fn should_invoke_empty_title_error_on_update() {
+        let mut state = ApplicationState::default();
+        state
+            .append(Todo::new("Task", "Desc", Some(Priority::Low)))
+            .unwrap();
+        let id: Uuid = state.todos[0].id;
+
+        let updated: Todo = Todo::new(" ", "", Some(Priority::High));
+        let result: ApplicationResult<String> = state.update(&id, updated);
 
         assert_eq!(result, Err(ApplicationError::Todo(TodoError::EmptyTitle)));
-        assert_eq!(state.todos[0].title, "Task 1");
+        assert_eq!(state.todos[0].title, "Task");
+        assert_eq!(state.todos[0].priority, Priority::Low);
     }
 
     #[test]
-    fn should_invoke_task_exists_on_rename() {
-        let mut state: ApplicationState = setup_with_n_todos(3);
-        let title: String = "Task 1".to_string();
-        let result: ApplicationResult<String> = state.rename_todo(&title);
-
-        assert_eq!(
-            result,
-            Err(ApplicationError::Todo(TodoError::TaskAlreadyExists(title)))
-        );
-        assert_eq!(state.todos[2].title, "Task 3");
-    }
-
-    #[test]
-    fn should_invoke_not_selected_error_on_rename() {
+    fn should_invoke_not_selected_error_on_update() {
         let mut state: ApplicationState = ApplicationState::default();
-        state.select_state.select(None);
-        let result: ApplicationResult<String> = state.rename_todo("Should fail");
+        state.append(Todo::new("Task", "Desc", None)).unwrap();
 
+        let id: Uuid = state.todos[0].id;
+        let updated: Todo = Todo::new("Updated", "Updated", Some(Priority::High));
+
+        state.select_state.select(None);
+        let result: ApplicationResult<String> = state.update(&id, updated);
         assert_eq!(
             result,
             Err(ApplicationError::Todo(TodoError::TaskNotSelected))
@@ -354,56 +449,36 @@ mod tests {
     }
 
     #[test]
-    fn should_remove_todo_in_the_middle() {
-        let mut state: ApplicationState = setup_with_n_todos(3);
-        state.select_state.select(Some(1));
-        let result: ApplicationResult<String> = state.remove_todo();
-
-        assert_eq!(result, Ok(String::from(REMOVED_TASK_TEXT)));
-        assert_eq!(state.todos.len(), 2);
-        assert_eq!(state.todos[0].title, "Task 1");
-        assert_eq!(state.todos[1].title, "Task 3");
-        assert_eq!(state.select_state.selected(), Some(1));
-    }
-
-    #[test]
-    fn should_remove_todo_last() {
-        let mut state: ApplicationState = setup_with_n_todos(2);
-        state.select_state.select(Some(1));
-        let result: ApplicationResult<String> = state.remove_todo();
-
-        assert_eq!(result, Ok(String::from(REMOVED_TASK_TEXT)));
-        assert_eq!(state.todos.len(), 1);
-        assert_eq!(state.todos[0].title, "Task 1");
-        assert_eq!(state.select_state.selected(), Some(0));
-    }
-
-    #[test]
-    fn should_remove_only_one_element() {
-        let mut state: ApplicationState = setup_with_n_todos(1);
-        let result: ApplicationResult<String> = state.remove_todo();
-
-        assert_eq!(result, Ok(String::from(REMOVED_TASK_TEXT)));
-        assert!(state.todos.is_empty());
-        assert_eq!(state.select_state.selected(), None);
-    }
-
-    #[test]
-    fn should_invoke_cannot_remove_empty_error_on_remove() {
+    fn should_invoke_not_found_error_on_update() {
         let mut state: ApplicationState = ApplicationState::default();
-        let result: ApplicationResult<String> = state.remove_todo();
+        state.append(Todo::new("Task", "Desc", None)).unwrap();
 
-        assert_eq!(
-            result,
-            Err(ApplicationError::Todo(TodoError::CannotRemoveFromEmpty))
-        );
+        let updated: Todo = Todo::new("Updated", "Updated", Some(Priority::High));
+        let id: Uuid = Uuid::new_v4();
+
+        let result: ApplicationResult<String> = state.update(&id, updated);
+        assert_eq!(result, Err(ApplicationError::Todo(TodoError::TaskNotFound)));
+    }
+
+    #[test]
+    fn should_remove_todo_with_filter() {
+        let mut state = ApplicationState::default();
+        state.append(Todo::new("Task 1", "", None)).unwrap();
+        state.append(Todo::new("Task 2", "", None)).unwrap();
+        state.todos[0].completed = true;
+
+        state.remove(&Filter::Active, Some(0)).unwrap();
+
+        assert_eq!(state.todos.len(), 1);
+        assert_eq!(state.todos[0].title, "Task 1",);
     }
 
     #[test]
     fn should_invoke_not_selected_error_on_remove() {
-        let mut state: ApplicationState = setup_with_n_todos(1);
-        state.select_state.select(None);
-        let result: ApplicationResult<String> = state.remove_todo();
+        let mut state: ApplicationState = ApplicationState::default();
+        state.append(Todo::new("Task", "", None)).unwrap();
+
+        let result = state.remove(&Filter::All, None);
 
         assert_eq!(
             result,
@@ -412,76 +487,46 @@ mod tests {
     }
 
     #[test]
-    fn should_toggle_current_todo() {
-        let mut state: ApplicationState = setup_with_n_todos(2);
-        state.select_state.select(Some(0));
+    fn should_toggle_with_filter_logic() {
+        let mut state = ApplicationState::default();
+        state.append(Todo::new("Toggle Me", "", None)).unwrap();
 
-        assert!(!state.todos[0].done);
+        assert!(!state.todos[0].completed);
 
-        state.toggle_current();
-        assert!(state.todos[0].done);
+        state.toggle(&Filter::All, Some(0));
+        assert!(state.todos[0].completed);
 
-        state.toggle_current();
-        assert!(!state.todos[0].done);
+        state.toggle(&Filter::All, Some(0));
+        assert!(!state.todos[0].completed);
     }
 
     #[test]
-    fn should_toggle_current_on_empty() {
-        let mut state: ApplicationState = ApplicationState::default();
-        state.select_state.select(None);
-        state.toggle_current();
+    fn should_clear_todos_with_specific_filter() {
+        let mut state = ApplicationState::default();
+        state.append(Todo::new("Active", "", None)).unwrap();
+        state.append(Todo::new("Done", "", None)).unwrap();
+        state.todos[1].completed = true;
 
+        state.clear(&Filter::Completed).unwrap();
+        assert_eq!(state.todos.len(), 1);
+        assert_eq!(state.todos[0].title, "Active");
+
+        let result: ApplicationResult<String> = state.clear(&Filter::Completed);
+        assert_eq!(result, Err(TodoError::ListEmpty.into()))
+    }
+
+    #[test]
+    fn should_clear_all() {
+        let mut state = ApplicationState::default();
+        state.append(Todo::new("T1", "", None)).unwrap();
+        state.append(Todo::new("T2", "", None)).unwrap();
+
+        let result: ApplicationResult<String> = state.clear(&Filter::All);
+        assert_eq!(
+            result,
+            Ok(String::from("Cleared 2 tasks from current view"))
+        );
         assert!(state.todos.is_empty());
-    }
-
-    #[test]
-    fn should_clear_todos() {
-        let mut state: ApplicationState = setup_with_n_todos(5);
-        let result: ApplicationResult<String> = state.clear_todos();
-
-        assert_eq!(result, Ok(String::from(CLEARED_TASKS_TEXT)));
-        assert!(state.todos.is_empty());
-    }
-
-    #[test]
-    fn should_invoke_list_empty_on_clear() {
-        let mut state: ApplicationState = ApplicationState::default();
-        let result: ApplicationResult<String> = state.clear_todos();
-
-        assert_eq!(result, Err(ApplicationError::Todo(TodoError::ListEmpty)));
-        assert!(state.todos.is_empty());
-    }
-
-    #[test]
-    fn should_return_current_todo() {
-        let mut state: ApplicationState = setup_with_n_todos(3);
-        state.select_state.select(Some(1));
-        let current: Option<&Todo> = state.current_todo();
-
-        assert!(current.is_some());
-        assert_eq!(current.unwrap().title, "Task 2");
-    }
-
-    #[test]
-    fn should_return_none_if_no_selection_found() {
-        let mut state: ApplicationState = setup_with_n_todos(3);
-        state.select_state.select(None);
-
-        assert!(state.current_todo().is_none());
-    }
-
-    #[test]
-    fn should_return_none_if_list_empty() {
-        let state: ApplicationState = ApplicationState::default();
-        assert!(state.current_todo().is_none());
-    }
-
-    #[test]
-    fn should_return_last_todo_if_is_out_of_bounds() {
-        let mut state: ApplicationState = setup_with_n_todos(1);
-        state.select_state.select(Some(999));
-
-        assert!(state.current_todo().is_none());
     }
 
     #[test]
@@ -490,11 +535,11 @@ mod tests {
         let path: PathBuf = temp_dir.path().join("todos.json");
 
         let mut state = ApplicationState::default();
-        state.append_todo("Task 1").unwrap();
-        state.append_todo("Task 2").unwrap();
+        state.append(Todo::new("Task 1", "", None)).unwrap();
+        state.append(Todo::new("Task 2", "", None)).unwrap();
 
         let result: ApplicationResult<String> = state.save_to_path(&path);
-        assert_eq!(result, Ok(String::from(SAVED_TASKS_TEXT)));
+        assert_eq!(result, Ok(String::from("Tasks were saved!")));
 
         let loaded: ApplicationState = ApplicationState::load_from_path(&path).unwrap();
 
@@ -554,5 +599,86 @@ mod tests {
             result,
             Err(ApplicationError::Storage(StorageError::IOError))
         ));
+    }
+
+    #[test]
+    fn should_determine_unsaved_changes() {
+        let mut state = ApplicationState::default();
+        state.saved_todos_hash = state.calculate_todos_hash();
+        assert!(!state.any_unsaved_changes());
+
+        state.append(Todo::new("Task", "", None)).unwrap();
+        assert!(
+            state.any_unsaved_changes(),
+            "Hash should be changed after append"
+        );
+
+        state.saved_todos_hash = state.calculate_todos_hash();
+        assert!(!state.any_unsaved_changes());
+
+        state.todos[0].title = "Changed".to_string();
+        assert!(
+            state.any_unsaved_changes(),
+            "Hash should be changed after field edit"
+        );
+    }
+
+    #[test]
+    fn should_find_todo_by_id() {
+        let mut state = ApplicationState::default();
+        let task: Todo = Todo::new("Find me", "", None);
+        let target_id: Uuid = task.id;
+        state.append(task).unwrap();
+
+        let found = state.todo_by_id_mut(&target_id);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().title, "Find me");
+
+        let missing = state.todo_by_id_mut(&uuid::Uuid::new_v4());
+        assert!(missing.is_none());
+    }
+
+    #[test]
+    fn should_return_stats_for_bottom_bar() {
+        let mut state = ApplicationState::default();
+        state.append(Todo::new("T1", "", None)).unwrap();
+        state.append(Todo::new("T2", "", None)).unwrap();
+        state.todos[0].completed = true;
+
+        let (total, active) = state.stats();
+        assert_eq!(total, 2);
+        assert_eq!(active, 1);
+    }
+
+    #[test]
+    fn should_test_filtered_stream_mapping() {
+        let mut state = ApplicationState::default();
+        state.append(Todo::new("Active", "", None)).unwrap();
+        state
+            .append(Todo::new("High", "", Some(Priority::High)))
+            .unwrap();
+        state.append(Todo::new("Done", "", None)).unwrap();
+        state.todos[2].completed = true;
+
+        let high_priority: Vec<_> = state.filtered_stream(&Filter::HighPriority).collect();
+        assert_eq!(high_priority.len(), 1);
+        assert_eq!(high_priority[0].0, 1);
+
+        let completed: Vec<_> = state.filtered_stream(&Filter::Completed).collect();
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0].0, 2);
+        assert_eq!(completed[0].1.title, "Done");
+    }
+
+    #[test]
+    fn shoukd_handle_notification_creation() {
+        let mut state = ApplicationState::default();
+
+        state.notify(Ok("Success message".to_string()));
+        assert!(state.notification.is_some());
+
+        let error_res: ApplicationResult<String> = Err(TodoError::EmptyTitle.into());
+        state.notify(error_res);
+        assert!(state.notification.is_some());
     }
 }
