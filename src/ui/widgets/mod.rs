@@ -1,10 +1,9 @@
-pub mod dialogs;
+pub mod form;
 pub mod input;
+pub mod modal;
 pub mod notification;
 
-pub use dialogs::{
-    Confirm, ConfirmOption, Dialog, DialogIntent, DialogResult, Popup, PopupCloseBehavior,
-    PopupKind,
-};
-pub use input::{Input, InputMode, InputResult};
-pub use notification::{Notification, NotificationKind};
+pub use form::{Field, FieldType, Form};
+pub use input::{EnumInput, TextInput};
+pub use modal::{Confirm, Popup};
+pub use notification::Notification;
