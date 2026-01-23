@@ -1,59 +1,79 @@
+use super::Priority;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, Hash)]
 pub struct Todo {
+    pub id: Uuid,
     pub title: String,
-    pub done: bool,
+    pub description: String,
+    pub completed: bool,
+    pub priority: Priority,
 }
 
 impl Todo {
-    pub fn new(title: impl Into<String>) -> Self {
+    pub fn new(
+        title: impl Into<String>,
+        description: impl Into<String>,
+        priority: Option<Priority>,
+    ) -> Self {
         Self {
+            id: Uuid::new_v4(),
             title: title.into(),
-            done: false,
+            description: description.into(),
+            completed: false,
+            priority: priority.unwrap_or_default(),
         }
     }
 
-    pub fn toggle_done(&mut self) {
-        self.done = !self.done;
-    }
-
-    pub fn rename(&mut self, new_name: impl Into<String>) {
-        self.title = new_name.into();
+    pub fn toggle_completed(&mut self) {
+        self.completed = !self.completed;
     }
 }
 
 // Unit-tests for todo model (basic methods)
 #[cfg(test)]
 mod tests {
-    use super::Todo;
+    use super::*;
 
     #[test]
     fn should_create_todo_item() {
-        let todo: Todo = Todo::new("Test task");
+        let todo: Todo = Todo::new("Test", "Test", None);
 
-        assert_eq!(todo.title, "Test task");
-        assert!(!todo.done);
+        assert_eq!(todo.title, "Test");
+        assert_eq!(todo.title, "Test");
+        assert_eq!(todo.priority, Priority::Low);
+        assert!(!todo.completed);
     }
 
     #[test]
-    fn should_toggle_complete() {
-        let mut todo: Todo = Todo::new("Test task");
+    fn should_generate_unique_id_for_todos() {
+        let title: &str = "Test Task";
+        let desc: &str = "Description";
 
-        todo.toggle_done();
-        assert!(todo.done);
+        let todo1 = Todo::new(title, desc, None);
+        let todo2 = Todo::new(title, desc, None);
 
-        todo.toggle_done();
-        assert!(!todo.done);
+        assert!(!todo1.id.is_nil(), "UUID should not be nil");
+        assert_ne!(todo1.id, todo2.id, "each todo must have a unique UUID");
+
+        assert_eq!(
+            todo1.id.get_version(),
+            Some(uuid::Version::Random),
+            "UUID should be version 4"
+        );
     }
 
     #[test]
-    fn should_rename_todo() {
-        let mut todo: Todo = Todo::new("Test task");
-        assert_eq!(todo.title, "Test task");
+    fn should_toggle_completed() {
+        let mut todo: Todo = Todo::new("Test", "Test", Some(Priority::Medium));
+        assert_eq!(todo.priority, Priority::Medium);
 
-        todo.rename("Renamed task");
-        assert_eq!(todo.title, "Renamed task");
+        todo.toggle_completed();
+        assert!(todo.completed);
+
+        todo.toggle_completed();
+        assert!(!todo.completed);
     }
 }
