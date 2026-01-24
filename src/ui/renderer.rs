@@ -10,7 +10,7 @@ impl Renderer {
     pub fn render(
         &self,
         frame: &mut Frame,
-        state: &ApplicationState,
+        state: &mut ApplicationState,
         ui: &UIState,
         mode: ApplicationMode,
     ) {

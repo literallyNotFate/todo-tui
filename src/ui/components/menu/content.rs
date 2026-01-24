@@ -10,7 +10,7 @@ impl MenuContent {
     pub fn render(
         frame: &mut Frame,
         area: Rect,
-        state: &ApplicationState,
+        state: &mut ApplicationState,
         ui: &UIState,
         mode: &ApplicationMode,
     ) {
@@ -19,14 +19,7 @@ impl MenuContent {
         match mode {
             ApplicationMode::Browsing => {
                 let filtered = ui.current_filter.filter(&state.todos);
-                TaskList::render(
-                    frame,
-                    area,
-                    &filtered,
-                    &state.select_state,
-                    ui.current_filter,
-                    &ui.focus_area,
-                );
+                TaskList::render(frame, area, ui, &mut state.select_state, &filtered);
             }
             ApplicationMode::Task => {
                 if let Some(form) = &ui.task_form {

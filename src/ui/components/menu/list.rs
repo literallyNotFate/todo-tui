@@ -1,8 +1,18 @@
 use crate::{
     enums::FocusArea,
-    models::{Filter, Priority, Todo},
+    models::{Priority, Todo},
+    state::UIState,
+    traits::InteractableEnum,
+    ui::center,
+    utils::constants::theme::TEXT_DIMMED,
 };
-use ratatui::{Frame, layout::Rect, widgets::ListState};
+use ratatui::{
+    Frame,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Modifier, Style},
+    text::Line,
+    widgets::{Block, Paragraph, TableState},
+};
 
 pub struct TaskList;
 
@@ -10,60 +20,148 @@ impl TaskList {
     pub fn render(
         frame: &mut Frame,
         area: Rect,
+        ui: &UIState,
+        select_state: &mut TableState,
         todos: &[Todo],
-        select_state: &ListState,
-        current_filter: Filter,
-        focused_area: &FocusArea,
     ) {
         use ratatui::{
             style::{Color, Style, Stylize},
-            text::{Line, Span},
-            widgets::{Block, List, ListItem},
+            widgets::{Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, Wrap},
         };
 
-        let filtered = current_filter.filter(todos);
-
-        let list_items = filtered.iter().map(|todo| {
-            let priority_style: Style = match todo.priority {
-                Priority::High => Style::default().fg(Color::LightRed),
-                Priority::Medium => Style::default().fg(Color::LightYellow),
-                Priority::Low => Style::default().fg(Color::LightGreen),
-            };
-
-            let title = if todo.completed {
-                Span::styled(
-                    format!("✓ {}", todo.title),
-                    Style::default().fg(Color::Green),
-                )
-            } else {
-                Span::styled(todo.title.clone(), priority_style)
-            };
-
-            ListItem::new(Line::from(vec![
-                title,
-                Span::raw(" "),
-                Span::styled(
-                    todo.description.chars().take(30).collect::<String>(),
-                    Style::default().dim(),
-                ),
-            ]))
-        });
-
-        let focused_style: Style = if *focused_area == FocusArea::MainContent {
+        let focused_style: Style = if ui.focus_area == FocusArea::MainContent {
             Style::default().fg(Color::Green)
         } else {
             Style::default()
         };
 
-        let list = List::new(list_items)
-            .block(
-                Block::bordered()
-                    .title(" Tasks ")
-                    .border_style(focused_style),
+        let filtered = ui.current_filter.filter(todos);
+        if filtered.is_empty() {
+            Self::render_empty_state(frame, area, focused_style);
+            return;
+        }
+
+        let main_layout: std::rc::Rc<[Rect]> = Self::main_layout(area);
+
+        let main_block = Block::bordered()
+            .title(" Tasks ")
+            .border_style(focused_style);
+
+        let inner_area: Rect = main_block.inner(main_layout[0]);
+        frame.render_widget(main_block, main_layout[0]);
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Top margin table
+                Constraint::Min(0),    // Table
+            ])
+            .split(inner_area);
+
+        let table_area = chunks[1];
+        let details_area = main_layout[1];
+
+        if let Some(selected_index) = select_state.selected() {
+            if let Some(todo) = filtered.get(selected_index) {
+                let details_block = Block::bordered()
+                    .title(format!(" Details: {} ", todo.title))
+                    .border_style(Style::default().fg(Color::Cyan).dim());
+
+                let details: Paragraph = Paragraph::new(todo.description.as_str())
+                    .block(details_block)
+                    .wrap(Wrap { trim: true });
+
+                frame.render_widget(details, details_area);
+            }
+        }
+
+        let rows = filtered.iter().map(|todo| {
+            let priority_color: Color = match todo.priority {
+                Priority::High => Color::LightRed,
+                Priority::Medium => Color::LightYellow,
+                Priority::Low => Color::LightGreen,
+            };
+
+            Row::new(vec![
+                Cell::from(if todo.completed { "✓" } else { "☐" }).style(Style::default().fg(
+                    if todo.completed {
+                        Color::Green
+                    } else {
+                        priority_color
+                    },
+                )),
+                Cell::from(todo.title.as_str()),
+                Cell::from(todo.priority.to_string()).style(Style::default().fg(priority_color)),
+            ])
+            .height(1)
+        });
+
+        let table = Table::new(rows, Self::table_measurements())
+            .header(
+                Row::new(vec![
+                    Cell::from(""),
+                    Cell::from(Line::from(" Title ").alignment(Alignment::Center)),
+                    Cell::from(Line::from(" Priority ").alignment(Alignment::Center)),
+                ])
+                .style(Style::default().bold())
+                .bottom_margin(1),
             )
-            .highlight_style(Style::default().bg(Color::DarkGray))
+            .row_highlight_style(Style::default().bg(Color::DarkGray))
             .highlight_symbol(">> ");
 
-        frame.render_stateful_widget(list, area, &mut select_state.clone());
+        let table_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(0), Constraint::Length(3)])
+            .split(table_area);
+
+        let final_table_area = table_layout[0];
+        let scrollbar_area = table_layout[1];
+
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"))
+            .track_symbol(Some("│"));
+
+        let mut scrollbar_state =
+            ScrollbarState::new(filtered.len()).position(select_state.selected().unwrap_or(0));
+
+        frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+        frame.render_stateful_widget(table, final_table_area, select_state);
+    }
+
+    // Render fallback if list is empty
+    fn render_empty_state(frame: &mut Frame, area: Rect, focused_style: Style) {
+        let outer_block: Block = Block::bordered()
+            .title(" Tasks ")
+            .border_style(focused_style);
+        frame.render_widget(outer_block, area);
+
+        let message_area: Rect = center(50, 20, area);
+
+        let message = vec![
+            Line::from("All clear!").style(Style::default().add_modifier(Modifier::BOLD)),
+            Line::from(""),
+            Line::from("Press 'a' to add a new task").style(Style::default().fg(TEXT_DIMMED)),
+        ];
+
+        let paragraph = Paragraph::new(message).alignment(Alignment::Center);
+        frame.render_widget(paragraph, message_area);
+    }
+
+    // Layout methods
+    fn main_layout(area: Rect) -> std::rc::Rc<[Rect]> {
+        Layout::default()
+            .constraints(vec![Constraint::Min(0), Constraint::Length(10)])
+            .split(area)
+    }
+
+    fn table_measurements() -> [Constraint; 4] {
+        [
+            Constraint::Length(5),  // Status
+            Constraint::Min(20),    // Title
+            Constraint::Length(10), // Priority
+            Constraint::Length(1),  // Space for scrollbar
+        ]
     }
 }

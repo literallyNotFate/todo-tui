@@ -26,7 +26,10 @@ impl MenuBottomBar {
             }
             ApplicationMode::Task => " Esc:Cancel │ ▲/▼:Next │ ◄/►:Priority ",
         };
-        frame.render_widget(Paragraph::new(hotkeys).fg(Color::DarkGray), chunks[0]);
+        frame.render_widget(
+            Paragraph::new(hotkeys).centered().fg(Color::DarkGray),
+            chunks[0],
+        );
 
         let status_layout = Layout::default()
             .direction(Direction::Horizontal)

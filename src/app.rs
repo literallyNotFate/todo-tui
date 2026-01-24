@@ -95,7 +95,7 @@ impl<'a> Application<'a> {
     // Rendering
     pub fn render(&mut self, frame: &mut Frame) {
         self.renderer
-            .render(frame, &self.state, &self.ui, self.mode);
+            .render(frame, &mut self.state, &self.ui, self.mode);
     }
 }
 

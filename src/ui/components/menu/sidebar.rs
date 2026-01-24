@@ -1,6 +1,7 @@
 use crate::{
     enums::FocusArea,
     models::{Filter, Todo},
+    state::UIState,
     traits::InteractableEnum,
 };
 use ratatui::{Frame, layout::Rect};
@@ -8,13 +9,7 @@ use ratatui::{Frame, layout::Rect};
 pub struct MenuSidebar;
 
 impl MenuSidebar {
-    pub fn render(
-        frame: &mut Frame,
-        area: Rect,
-        current_filter: Filter,
-        todos: &[Todo],
-        focused_area: &FocusArea,
-    ) {
+    pub fn render(frame: &mut Frame, area: Rect, ui: &UIState, todos: &[Todo]) {
         use ratatui::{
             style::{Color, Modifier, Style},
             text::Span,
@@ -26,7 +21,7 @@ impl MenuSidebar {
             .map(|tab| {
                 let count = tab.count(todos);
                 let text = format!("{} ({})", tab.to_string(), count);
-                let style = if *tab == current_filter {
+                let style = if *tab == ui.current_filter {
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD)
@@ -37,7 +32,7 @@ impl MenuSidebar {
             })
             .collect();
 
-        let is_focused = *focused_area == FocusArea::LeftPanel;
+        let is_focused = ui.focus_area == FocusArea::LeftPanel;
         let focused_style: Style = if is_focused {
             Style::default().fg(Color::Green)
         } else {
@@ -54,7 +49,7 @@ impl MenuSidebar {
             .highlight_symbol("→ ");
 
         let mut state = ListState::default();
-        state.select(Some(current_filter.index()));
+        state.select(Some(ui.current_filter.index()));
 
         frame.render_stateful_widget(list, area, &mut state);
     }

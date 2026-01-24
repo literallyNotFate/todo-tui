@@ -3,7 +3,7 @@ use crate::{
     state::{ApplicationError, StorageError, TodoError},
     ui::Notification,
 };
-use ratatui::widgets::ListState;
+use ratatui::widgets::TableState;
 use std::{
     fs::{self, File},
     hash::{DefaultHasher, Hash, Hasher},
@@ -15,7 +15,7 @@ use uuid::Uuid;
 #[derive(Debug, Default)]
 pub struct ApplicationState {
     pub todos: Vec<Todo>,
-    pub select_state: ListState,
+    pub select_state: TableState,
 
     pub notification: Option<Notification>,
     pub saved_todos_hash: u64,
@@ -37,7 +37,7 @@ impl ApplicationState {
     pub fn default() -> Self {
         Self {
             todos: Vec::new(),
-            select_state: ListState::default(),
+            select_state: TableState::default(),
             notification: None,
             saved_todos_hash: 0,
         }
