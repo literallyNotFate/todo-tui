@@ -80,7 +80,7 @@ pub fn handle_global_key(app: &mut Application, event: &KeyEvent) {
 
     match app.mode {
         ApplicationMode::Browsing => handle_browsing_keys(app, &event.code),
-        ApplicationMode::Task => handle_form_keys(app, &event.code),
+        ApplicationMode::Task => handle_form_keys(app, &event),
     }
 }
 
@@ -135,9 +135,9 @@ pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
 }
 
 // Handle task form keys
-pub fn handle_form_keys(app: &mut Application, code: &KeyCode) {
+pub fn handle_form_keys(app: &mut Application, event: &KeyEvent) {
     if let Some(form) = &mut app.ui.task_form {
-        let response: WidgetResponse = form.handle_key(code);
+        let response: WidgetResponse = form.handle_key(event);
         match response {
             WidgetResponse::Continue => return,
             WidgetResponse::Submit => {
@@ -202,7 +202,7 @@ mod tests {
     use tempdir::TempDir;
 
     // Setup application
-    fn setup_app() -> Application {
+    fn setup_app() -> Application<'static> {
         Application::test()
     }
 

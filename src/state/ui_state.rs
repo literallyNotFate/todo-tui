@@ -12,15 +12,15 @@ pub struct ActiveModal {
 }
 
 #[derive(Default)]
-pub struct UIState {
+pub struct UIState<'a> {
     pub current_filter: Filter,
     pub focus_area: FocusArea,
 
     pub modal: Option<ActiveModal>,
-    pub task_form: Option<Form>,
+    pub task_form: Option<Form<'a>>,
 }
 
-impl UIState {
+impl<'a> UIState<'a> {
     // Next tab filter
     pub fn next_tab_filter(&mut self) {
         self.current_filter = self.current_filter.next();

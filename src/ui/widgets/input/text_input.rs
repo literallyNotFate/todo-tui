@@ -1,4 +1,8 @@
-use crate::{traits::Input, ui::WidgetResponse, utils::constants::theme::TEXT_PRIMARY};
+use crate::{
+    traits::Input,
+    ui::WidgetResponse,
+    utils::constants::{size::TEXT_INPUT_MAX_CHARS, theme::TEXT_PRIMARY},
+};
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
@@ -22,7 +26,7 @@ impl TextInput {
             buffer: String::default(),
             title: String::default(),
             cursor: 0,
-            max_chars: 256,
+            max_chars: TEXT_INPUT_MAX_CHARS,
             border_style: Style::default(),
         }
     }
@@ -35,7 +39,7 @@ impl TextInput {
             buffer: initial_buffer,
             title: String::default(),
             cursor: cursor_value,
-            max_chars: 256,
+            max_chars: TEXT_INPUT_MAX_CHARS,
             border_style: Style::default(),
         }
     }

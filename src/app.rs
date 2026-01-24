@@ -10,15 +10,15 @@ use ratatui::{
     {DefaultTerminal, Frame},
 };
 
-pub struct Application {
+pub struct Application<'a> {
     pub mode: ApplicationMode,
     pub state: ApplicationState,
     pub running: bool,
-    pub ui: UIState,
+    pub ui: UIState<'a>,
     pub renderer: Renderer,
 }
 
-impl Application {
+impl<'a> Application<'a> {
     pub fn new() -> Self {
         Self {
             mode: ApplicationMode::Browsing,

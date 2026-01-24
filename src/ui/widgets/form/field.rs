@@ -1,3 +1,5 @@
+use tui_textarea::TextArea;
+
 use crate::{
     models::Priority,
     traits::Input,
@@ -5,12 +7,14 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub enum FieldType {
+pub enum FieldType<'a> {
     Text { input: TextInput },
     Enum { input: EnumInput<Priority> },
+    Multiline { input: TextArea<'a> },
+    Button,
 }
 
-impl FieldType {
+impl<'a> FieldType<'a> {
     pub fn text(title: &str, value: &str) -> Self {
         Self::Text {
             input: TextInput::from(value).title(title),
@@ -22,35 +26,25 @@ impl FieldType {
             input: EnumInput::from(p).title(" Priority "),
         }
     }
+
+    pub fn textarea(value: &str) -> Self {
+        Self::Multiline {
+            input: TextArea::new(vec![value.to_string()]),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
-pub struct Field {
+pub struct Field<'a> {
     pub name: String,
-    pub field_type: FieldType,
+    pub field_type: FieldType<'a>,
 }
 
-impl Field {
-    pub fn new(field_name: impl Into<String>, field_type: FieldType) -> Self {
+impl<'a> Field<'a> {
+    pub fn new(field_name: impl Into<String>, field_type: FieldType<'a>) -> Self {
         Self {
             name: field_name.into(),
             field_type,
-        }
-    }
-
-    pub fn get_text(&self) -> Option<String> {
-        if let FieldType::Text { input } = &self.field_type {
-            Some(input.buffer.clone())
-        } else {
-            None
-        }
-    }
-
-    pub fn get_priority(&self) -> Option<Priority> {
-        if let FieldType::Enum { input } = &self.field_type {
-            Some(input.selected.clone())
-        } else {
-            None
         }
     }
 }
