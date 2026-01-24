@@ -22,9 +22,9 @@ impl MenuBottomBar {
 
         let hotkeys: &str = match mode {
             ApplicationMode::Browsing => {
-                " Esc/q:Quit │ Enter:Toggle │ a:Add │ e:Edit │ d:Delete │ x:Clear │ <C-s>:Save │ h/l:Focus | ▲/▼/j/k:Filter "
+                " Esc/q:Quit │ Enter:Toggle │ a:Add │ e:Edit │ d:Delete │ x:Clear │ <C-s>:Save │ h/l:Focus │ ▲/▼/j/k:Navigate │ J/K:Move "
             }
-            ApplicationMode::Task => " Esc:Cancel │ Enter:Save │ ▲/▼:Next │ ◄/►:Priority ",
+            ApplicationMode::Task => " Esc:Cancel │ ▲/▼:Next │ ◄/►:Priority ",
         };
         frame.render_widget(Paragraph::new(hotkeys).fg(Color::DarkGray), chunks[0]);
 

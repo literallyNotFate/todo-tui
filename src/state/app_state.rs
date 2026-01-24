@@ -90,6 +90,42 @@ impl ApplicationState {
         self.calculate_todos_hash() != self.saved_todos_hash
     }
 
+    // Move tasks
+    pub fn move_task_up(&mut self) {
+        if let Some(i) = self.select_state.selected() {
+            if i > 0 {
+                if self.todos[i].priority == self.todos[i - 1].priority {
+                    self.todos.swap(i, i - 1);
+                    self.select_state.select(Some(i - 1));
+                }
+            }
+        }
+    }
+
+    pub fn move_task_down(&mut self) {
+        if let Some(i) = self.select_state.selected() {
+            if i < self.todos.len() - 1 {
+                if self.todos[i].priority == self.todos[i + 1].priority {
+                    self.todos.swap(i, i + 1);
+                    self.select_state.select(Some(i + 1));
+                }
+            }
+        }
+    }
+
+    // Stabilize soritng order (by priority) with keeping focused on (if needed)
+    pub(crate) fn stabilize_order(&mut self, focus_id: Option<Uuid>) {
+        self.todos.sort_by_key(|t| t.priority);
+
+        if let Some(id) = focus_id {
+            if let Some(new_pos) = self.todos.iter().position(|t| t.id == id) {
+                self.select_state.select(Some(new_pos));
+            }
+        } else if self.select_state.selected().is_none() && !self.todos.is_empty() {
+            self.select_state.select(Some(0));
+        }
+    }
+
     //
     // Main service todo
     //
@@ -102,8 +138,10 @@ impl ApplicationState {
             return Err(TodoError::EmptyTitle.into());
         }
 
+        let id: Uuid = new_task.id;
         self.todos.push(new_task);
-        self.select_state.select(Some(self.todos.len() - 1));
+
+        self.stabilize_order(Some(id));
 
         Ok(format!("Task '{}' was added to the list!", title))
     }
@@ -123,6 +161,8 @@ impl ApplicationState {
         task.title = updated_data.title;
         task.description = updated_data.description;
         task.priority = updated_data.priority;
+
+        self.stabilize_order(None);
 
         Ok(format!(
             "Task {} / {} was updated",
@@ -146,6 +186,16 @@ impl ApplicationState {
             .ok_or(TodoError::TaskNotSelected)?;
 
         let removed: Todo = self.todos.remove(real_index);
+        let tasks_count: usize = self.todos.len();
+
+        if tasks_count == 0 {
+            self.select_state.select(None);
+        } else if ui_index >= tasks_count {
+            self.select_state.select(Some(tasks_count - 1));
+        } else {
+            self.select_state.select(Some(ui_index));
+        }
+
         Ok(format!("Task '{}' was removed!", removed.title))
     }
 
@@ -182,6 +232,18 @@ impl ApplicationState {
         let removed_count: usize = old_count - self.todos.len();
         if removed_count == 0 {
             return Err(TodoError::ListEmpty.into());
+        }
+
+        if removed_count == 0 {
+            self.select_state.select(None);
+        } else {
+            if let Some(selected) = self.select_state.selected() {
+                if selected >= removed_count {
+                    self.select_state.select(Some(removed_count - 1));
+                }
+            } else {
+                self.select_state.select(Some(0));
+            }
         }
 
         Ok(format!("Cleared {} tasks from current view", removed_count))
@@ -377,6 +439,19 @@ mod tests {
     }
 
     #[test]
+    fn should_sort_after_append_by_priority() {
+        let mut state = ApplicationState::default();
+
+        state.append(Todo::new("Low", "", None)).unwrap();
+        state
+            .append(Todo::new("High", "", Some(Priority::High)))
+            .unwrap();
+
+        assert_eq!(state.todos[0].title, "High");
+        assert_eq!(state.todos[1].title, "Low");
+    }
+
+    #[test]
     fn should_invoke_empty_title_error_on_append() {
         let mut state: ApplicationState = ApplicationState::default();
         let result: ApplicationResult<String> = state.append(Todo::new("", "", None));
@@ -414,6 +489,26 @@ mod tests {
         assert_eq!(state.todos[0].title, "New Title");
         assert_eq!(state.todos[0].description, "New Desc");
         assert_eq!(state.todos[0].priority, Priority::High);
+    }
+
+    #[test]
+    fn should_sort_after_update_by_priority() {
+        let mut state: ApplicationState = ApplicationState::default();
+        let id: Uuid = Uuid::new_v4();
+
+        state
+            .append(Todo::new("First High", "", Some(Priority::High)))
+            .unwrap();
+
+        let mut updated = Todo::new("Initially Low", "", Some(Priority::Low));
+        updated.id = id;
+        state.append(updated.clone()).unwrap();
+
+        updated.priority = Priority::High;
+        state.update(&id, updated).unwrap();
+
+        assert_eq!(state.todos[1].title, "Initially Low");
+        assert_eq!(state.todos[1].priority, Priority::High);
     }
 
     #[test]
@@ -458,6 +553,28 @@ mod tests {
 
         let result: ApplicationResult<String> = state.update(&id, updated);
         assert_eq!(result, Err(ApplicationError::Todo(TodoError::TaskNotFound)));
+    }
+
+    #[test]
+    fn should_stabilize_order_properly() {
+        let mut state: ApplicationState = ApplicationState::default();
+
+        state
+            .append(Todo::new("Task A", "", Some(Priority::High)))
+            .unwrap();
+        state
+            .append(Todo::new("Task B", "", Some(Priority::High)))
+            .unwrap();
+
+        state.todos.swap(0, 1);
+        assert_eq!(state.todos[0].title, "Task B");
+
+        state.stabilize_order(None);
+
+        assert_eq!(
+            state.todos[0].title, "Task B",
+            "Stability failed: swap was reverted"
+        );
     }
 
     #[test]
@@ -662,7 +779,7 @@ mod tests {
 
         let high_priority: Vec<_> = state.filtered_stream(&Filter::HighPriority).collect();
         assert_eq!(high_priority.len(), 1);
-        assert_eq!(high_priority[0].0, 1);
+        assert_eq!(high_priority[0].0, 0);
 
         let completed: Vec<_> = state.filtered_stream(&Filter::Completed).collect();
         assert_eq!(completed.len(), 1);
@@ -680,5 +797,56 @@ mod tests {
         let error_res: ApplicationResult<String> = Err(TodoError::EmptyTitle.into());
         state.notify(error_res);
         assert!(state.notification.is_some());
+    }
+
+    #[test]
+    fn should_move_tasks_successully_with_same_priority() {
+        let mut state: ApplicationState = ApplicationState::default();
+
+        state
+            .append(Todo::new("Task 1", "", Some(Priority::High)))
+            .unwrap();
+        state
+            .append(Todo::new("Task 2", "", Some(Priority::High)))
+            .unwrap();
+
+        state.select_state.select(Some(0));
+        state.move_task_down();
+
+        assert_eq!(state.todos[0].title, "Task 2");
+        assert_eq!(state.todos[1].title, "Task 1");
+        assert_eq!(state.select_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn should_not_move_tasks_with_different_priorities() {
+        let mut state = ApplicationState::default();
+
+        state
+            .append(Todo::new("High Task", "", Some(Priority::High)))
+            .unwrap();
+        state
+            .append(Todo::new("Medium Task", "", Some(Priority::Medium)))
+            .unwrap();
+
+        state.select_state.select(Some(1));
+        state.move_task_up();
+
+        assert_eq!(state.todos[0].title, "High Task");
+        assert_eq!(state.todos[1].title, "Medium Task");
+        assert_eq!(state.select_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_move_task_boundaries() {
+        let mut state = ApplicationState::default();
+        state.append(Todo::new("Task 1", "", None)).unwrap();
+
+        state.select_state.select(Some(0));
+
+        state.move_task_up();
+        state.move_task_down();
+
+        assert_eq!(state.select_state.selected(), Some(0));
     }
 }

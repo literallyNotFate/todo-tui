@@ -1,12 +1,14 @@
 use crate::traits::InteractableEnum;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Hash, PartialEq, Copy)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Default, Hash, Eq, PartialEq, Copy, PartialOrd, Ord,
+)]
 pub enum Priority {
+    High,
+    Medium,
     #[default]
     Low,
-    Medium,
-    High,
 }
 
 impl InteractableEnum for Priority {

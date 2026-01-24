@@ -103,6 +103,8 @@ pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
             KeyCode::Enter => app
                 .state
                 .toggle(&app.ui.current_filter, app.state.select_state.selected()),
+            KeyCode::Char('J') => app.state.move_task_down(),
+            KeyCode::Char('K') => app.state.move_task_up(),
             KeyCode::Char('d') => open_remove_confirm(&mut app.ui),
             KeyCode::Char('e') => {
                 if let Some(ui_index) = app.state.select_state.selected() {
