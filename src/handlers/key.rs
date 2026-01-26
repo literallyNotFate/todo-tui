@@ -94,6 +94,7 @@ pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
             KeyCode::Char('2') => app.ui.change_filter(Filter::Active),
             KeyCode::Char('3') => app.ui.change_filter(Filter::Completed),
             KeyCode::Char('4') => app.ui.change_filter(Filter::HighPriority),
+            KeyCode::Char('5') => app.ui.change_filter(Filter::Today),
             _ => {}
         },
 
@@ -375,6 +376,9 @@ mod tests {
                 .is_none(),
             "Filter 'HighPriority' must contain no todos"
         );
+
+        handle_global_key(&mut app, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.ui.current_filter, Filter::Today);
 
         handle_global_key(&mut app, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(app.ui.current_filter, Filter::All);

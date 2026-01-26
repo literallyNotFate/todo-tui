@@ -1,5 +1,6 @@
 use super::{Priority, Todo};
 use crate::traits::InteractableEnum;
+use chrono::Local;
 
 #[derive(Default, Clone, Copy, Debug, PartialEq)]
 pub enum Filter {
@@ -8,11 +9,18 @@ pub enum Filter {
     Active,
     Completed,
     HighPriority,
+    Today,
 }
 
 impl InteractableEnum for Filter {
     fn all_variants() -> &'static [Self] {
-        &[Self::All, Self::Active, Self::Completed, Self::HighPriority]
+        &[
+            Self::All,
+            Self::Active,
+            Self::Completed,
+            Self::HighPriority,
+            Self::Today,
+        ]
     }
 
     fn to_string(&self) -> &'static str {
@@ -21,6 +29,7 @@ impl InteractableEnum for Filter {
             Self::Active => "Active",
             Self::Completed => "Completed",
             Self::HighPriority => "High Priority",
+            Self::Today => "Today",
         }
     }
 }
@@ -40,6 +49,14 @@ impl Filter {
                 .filter(|t| matches!(t.priority, Priority::High))
                 .cloned()
                 .collect(),
+            Self::Today => {
+                let today = Local::now().date_naive();
+                todos
+                    .iter()
+                    .filter(|t| t.created_at.with_timezone(&Local).date_naive() == today)
+                    .cloned()
+                    .collect()
+            }
         }
     }
 }
@@ -48,6 +65,7 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Duration, Utc};
 
     fn setup_test_todos() -> Vec<Todo> {
         vec![
@@ -55,12 +73,14 @@ mod tests {
             {
                 let mut t = Todo::new("Task 2", "Desc", Some(Priority::Medium));
                 t.completed = true;
+                t.created_at = Utc::now() - Duration::days(1);
                 t
             },
             Todo::new("Task 3", "Desc", Some(Priority::High)),
             {
                 let mut t = Todo::new("Task 4", "Desc", Some(Priority::High));
                 t.completed = true;
+                t.created_at = Utc::now() - Duration::weeks(2);
                 t
             },
         ]
@@ -83,5 +103,8 @@ mod tests {
         let high = Filter::HighPriority.filter(&todos);
         assert_eq!(high.len(), 2);
         assert!(high.iter().all(|t| matches!(t.priority, Priority::High)));
+
+        let today = Filter::Today.filter(&todos);
+        assert_eq!(today.len(), 2);
     }
 }

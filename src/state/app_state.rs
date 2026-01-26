@@ -3,6 +3,7 @@ use crate::{
     state::{ApplicationError, StorageError, TodoError},
     ui::Notification,
 };
+use chrono::Local;
 use ratatui::widgets::TableState;
 use std::{
     fs::{self, File},
@@ -227,6 +228,11 @@ impl ApplicationState {
             Filter::Completed => self.todos.retain(|t| !t.completed),
             Filter::Active => self.todos.retain(|t| t.completed),
             Filter::HighPriority => self.todos.retain(|t| t.priority != Priority::High),
+            Filter::Today => {
+                let today = Local::now().date_naive();
+                self.todos
+                    .retain(|t| t.created_at.with_timezone(&Local).date_naive() != today)
+            }
         }
 
         let removed_count: usize = old_count - self.todos.len();
@@ -324,6 +330,8 @@ impl ApplicationState {
 
     // Filter tasks by filter
     pub(crate) fn filtered_stream(&self, filter: &Filter) -> impl Iterator<Item = (usize, &Todo)> {
+        let today = Local::now().date_naive();
+
         self.todos
             .iter()
             .enumerate()
@@ -332,6 +340,7 @@ impl ApplicationState {
                 Filter::Active => !todo.completed,
                 Filter::Completed => todo.completed,
                 Filter::HighPriority => todo.priority == Priority::High,
+                Filter::Today => todo.created_at.with_timezone(&Local).date_naive() == today,
             })
     }
 

@@ -9,7 +9,7 @@ use crate::{
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
 };
@@ -43,13 +43,14 @@ impl Popup {
             message: message.into(),
             title: String::default(),
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
-            border_style: Style::default(),
+            border_style: Style::default().fg(Color::Blue),
         }
     }
 
     pub fn success(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Success,
+            border_style: Style::default().fg(Color::Green),
             ..Self::info(message)
         }
     }
@@ -57,6 +58,7 @@ impl Popup {
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Error,
+            border_style: Style::default().fg(Color::Red),
             ..Self::info(message)
         }
     }
@@ -75,6 +77,46 @@ impl Popup {
         self.close_behavior = PopupCloseBehavior::Specific(key);
         self
     }
+
+    // Vertical layout for inner content
+    fn vertical_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Fill(1), Constraint::Min(1), Constraint::Fill(1)])
+            .split(area)
+    }
+
+    // Horizontal layout for inner content
+    fn horizontal_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(10), // Left
+                Constraint::Percentage(80),
+                Constraint::Percentage(10), // Right
+            ])
+            .split(area)
+    }
+
+    // Generate bottom title based on close behavior
+    fn bottom_title(&self) -> Line<'static> {
+        let key: String = match self.close_behavior {
+            PopupCloseBehavior::AnyKey => "any key".to_string(),
+            PopupCloseBehavior::Specific(c) => format!("<{}>", c),
+        };
+
+        Line::from(vec![
+            Span::styled(" Press ", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled(
+                key,
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" to close this popup. ", Style::default().fg(TEXT_PRIMARY)),
+        ])
+        .centered()
+    }
 }
 
 impl Modal for Popup {
@@ -90,42 +132,25 @@ impl Modal for Popup {
             widgets::{Block, BorderType, Paragraph, Wrap},
         };
 
-        let key: String = match self.close_behavior {
-            PopupCloseBehavior::AnyKey => "any key".to_string(),
-            PopupCloseBehavior::Specific(c) => format!("<{}>", c),
-        };
-
-        let bottom_line: Line = Line::from(vec![
-            Span::styled(" Press ", Style::default().fg(TEXT_PRIMARY)),
-            Span::styled(
-                key,
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" to close this popup. ", Style::default().fg(TEXT_PRIMARY)),
-        ]);
-
-        let border_style: Style = match self.kind {
-            PopupKind::Info => Style::default().fg(Color::Blue),
-            PopupKind::Success => Style::default().fg(Color::Green),
-            PopupKind::Error => Style::default().fg(Color::Red),
-        };
-
-        let block = Block::bordered()
+        let popup_block: Block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
-            .title_bottom(bottom_line)
-            .border_style(border_style)
+            .title_bottom(self.bottom_title())
+            .border_style(self.border_style)
             .fg(TEXT_PRIMARY);
 
-        let paragraph = Paragraph::new(self.message.as_str())
-            .block(block)
-            .alignment(Alignment::Center)
-            .wrap(Wrap { trim: false });
+        let inner_area: Rect = popup_block.inner(area);
+        frame.render_widget(popup_block, area);
 
-        frame.render_widget(paragraph, area);
+        let vertical_chunks: std::rc::Rc<[Rect]> = self.vertical_layout(inner_area);
+        let message_area: Rect = self.horizontal_layout(vertical_chunks[1])[1];
+
+        let message: Paragraph = Paragraph::new(self.message.as_str())
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+
+        frame.render_widget(message, message_area);
     }
 
     // Key event handling

@@ -91,7 +91,9 @@ impl TaskList {
                     },
                 )),
                 Cell::from(todo.title.as_str()),
-                Cell::from(todo.priority.to_string()).style(Style::default().fg(priority_color)),
+                Cell::from(Line::from(todo.priority.to_string()).alignment(Alignment::Center))
+                    .style(Style::default().fg(priority_color)),
+                Cell::from(Line::from(todo.time_ago()).alignment(Alignment::Center)),
             ])
             .height(1)
         });
@@ -102,6 +104,7 @@ impl TaskList {
                     Cell::from(""),
                     Cell::from(Line::from(" Title ").alignment(Alignment::Center)),
                     Cell::from(Line::from(" Priority ").alignment(Alignment::Center)),
+                    Cell::from(Line::from(" Created ").alignment(Alignment::Center)),
                 ])
                 .style(Style::default().bold())
                 .bottom_margin(1),
@@ -156,11 +159,12 @@ impl TaskList {
             .split(area)
     }
 
-    fn table_measurements() -> [Constraint; 4] {
+    fn table_measurements() -> [Constraint; 5] {
         [
             Constraint::Length(5),  // Status
-            Constraint::Min(20),    // Title
+            Constraint::Min(15),    // Title
             Constraint::Length(10), // Priority
+            Constraint::Length(15), // Created At
             Constraint::Length(1),  // Space for scrollbar
         ]
     }

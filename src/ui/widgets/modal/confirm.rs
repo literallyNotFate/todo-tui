@@ -6,7 +6,13 @@ use crate::{
         theme::{TEXT_DIMMED, TEXT_PRIMARY},
     },
 };
-use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Modifier, text::Span};
+use ratatui::{
+    Frame,
+    crossterm::event::KeyCode,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfirmOption {
@@ -26,6 +32,61 @@ impl Confirm {
             select: ConfirmOption::Cancel,
         }
     }
+
+    // Vertical layout for inner content
+    fn vertical_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(2),
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Fill(1),
+            ])
+            .split(area)
+    }
+
+    // Horizontal layout for inner content
+    fn horizontal_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(10), // Left
+                Constraint::Percentage(80),
+                Constraint::Percentage(10), // Right
+            ])
+            .split(area)
+    }
+
+    // Style for buttons based on selection
+    fn button_styles(&self) -> (Style, Style) {
+        match self.select {
+            ConfirmOption::Yes => (
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(TEXT_DIMMED),
+            ),
+            ConfirmOption::Cancel => (
+                Style::default().fg(TEXT_DIMMED),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+        }
+    }
+
+    // Render buttons
+    fn button_line(&self, styles: (Style, Style)) -> Line<'static> {
+        Line::from(vec![
+            Span::styled("[ ", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled("Yes", styles.0),
+            Span::styled(" ]", Style::default().fg(TEXT_PRIMARY)),
+            Span::raw("    "),
+            Span::styled("[ ", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled("Cancel", styles.1),
+            Span::styled(" ]", Style::default().fg(TEXT_PRIMARY)),
+        ])
+    }
 }
 
 impl Modal for Confirm {
@@ -37,60 +98,36 @@ impl Modal for Confirm {
     // Rendering
     fn render(&self, frame: &mut Frame, area: Rect) {
         use ratatui::{
-            layout::{Alignment, Constraint, Direction, Layout},
-            style::{Color, Style, Stylize},
-            text::Line,
+            layout::Alignment,
+            style::Stylize,
             widgets::{Block, BorderType, Paragraph, Wrap},
         };
 
-        let confirm_block = Block::bordered()
+        let confirm_block: Block = Block::bordered()
             .fg(TEXT_PRIMARY)
             .border_style(Style::default())
-            .title_top(Line::from(" Confirm Operation ").centered())
+            .title_top(Line::from(" Confirm Action ").centered())
             .border_type(BorderType::Rounded);
 
-        let inner_area = confirm_block.inner(area);
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(1),    // Message
-                Constraint::Length(1), // Buttons
-            ])
-            .margin(1)
-            .split(inner_area);
+        let inner_area: Rect = confirm_block.inner(area);
+        frame.render_widget(confirm_block.clone(), area);
 
-        frame.render_widget(confirm_block, area);
+        let vertical_chunks: std::rc::Rc<[Rect]> = self.vertical_layout(inner_area);
 
-        let message = Paragraph::new(self.message.clone())
+        let message_area: Rect = self.horizontal_layout(vertical_chunks[1])[1];
+        let buttons_area: Rect = self.horizontal_layout(vertical_chunks[3])[1];
+
+        let message: Paragraph = Paragraph::new(self.message.clone())
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true });
-        frame.render_widget(message, chunks[0]);
 
-        let (yes_style, cancel_style): (Style, Style) = match self.select {
-            ConfirmOption::Yes => (
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-                Style::default().fg(TEXT_DIMMED),
-            ),
-            ConfirmOption::Cancel => (
-                Style::default().fg(TEXT_DIMMED),
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            ),
-        };
+        frame.render_widget(message, message_area);
 
-        let buttons: Line = Line::from(vec![
-            Span::styled("[ ", Style::default().fg(TEXT_PRIMARY)),
-            Span::styled("Yes", yes_style),
-            Span::styled(" ]", Style::default().fg(TEXT_PRIMARY)),
-            Span::raw("   "),
-            Span::styled("[ ", Style::default().fg(TEXT_PRIMARY)),
-            Span::styled("Cancel", cancel_style),
-            Span::styled(" ]", Style::default().fg(TEXT_PRIMARY)),
-        ]);
+        let button_styles: (Style, Style) = self.button_styles();
+        let buttons: Line = self.button_line(button_styles);
 
         let buttons_widget = Paragraph::new(buttons).alignment(Alignment::Center);
-        frame.render_widget(buttons_widget, chunks[1]);
+        frame.render_widget(buttons_widget, buttons_area);
     }
 
     // Key event handling
