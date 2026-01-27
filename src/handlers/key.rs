@@ -126,6 +126,7 @@ pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
     match code {
         KeyCode::Char('q') => handle_close(&mut app.state, &mut app.ui, &mut app.running),
         KeyCode::Char('h') | KeyCode::Char('l') => app.ui.toggle_focus(),
+        KeyCode::Char('t') => app.ui.switch_theme(),
         KeyCode::Char('a') => {
             app.ui.task_form = Some(Form::new());
             app.mode = ApplicationMode::Task;
@@ -155,6 +156,7 @@ pub fn handle_form_keys(app: &mut Application, event: &KeyEvent) {
                 if is_ok {
                     app.ui.task_form = None;
                     app.mode = ApplicationMode::Browsing;
+                    app.ui.focus_area = FocusArea::MainContent
                 } else {
                     return;
                 }

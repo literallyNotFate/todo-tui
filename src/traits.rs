@@ -1,10 +1,10 @@
-use crate::ui::WidgetResponse;
+use crate::{theme::ThemeColors, ui::WidgetResponse};
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect};
 
 // Modal trait for interactable widgets (handle_key()) for popup and confirm
 pub trait Modal {
     fn area(&self, frame_area: Rect) -> Rect;
-    fn render(&self, frame: &mut Frame, area: Rect);
+    fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors);
     fn handle_key(&mut self, key: KeyCode) -> Option<ModalResult>;
 }
 
@@ -53,5 +53,5 @@ pub trait InteractableEnum: Sized + Copy + PartialEq + 'static {
 pub trait Input {
     fn title(self, title: impl Into<String>) -> Self;
     fn handle_key(&mut self, key: &KeyCode) -> WidgetResponse;
-    fn render(&self, frame: &mut Frame, area: Rect, focused: bool);
+    fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors);
 }

@@ -1,20 +1,14 @@
 use crate::{
+    theme::ThemeColors,
     traits::{Input, InteractableEnum},
     ui::WidgetResponse,
-    utils::constants::theme::TEXT_PRIMARY,
 };
-use ratatui::{
-    Frame,
-    crossterm::event::KeyCode,
-    layout::Rect,
-    style::{Color, Style},
-};
+use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect};
 
 #[derive(Debug, Default, Clone)]
 pub struct EnumInput<T> {
     pub title: String,
     pub selected: T,
-    pub border_style: Style,
 }
 
 impl<T> EnumInput<T> {
@@ -22,7 +16,6 @@ impl<T> EnumInput<T> {
         Self {
             selected,
             title: String::default(),
-            border_style: Style::default(),
         }
     }
 }
@@ -48,22 +41,22 @@ where
         WidgetResponse::Continue
     }
 
-    fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
+    fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
         use ratatui::{
             style::Style,
             widgets::{Block, Paragraph},
         };
 
         let focused_style: Style = if focused {
-            Style::default().fg(Color::Green)
+            Style::default().fg(theme.accent)
         } else {
-            self.border_style
+            Style::default().fg(theme.border)
         };
 
         let input_block = Block::bordered()
             .border_style(focused_style)
-            .title(self.title.clone())
-            .title_style(Style::default().fg(TEXT_PRIMARY));
+            .title(self.title.as_str())
+            .title_style(Style::default().fg(theme.text_primary));
 
         let input = Paragraph::new(self.selected.to_string()).block(input_block);
 

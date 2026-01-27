@@ -2,6 +2,7 @@ use crate::{
     enums::FocusArea,
     models::Filter,
     state::ApplicationResult,
+    theme::Theme,
     traits::{InteractableEnum, Modal, ModalAction},
     ui::{Form, Notification, Popup},
 };
@@ -18,6 +19,8 @@ pub struct UIState<'a> {
 
     pub modal: Option<ActiveModal>,
     pub task_form: Option<Form<'a>>,
+
+    pub theme: Theme,
 }
 
 impl<'a> UIState<'a> {
@@ -42,6 +45,11 @@ impl<'a> UIState<'a> {
             FocusArea::LeftPanel => FocusArea::MainContent,
             FocusArea::MainContent => FocusArea::LeftPanel,
         };
+    }
+
+    // Switch theme
+    pub fn switch_theme(&mut self) {
+        self.theme = self.theme.next()
     }
 
     // Modal

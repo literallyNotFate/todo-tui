@@ -1,3 +1,4 @@
+use crate::theme::ThemeColors;
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
@@ -38,13 +39,13 @@ impl Notification {
     }
 
     // Rendering
-    pub fn render(&self, frame: &mut Frame, area: Rect) {
-        use ratatui::style::{Color, Style};
+    pub fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
+        use ratatui::style::Style;
         use ratatui::widgets::Paragraph;
 
         let (color, icon) = match self.kind {
-            NotificationKind::Success => (Color::Green, "✔"),
-            NotificationKind::Error => (Color::Red, "✘"),
+            NotificationKind::Success => (theme.success, "✔"),
+            NotificationKind::Error => (theme.error, "✘"),
         };
 
         let text = format!("{} {} ({}s)", icon, self.message, self.remaining_secs() + 1);

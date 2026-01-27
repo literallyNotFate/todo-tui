@@ -1,6 +1,7 @@
 use crate::{
     models::{Priority, Todo},
     state::{ApplicationResult, ApplicationState},
+    theme::ThemeColors,
     traits::Input,
     ui::{Field, FieldType, WidgetResponse},
 };
@@ -8,7 +9,7 @@ use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::{Style, Stylize},
     widgets::{Block, Paragraph},
 };
 
@@ -191,7 +192,7 @@ impl<'a> Form<'a> {
     }
 
     // Rendering
-    pub fn render(&self, frame: &mut Frame, area: Rect) {
+    pub fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
         let chunks: std::rc::Rc<[Rect]> = self.layout(area);
         let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
 
@@ -204,11 +205,11 @@ impl<'a> Form<'a> {
                     let focused_style: Style;
 
                     if is_focused {
-                        input.set_cursor_style(Style::default().bg(Color::White));
-                        focused_style = Style::default().fg(Color::Green);
+                        input.set_cursor_style(Style::default().bg(theme.accent).fg(theme.surface));
+                        focused_style = Style::default().fg(theme.accent);
                     } else {
                         input.set_cursor_style(Style::default());
-                        focused_style = Style::default();
+                        focused_style = Style::default().fg(theme.border);
                     }
 
                     let block = Block::bordered()
@@ -216,19 +217,21 @@ impl<'a> Form<'a> {
                         .border_style(focused_style);
 
                     input.set_block(block);
+                    input.set_style(Style::default().fg(theme.text_primary));
+
                     frame.render_widget(&input, chunks[i]);
                 }
                 FieldType::Text { input } => {
-                    input.render(frame, chunks[i], is_focused);
+                    input.render(frame, chunks[i], is_focused, theme);
                 }
                 FieldType::Enum { input } => {
-                    input.render(frame, chunks[i], is_focused);
+                    input.render(frame, chunks[i], is_focused, theme);
                 }
                 FieldType::Button => {
                     let focused_style: Style = if is_focused {
-                        Style::default().fg(Color::Green)
+                        Style::default().fg(theme.accent).bold()
                     } else {
-                        Style::default()
+                        Style::default().fg(theme.text_dim)
                     };
 
                     let button = Paragraph::new(" Save task ")

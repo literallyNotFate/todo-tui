@@ -321,13 +321,6 @@ impl ApplicationState {
         hasher.finish()
     }
 
-    // Get stats for bottom bar
-    pub fn stats(&self) -> (usize, usize) {
-        let total: usize = self.todos.len();
-        let active: usize = self.todos.iter().filter(|t| !t.completed).count();
-        (total, active)
-    }
-
     // Filter tasks by filter
     pub(crate) fn filtered_stream(&self, filter: &Filter) -> impl Iterator<Item = (usize, &Todo)> {
         let today = Local::now().date_naive();
@@ -762,18 +755,6 @@ mod tests {
 
         let missing = state.todo_by_id_mut(&uuid::Uuid::new_v4());
         assert!(missing.is_none());
-    }
-
-    #[test]
-    fn should_return_stats_for_bottom_bar() {
-        let mut state = ApplicationState::default();
-        state.append(Todo::new("T1", "", None)).unwrap();
-        state.append(Todo::new("T2", "", None)).unwrap();
-        state.todos[0].completed = true;
-
-        let (total, active) = state.stats();
-        assert_eq!(total, 2);
-        assert_eq!(active, 1);
     }
 
     #[test]

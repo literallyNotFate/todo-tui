@@ -1,10 +1,16 @@
-use crate::{enums::ApplicationMode, state::ApplicationState};
+use crate::{enums::ApplicationMode, state::ApplicationState, theme::ThemeColors};
 use ratatui::{Frame, layout::Rect};
 
 pub struct MenuBottomBar;
 
 impl MenuBottomBar {
-    pub fn render(frame: &mut Frame, area: Rect, state: &ApplicationState, mode: &ApplicationMode) {
+    pub fn render(
+        frame: &mut Frame,
+        area: Rect,
+        state: &ApplicationState,
+        theme: &ThemeColors,
+        mode: &ApplicationMode,
+    ) {
         use ratatui::{
             layout::{Alignment, Constraint, Direction, Layout},
             style::{Color, Stylize},
@@ -22,38 +28,39 @@ impl MenuBottomBar {
 
         let hotkeys: &str = match mode {
             ApplicationMode::Browsing => {
-                " Esc/q:Quit │ Enter:Toggle │ a:Add │ e:Edit │ d:Delete │ x:Clear │ <C-s>:Save │ h/l:Focus │ ▲/▼/j/k:Navigate │ J/K:Move "
+                " Esc/q:Quit │ Enter:Toggle │ a:Add │ e:Edit │ d:Delete │ x:Clear │ t:Theme │ <C-s>:Save │ h/l:Focus │ ▲/▼/j/k:Navigate │ J/K:Move "
             }
             ApplicationMode::Task => " Esc:Cancel │ ▲/▼:Next │ ◄/►:Priority ",
         };
         frame.render_widget(
-            Paragraph::new(hotkeys).centered().fg(Color::DarkGray),
+            Paragraph::new(hotkeys).centered().fg(theme.text_dim),
             chunks[0],
         );
 
         let status_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(30), // Stats
+                Constraint::Percentage(30), // App name
                 Constraint::Percentage(40), // Notification
                 Constraint::Percentage(30), // Status
             ])
             .split(chunks[2]);
 
-        let (total, active): (usize, usize) = state.stats();
-        let stats_text = format!(" Tasks: {} active / {} total", active, total);
-        frame.render_widget(Paragraph::new(stats_text).fg(Color::Cyan), status_layout[0]);
+        frame.render_widget(
+            Paragraph::new("todo-tui").fg(theme.accent),
+            status_layout[0],
+        );
 
         if let Some(n) = &state.notification {
             if !n.is_expired() {
-                n.render(frame, status_layout[1]);
+                n.render(frame, status_layout[1], theme);
             }
         }
 
         let (status_str, status_color): (&str, Color) = if state.any_unsaved_changes() {
-            ("● Unsaved ", Color::LightRed)
+            ("● Unsaved ", theme.error)
         } else {
-            ("✓ Saved ", Color::Green)
+            ("✓ Saved ", theme.success)
         };
 
         frame.render_widget(

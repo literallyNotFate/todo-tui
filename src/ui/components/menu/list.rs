@@ -2,9 +2,9 @@ use crate::{
     enums::FocusArea,
     models::{Priority, Todo},
     state::UIState,
+    theme::ThemeColors,
     traits::InteractableEnum,
     ui::center,
-    utils::constants::theme::TEXT_DIMMED,
 };
 use ratatui::{
     Frame,
@@ -22,22 +22,24 @@ impl TaskList {
         area: Rect,
         ui: &UIState,
         select_state: &mut TableState,
+        theme: &ThemeColors,
         todos: &[Todo],
     ) {
         use ratatui::{
             style::{Color, Style, Stylize},
+            text::Text,
             widgets::{Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, Wrap},
         };
 
         let focused_style: Style = if ui.focus_area == FocusArea::MainContent {
-            Style::default().fg(Color::Green)
+            Style::default().fg(theme.accent)
         } else {
-            Style::default()
+            Style::default().fg(theme.border)
         };
 
         let filtered = ui.current_filter.filter(todos);
         if filtered.is_empty() {
-            Self::render_empty_state(frame, area, focused_style);
+            Self::render_empty_state(frame, area, focused_style, &theme);
             return;
         }
 
@@ -65,7 +67,7 @@ impl TaskList {
             if let Some(todo) = filtered.get(selected_index) {
                 let details_block = Block::bordered()
                     .title(format!(" Details: {} ", todo.title))
-                    .border_style(Style::default().fg(Color::Cyan).dim());
+                    .border_style(Style::default().fg(theme.border));
 
                 let details: Paragraph = Paragraph::new(todo.description.as_str())
                     .block(details_block)
@@ -77,23 +79,24 @@ impl TaskList {
 
         let rows = filtered.iter().map(|todo| {
             let priority_color: Color = match todo.priority {
-                Priority::High => Color::LightRed,
-                Priority::Medium => Color::LightYellow,
-                Priority::Low => Color::LightGreen,
+                Priority::High => theme.error,
+                Priority::Medium => theme.warning,
+                Priority::Low => theme.success,
             };
 
             Row::new(vec![
                 Cell::from(if todo.completed { "✓" } else { "☐" }).style(Style::default().fg(
                     if todo.completed {
-                        Color::Green
+                        theme.success
                     } else {
                         priority_color
                     },
                 )),
-                Cell::from(todo.title.as_str()),
+                Cell::from(todo.title.as_str()).style(Style::default().fg(theme.text_primary)),
                 Cell::from(Line::from(todo.priority.to_string()).alignment(Alignment::Center))
                     .style(Style::default().fg(priority_color)),
-                Cell::from(Line::from(todo.time_ago()).alignment(Alignment::Center)),
+                Cell::from(Line::from(todo.time_ago()).alignment(Alignment::Center))
+                    .style(Style::default().fg(theme.text_dim)),
             ])
             .height(1)
         });
@@ -106,11 +109,11 @@ impl TaskList {
                     Cell::from(Line::from(" Priority ").alignment(Alignment::Center)),
                     Cell::from(Line::from(" Created ").alignment(Alignment::Center)),
                 ])
-                .style(Style::default().bold())
+                .style(Style::default().fg(theme.accent).bold())
                 .bottom_margin(1),
             )
-            .row_highlight_style(Style::default().bg(Color::DarkGray))
-            .highlight_symbol(">> ");
+            .row_highlight_style(Style::default().bg(theme.surface))
+            .highlight_symbol(Text::styled(">> ", Style::default().fg(theme.accent)));
 
         let table_layout = Layout::default()
             .direction(Direction::Horizontal)
@@ -124,7 +127,12 @@ impl TaskList {
             .orientation(ScrollbarOrientation::VerticalRight)
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"))
-            .track_symbol(Some("│"));
+            .track_symbol(Some("│"))
+            .thumb_symbol("▉")
+            .thumb_style(Style::default().fg(theme.accent))
+            .track_style(Style::default().fg(theme.border))
+            .begin_style(Style::default().fg(theme.accent))
+            .end_style(Style::default().fg(theme.accent));
 
         let mut scrollbar_state =
             ScrollbarState::new(filtered.len()).position(select_state.selected().unwrap_or(0));
@@ -134,7 +142,12 @@ impl TaskList {
     }
 
     // Render fallback if list is empty
-    fn render_empty_state(frame: &mut Frame, area: Rect, focused_style: Style) {
+    fn render_empty_state(
+        frame: &mut Frame,
+        area: Rect,
+        focused_style: Style,
+        theme: &ThemeColors,
+    ) {
         let outer_block: Block = Block::bordered()
             .title(" Tasks ")
             .border_style(focused_style);
@@ -143,9 +156,13 @@ impl TaskList {
         let message_area: Rect = center(50, 20, area);
 
         let message = vec![
-            Line::from("All clear!").style(Style::default().add_modifier(Modifier::BOLD)),
+            Line::from("All clear!").style(
+                Style::default()
+                    .fg(theme.success)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Line::from(""),
-            Line::from("Press 'a' to add a new task").style(Style::default().fg(TEXT_DIMMED)),
+            Line::from("Press 'a' to add a new task").style(Style::default().fg(theme.text_dim)),
         ];
 
         let paragraph = Paragraph::new(message).alignment(Alignment::Center);

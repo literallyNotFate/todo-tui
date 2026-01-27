@@ -1,16 +1,14 @@
 use crate::{
+    theme::ThemeColors,
     traits::{Modal, ModalResult},
     ui::center,
-    utils::constants::{
-        size::{CONFIRM_HEIGHT, CONFIRM_WIDTH},
-        theme::{TEXT_DIMMED, TEXT_PRIMARY},
-    },
+    utils::constants::{CONFIRM_HEIGHT, CONFIRM_WIDTH},
 };
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
 };
 
@@ -60,31 +58,33 @@ impl Confirm {
     }
 
     // Style for buttons based on selection
-    fn button_styles(&self) -> (Style, Style) {
+    fn button_styles(&self, theme: &ThemeColors) -> (Style, Style) {
         match self.select {
             ConfirmOption::Yes => (
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(theme.success)
                     .add_modifier(Modifier::BOLD),
-                Style::default().fg(TEXT_DIMMED),
+                Style::default().fg(theme.text_dim),
             ),
             ConfirmOption::Cancel => (
-                Style::default().fg(TEXT_DIMMED),
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                Style::default().fg(theme.text_dim),
+                Style::default()
+                    .fg(theme.error)
+                    .add_modifier(Modifier::BOLD),
             ),
         }
     }
 
     // Render buttons
-    fn button_line(&self, styles: (Style, Style)) -> Line<'static> {
+    fn button_line(&self, styles: (Style, Style), theme: &ThemeColors) -> Line<'static> {
         Line::from(vec![
-            Span::styled("[ ", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled("[ ", Style::default().fg(theme.text_primary)),
             Span::styled("Yes", styles.0),
-            Span::styled(" ]", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled(" ]", Style::default().fg(theme.text_primary)),
             Span::raw("    "),
-            Span::styled("[ ", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled("[ ", Style::default().fg(theme.text_primary)),
             Span::styled("Cancel", styles.1),
-            Span::styled(" ]", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled(" ]", Style::default().fg(theme.text_primary)),
         ])
     }
 }
@@ -96,7 +96,7 @@ impl Modal for Confirm {
     }
 
     // Rendering
-    fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
         use ratatui::{
             layout::Alignment,
             style::Stylize,
@@ -104,8 +104,8 @@ impl Modal for Confirm {
         };
 
         let confirm_block: Block = Block::bordered()
-            .fg(TEXT_PRIMARY)
-            .border_style(Style::default())
+            .fg(theme.text_primary)
+            .border_style(Style::default().fg(theme.accent))
             .title_top(Line::from(" Confirm Action ").centered())
             .border_type(BorderType::Rounded);
 
@@ -123,8 +123,8 @@ impl Modal for Confirm {
 
         frame.render_widget(message, message_area);
 
-        let button_styles: (Style, Style) = self.button_styles();
-        let buttons: Line = self.button_line(button_styles);
+        let button_styles: (Style, Style) = self.button_styles(theme);
+        let buttons: Line = self.button_line(button_styles, theme);
 
         let buttons_widget = Paragraph::new(buttons).alignment(Alignment::Center);
         frame.render_widget(buttons_widget, buttons_area);

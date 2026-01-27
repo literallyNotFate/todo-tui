@@ -1,22 +1,13 @@
 use crate::{
-    traits::Input,
-    ui::WidgetResponse,
-    utils::constants::{size::TEXT_INPUT_MAX_CHARS, theme::TEXT_PRIMARY},
+    theme::ThemeColors, traits::Input, ui::WidgetResponse, utils::constants::TEXT_INPUT_MAX_CHARS,
 };
-use ratatui::{
-    Frame,
-    crossterm::event::KeyCode,
-    layout::Rect,
-    style::{Color, Style},
-};
+use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect};
 
 #[derive(Debug, Default, Clone)]
 pub struct TextInput {
     pub title: String,
     pub buffer: String,
     pub cursor: usize,
-
-    pub border_style: Style,
     pub max_chars: usize,
 }
 
@@ -27,7 +18,6 @@ impl TextInput {
             title: String::default(),
             cursor: 0,
             max_chars: TEXT_INPUT_MAX_CHARS,
-            border_style: Style::default(),
         }
     }
 
@@ -40,7 +30,6 @@ impl TextInput {
             title: String::default(),
             cursor: cursor_value,
             max_chars: TEXT_INPUT_MAX_CHARS,
-            border_style: Style::default(),
         }
     }
 
@@ -95,7 +84,7 @@ impl Input for TextInput {
         WidgetResponse::Continue
     }
 
-    fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
+    fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
         use ratatui::{
             layout::Position,
             style::Style,
@@ -107,15 +96,15 @@ impl Input for TextInput {
         let text: String = self.displayed_content(width, scroll);
 
         let focused_style: Style = if focused {
-            Style::default().fg(Color::Green)
+            Style::default().fg(theme.accent)
         } else {
-            self.border_style
+            Style::default().fg(theme.border)
         };
 
         let input_block = Block::bordered()
             .border_style(focused_style)
             .title(self.title.as_str())
-            .title_style(Style::default().fg(TEXT_PRIMARY));
+            .title_style(Style::default().fg(theme.text_primary));
 
         let paragraph = Paragraph::new(text).block(input_block);
         frame.render_widget(paragraph, area);

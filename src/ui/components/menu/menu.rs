@@ -1,6 +1,7 @@
 use crate::{
     enums::ApplicationMode,
     state::{ApplicationState, UIState},
+    theme::ThemeColors,
 };
 use ratatui::{Frame, layout::Rect};
 
@@ -15,9 +16,10 @@ impl Menu {
         mode: &ApplicationMode,
     ) {
         use super::{bottom::MenuBottomBar, content::MenuContent, sidebar::MenuSidebar};
+        let theme_colors: ThemeColors = ui.theme.data();
 
-        MenuSidebar::render(frame, left, ui, &state.todos);
-        MenuContent::render(frame, content, state, ui, &mode);
-        MenuBottomBar::render(frame, bottom, state, &mode);
+        MenuSidebar::render(frame, left, ui, &theme_colors, &state.todos);
+        MenuContent::render(frame, content, state, ui, &theme_colors, &mode);
+        MenuBottomBar::render(frame, bottom, state, &theme_colors, &mode);
     }
 }

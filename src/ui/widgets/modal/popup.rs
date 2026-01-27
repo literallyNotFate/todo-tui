@@ -1,16 +1,14 @@
 use crate::{
+    theme::ThemeColors,
     traits::{Modal, ModalResult},
     ui::center,
-    utils::constants::{
-        size::{POPUP_HEIGHT, POPUP_WIDTH},
-        theme::TEXT_PRIMARY,
-    },
+    utils::constants::{POPUP_HEIGHT, POPUP_WIDTH},
 };
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Modifier, Style, Stylize},
     text::{Line, Span},
 };
 
@@ -33,7 +31,6 @@ pub struct Popup {
     pub title: String,
     pub kind: PopupKind,
     pub close_behavior: PopupCloseBehavior,
-    pub border_style: Style,
 }
 
 impl Popup {
@@ -43,14 +40,12 @@ impl Popup {
             message: message.into(),
             title: String::default(),
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
-            border_style: Style::default().fg(Color::Blue),
         }
     }
 
     pub fn success(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Success,
-            border_style: Style::default().fg(Color::Green),
             ..Self::info(message)
         }
     }
@@ -58,7 +53,6 @@ impl Popup {
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Error,
-            border_style: Style::default().fg(Color::Red),
             ..Self::info(message)
         }
     }
@@ -99,21 +93,24 @@ impl Popup {
     }
 
     // Generate bottom title based on close behavior
-    fn bottom_title(&self) -> Line<'static> {
+    fn bottom_title(&self, theme: &ThemeColors) -> Line<'static> {
         let key: String = match self.close_behavior {
             PopupCloseBehavior::AnyKey => "any key".to_string(),
             PopupCloseBehavior::Specific(c) => format!("<{}>", c),
         };
 
         Line::from(vec![
-            Span::styled(" Press ", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled(" Press ", Style::default().fg(theme.text_primary)),
             Span::styled(
                 key,
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(theme.success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" to close this popup. ", Style::default().fg(TEXT_PRIMARY)),
+            Span::styled(
+                " to close this popup. ",
+                Style::default().fg(theme.text_primary),
+            ),
         ])
         .centered()
     }
@@ -126,19 +123,25 @@ impl Modal for Popup {
     }
 
     // Rendering
-    fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
         use ratatui::{
             layout::Alignment,
             widgets::{Block, BorderType, Paragraph, Wrap},
+        };
+
+        let color = match self.kind {
+            PopupKind::Info => theme.accent,
+            PopupKind::Success => theme.success,
+            PopupKind::Error => theme.error,
         };
 
         let popup_block: Block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
-            .title_bottom(self.bottom_title())
-            .border_style(self.border_style)
-            .fg(TEXT_PRIMARY);
+            .title_bottom(self.bottom_title(theme))
+            .border_style(color)
+            .fg(theme.text_primary);
 
         let inner_area: Rect = popup_block.inner(area);
         frame.render_widget(popup_block, area);
