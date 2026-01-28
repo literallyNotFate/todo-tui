@@ -2,10 +2,11 @@ use crate::{
     enums::FocusArea,
     models::Filter,
     state::ApplicationResult,
-    theme::Theme,
+    theme::{Theme, ThemeColors},
     traits::{InteractableEnum, Modal, ModalAction},
     ui::{Form, Notification, Popup},
 };
+use ratatui::style::Style;
 
 pub struct ActiveModal {
     pub modal: Box<dyn Modal>,
@@ -45,6 +46,16 @@ impl<'a> UIState<'a> {
             FocusArea::LeftPanel => FocusArea::MainContent,
             FocusArea::MainContent => FocusArea::LeftPanel,
         };
+    }
+
+    // Return styles if focused
+    pub fn styles_on_focus(&self) -> Style {
+        let colors: ThemeColors = self.theme.data();
+        if self.focus_area == FocusArea::MainContent {
+            Style::default().fg(colors.accent)
+        } else {
+            Style::default().fg(colors.border)
+        }
     }
 
     // Switch theme
