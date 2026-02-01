@@ -16,10 +16,10 @@ impl Menu {
         mode: &ApplicationMode,
     ) {
         use super::{bottom::MenuBottomBar, content::MenuContent, sidebar::MenuSidebar};
-        let theme_colors: ThemeColors = ui.theme.data();
+        let theme_colors: ThemeColors = ui.theme.colors();
 
-        MenuSidebar::render(frame, left, ui, &theme_colors, &state.todos);
-        MenuContent::render(frame, content, state, ui, &theme_colors, &mode);
-        MenuBottomBar::render(frame, bottom, state, &theme_colors, &mode);
+        MenuSidebar::render(frame, left, ui, &theme_colors, &state.todos, mode);
+        MenuContent::render(frame, content, state, ui, &theme_colors, mode);
+        MenuBottomBar::render(frame, bottom, state, &theme_colors);
     }
 }

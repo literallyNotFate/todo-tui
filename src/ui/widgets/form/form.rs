@@ -198,11 +198,11 @@ impl<'a> Form<'a> {
 
         for (i, field) in self.fields.iter().enumerate() {
             let is_focused = self.focused == i;
+            let focused_style: Style;
 
             match &field.field_type {
                 FieldType::Multiline { input } => {
                     let mut input = input.clone();
-                    let focused_style: Style;
 
                     if is_focused {
                         input.set_cursor_style(Style::default().bg(theme.accent).fg(theme.surface));

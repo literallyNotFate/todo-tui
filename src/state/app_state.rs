@@ -237,19 +237,16 @@ impl ApplicationState {
 
         let removed_count: usize = old_count - self.todos.len();
         if removed_count == 0 {
+            self.select_state.select(None);
             return Err(TodoError::ListEmpty.into());
         }
 
-        if removed_count == 0 {
-            self.select_state.select(None);
-        } else {
-            if let Some(selected) = self.select_state.selected() {
-                if selected >= removed_count {
-                    self.select_state.select(Some(removed_count - 1));
-                }
-            } else {
-                self.select_state.select(Some(0));
+        if let Some(selected) = self.select_state.selected() {
+            if selected >= removed_count {
+                self.select_state.select(Some(removed_count - 1));
             }
+        } else {
+            self.select_state.select(Some(0));
         }
 
         Ok(format!("Cleared {} tasks from current view", removed_count))
@@ -283,7 +280,7 @@ impl ApplicationState {
             return Ok(Self::default());
         }
 
-        let file: File = File::open(&path).map_err(|_| StorageError::IOError)?;
+        let file: File = File::open(path).map_err(|_| StorageError::IOError)?;
         let todos: Vec<Todo> =
             serde_json::from_reader(file).map_err(|_| StorageError::JSONError)?;
 

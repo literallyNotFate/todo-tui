@@ -1,7 +1,7 @@
 use crate::{
     theme::ThemeColors, traits::Input, ui::WidgetResponse, utils::constants::TEXT_INPUT_MAX_CHARS,
 };
-use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect};
+use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 
 #[derive(Debug, Default, Clone)]
 pub struct TextInput {
@@ -87,7 +87,6 @@ impl Input for TextInput {
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
         use ratatui::{
             layout::Position,
-            style::Style,
             widgets::{Block, Paragraph},
         };
 
@@ -95,13 +94,9 @@ impl Input for TextInput {
         let scroll: usize = self.scroll(width);
         let text: String = self.displayed_content(width, scroll);
 
-        let focused_style: Style = if focused {
-            Style::default().fg(theme.accent)
-        } else {
-            Style::default().fg(theme.border)
-        };
+        let focused_style: Style = self.on_focused(focused, theme);
 
-        let input_block = Block::bordered()
+        let input_block: Block = Block::bordered()
             .border_style(focused_style)
             .title(self.title.as_str())
             .title_style(Style::default().fg(theme.text_primary));
@@ -116,13 +111,21 @@ impl Input for TextInput {
             ));
         }
     }
+
+    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> Style {
+        if focused {
+            Style::default().fg(theme.accent)
+        } else {
+            Style::default().fg(theme.border)
+        }
+    }
 }
 
 // Unit-tests for text input
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::crossterm::event::KeyCode;
+    use ratatui::{crossterm::event::KeyCode, style::Color};
 
     #[test]
     fn should_handle_input_key_input() {
@@ -208,5 +211,15 @@ mod tests {
 
         assert_eq!(scroll, 0);
         assert_eq!(input.displayed_content(width, scroll), "ABC");
+    }
+
+    #[test]
+    fn should_return_styles_if_focused() {
+        let input = TextInput::new();
+        let mut style: Style = input.on_focused(false, &ThemeColors::GRUVBOX);
+        assert_eq!(style, Style::default().fg(Color::Rgb(102, 92, 84)));
+
+        style = input.on_focused(true, &ThemeColors::GRUVBOX);
+        assert_eq!(style, Style::default().fg(Color::Rgb(250, 189, 47)));
     }
 }

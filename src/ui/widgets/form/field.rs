@@ -1,10 +1,9 @@
-use tui_textarea::TextArea;
-
 use crate::{
     models::Priority,
     traits::Input,
     ui::{EnumInput, TextInput},
 };
+use tui_textarea::TextArea;
 
 #[derive(Clone, Debug)]
 pub enum FieldType<'a> {

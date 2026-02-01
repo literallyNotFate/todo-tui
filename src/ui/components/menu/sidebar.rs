@@ -1,5 +1,5 @@
 use crate::{
-    enums::ApplicationMode,
+    enums::{ApplicationMode, FocusArea},
     models::{Filter, Todo},
     state::UIState,
     theme::ThemeColors,
@@ -31,7 +31,7 @@ impl MenuSidebar {
         };
 
         let sidebar_layout: std::rc::Rc<[Rect]> = Self::layout(area);
-        let focused_style: Style = ui.styles_on_focus();
+        let focused_style: Style = ui.focused_on(&FocusArea::LeftPanel);
 
         let filters_block: Block = Block::bordered()
             .title(" Filters ")
@@ -191,5 +191,61 @@ impl MenuSidebar {
             }
             ApplicationMode::Task => " Esc -> Cancel \n ▲/▼ -> Next \n ◄/► -> Priority ",
         }
+    }
+}
+
+// Unit-tests for sidebar
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shoukd_make_summary_for_todos_with_progress() {
+        let todos = vec![
+            Todo {
+                completed: true,
+                ..Default::default()
+            },
+            Todo {
+                completed: false,
+                ..Default::default()
+            },
+        ];
+
+        let summary = MenuSidebar::summary_text(&todos, &ThemeColors::GRUVBOX);
+        let line_text = summary[1].to_string();
+        assert!(line_text.contains("50%"));
+
+        let gauge_text = summary[2].to_string();
+        assert!(gauge_text.contains("■■■■■□□□□□"));
+    }
+
+    #[test]
+    fn should_make_summary_for_empty_todos() {
+        let todos: Vec<Todo> = vec![];
+
+        let summary = MenuSidebar::summary_text(&todos, &ThemeColors::GRUVBOX);
+        assert!(summary[1].to_string().contains("0%"));
+        assert!(summary[2].to_string().contains("□□□□□□□□□□"));
+    }
+
+    #[test]
+    fn should_construct_list_with_highlighting() {
+        let todos = vec![];
+        let current_filter: Filter = Filter::All;
+
+        let list: List =
+            MenuSidebar::construct_list(&todos, &current_filter, &ThemeColors::GRUVBOX);
+        assert_eq!(list.len(), Filter::all_variants().len());
+    }
+
+    #[test]
+    fn should_switch_hotkeys_depending_on_mode() {
+        let browsing_keys = MenuSidebar::hotkeys(&ApplicationMode::Browsing);
+        let task_keys = MenuSidebar::hotkeys(&ApplicationMode::Task);
+
+        assert!(browsing_keys.contains("Quit"));
+        assert!(task_keys.contains("Cancel"));
+        assert_ne!(browsing_keys, task_keys);
     }
 }

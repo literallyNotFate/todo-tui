@@ -1,6 +1,6 @@
 use ratatui::style::Color;
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct ThemeColors {
     pub name: &'static str,
     pub accent: Color,  // Main color (cursor ">>", border fg on focus)

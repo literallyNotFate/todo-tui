@@ -1,4 +1,5 @@
-use crate::traits::InteractableEnum;
+use crate::{theme::ThemeColors, traits::InteractableEnum};
+use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -25,9 +26,21 @@ impl InteractableEnum for Priority {
     }
 }
 
+impl Priority {
+    pub fn color(&self, theme: &ThemeColors) -> Color {
+        match self {
+            Priority::High => theme.error,
+            Priority::Medium => theme.warning,
+            Priority::Low => theme.success,
+        }
+    }
+}
+
 // Unit-tests for priority
 #[cfg(test)]
 mod tests {
+    use crate::theme::Theme;
+
     use super::*;
 
     #[test]
@@ -67,5 +80,20 @@ mod tests {
 
         priority = priority.prev();
         assert_eq!(priority, Priority::High);
+    }
+
+    #[test]
+    fn should_return_right_color_of_priority_with_theme() {
+        let theme: Theme = Theme::Gruvbox;
+        let colors: ThemeColors = theme.colors();
+
+        let mut priority: Priority = Priority::Low;
+        assert_eq!(priority.color(&colors), colors.success);
+
+        priority = Priority::Medium;
+        assert_eq!(priority.color(&colors), colors.warning);
+
+        priority = Priority::High;
+        assert_eq!(priority.color(&colors), colors.error);
     }
 }

@@ -3,7 +3,7 @@ use crate::{
     traits::{Input, InteractableEnum},
     ui::WidgetResponse,
 };
-use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect};
+use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 
 #[derive(Debug, Default, Clone)]
 pub struct EnumInput<T> {
@@ -42,18 +42,11 @@ where
     }
 
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
-        use ratatui::{
-            style::Style,
-            widgets::{Block, Paragraph},
-        };
+        use ratatui::widgets::{Block, Paragraph};
 
-        let focused_style: Style = if focused {
-            Style::default().fg(theme.accent)
-        } else {
-            Style::default().fg(theme.border)
-        };
+        let focused_style: Style = self.on_focused(focused, theme);
 
-        let input_block = Block::bordered()
+        let input_block: Block = Block::bordered()
             .border_style(focused_style)
             .title(self.title.as_str())
             .title_style(Style::default().fg(theme.text_primary));
@@ -62,13 +55,21 @@ where
 
         frame.render_widget(input, area);
     }
+
+    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> Style {
+        if focused {
+            Style::default().fg(theme.accent)
+        } else {
+            Style::default().fg(theme.border)
+        }
+    }
 }
 
 // Unit-tests for enum input
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::crossterm::event::KeyCode;
+    use ratatui::{crossterm::event::KeyCode, style::Color};
 
     #[derive(Debug, Clone, PartialEq, Default, Copy)]
     enum MockEnum {
@@ -133,9 +134,19 @@ mod tests {
     #[test]
     fn should_not_handle_other_keys_for_enum_input() {
         let mut input = EnumInput::from(MockEnum::A);
-        let initial_val = input.selected.clone();
+        let initial_val = input.selected;
 
         input.handle_key(&KeyCode::Char(' '));
         assert_eq!(input.selected, initial_val);
+    }
+
+    #[test]
+    fn should_return_styles_if_focused() {
+        let input = EnumInput::from(MockEnum::B);
+        let mut style: Style = input.on_focused(false, &ThemeColors::GRUVBOX);
+        assert_eq!(style, Style::default().fg(Color::Rgb(102, 92, 84)));
+
+        style = input.on_focused(true, &ThemeColors::GRUVBOX);
+        assert_eq!(style, Style::default().fg(Color::Rgb(250, 189, 47)));
     }
 }

@@ -49,9 +49,9 @@ impl<'a> UIState<'a> {
     }
 
     // Return styles if focused
-    pub fn styles_on_focus(&self) -> Style {
-        let colors: ThemeColors = self.theme.data();
-        if self.focus_area == FocusArea::MainContent {
+    pub fn focused_on(&self, focus_area: &FocusArea) -> Style {
+        let colors: ThemeColors = self.theme.colors();
+        if self.focus_area == *focus_area {
             Style::default().fg(colors.accent)
         } else {
             Style::default().fg(colors.border)
@@ -104,6 +104,7 @@ impl<'a> UIState<'a> {
 mod tests {
     use super::*;
     use crate::{state::StorageError, ui::Popup};
+    use ratatui::style::{Color, Style};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -134,6 +135,22 @@ mod tests {
 
         ui.toggle_focus();
         assert_eq!(ui.focus_area, FocusArea::LeftPanel);
+    }
+
+    #[test]
+    fn should_return_proper_styles_for_active_focus() {
+        let mut ui = UIState::default();
+        ui.focus_area = FocusArea::LeftPanel;
+        ui.theme = Theme::Everforest;
+
+        let mut style: Style = ui.focused_on(&ui.focus_area);
+        assert_eq!(style, Style::default().fg(Color::Rgb(167, 192, 128)));
+
+        ui.theme = Theme::Gruvbox;
+        ui.focus_area = FocusArea::MainContent;
+        style = ui.focused_on(&ui.focus_area);
+
+        assert_ne!(style, Style::default().fg(Color::Rgb(102, 92, 84)));
     }
 
     #[test]

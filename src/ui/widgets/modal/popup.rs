@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style, Stylize},
+    style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
 };
 
@@ -114,6 +114,15 @@ impl Popup {
         ])
         .centered()
     }
+
+    // Return color based on kind
+    fn color_on_kind(&self, theme: &ThemeColors) -> Color {
+        match self.kind {
+            PopupKind::Info => theme.accent,
+            PopupKind::Success => theme.success,
+            PopupKind::Error => theme.error,
+        }
+    }
 }
 
 impl Modal for Popup {
@@ -129,18 +138,12 @@ impl Modal for Popup {
             widgets::{Block, BorderType, Paragraph, Wrap},
         };
 
-        let color = match self.kind {
-            PopupKind::Info => theme.accent,
-            PopupKind::Success => theme.success,
-            PopupKind::Error => theme.error,
-        };
-
         let popup_block: Block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
             .title_bottom(self.bottom_title(theme))
-            .border_style(color)
+            .border_style(self.color_on_kind(theme))
             .fg(theme.text_primary);
 
         let inner_area: Rect = popup_block.inner(area);
@@ -247,5 +250,69 @@ mod tests {
         );
         assert_eq!(popup.handle_key(KeyCode::Char('n')), None);
         assert_eq!(popup.handle_key(KeyCode::Esc), None);
+    }
+
+    #[test]
+    fn should_return_bottom_title_for_popup() {
+        let mut popup = Popup::success("Test");
+        let mut bottom_title: Line = popup.bottom_title(&ThemeColors::GRUVBOX);
+
+        let expected: Line = Line::from(vec![
+            Span::styled(" Press ", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::styled(
+                "<Esc>",
+                Style::default()
+                    .fg(Color::Rgb(184, 187, 38))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " to close this popup. ",
+                Style::default().fg(Color::Rgb(235, 219, 178)),
+            ),
+        ])
+        .centered();
+
+        assert_eq!(bottom_title, expected);
+
+        popup = Popup::error("Test").close_on_any_key();
+        bottom_title = popup.bottom_title(&ThemeColors::GRUVBOX);
+
+        assert_eq!(
+            bottom_title.spans[1],
+            Span::styled(
+                "any key",
+                Style::default()
+                    .fg(Color::Rgb(184, 187, 38))
+                    .add_modifier(Modifier::BOLD),
+            )
+        );
+
+        popup = Popup::info("Test").close_on(KeyCode::Char('q'));
+        bottom_title = popup.bottom_title(&ThemeColors::CATPPUCCIN);
+
+        assert_eq!(
+            bottom_title.spans[1],
+            Span::styled(
+                "<q>",
+                Style::default()
+                    .fg(Color::Rgb(166, 227, 161))
+                    .add_modifier(Modifier::BOLD),
+            )
+        );
+    }
+
+    #[test]
+    fn should_return_color_based_on_popup_kind_with_theme() {
+        let mut popup = Popup::success("Test");
+        let mut color: Color = popup.color_on_kind(&ThemeColors::GRUVBOX);
+        assert_eq!(color, Color::Rgb(184, 187, 38));
+
+        popup = Popup::info("Test");
+        color = popup.color_on_kind(&ThemeColors::GRUVBOX);
+        assert_eq!(color, Color::Rgb(250, 189, 47));
+
+        popup = Popup::error("Test");
+        color = popup.color_on_kind(&ThemeColors::CATPPUCCIN);
+        assert_ne!(color, Color::Rgb(251, 73, 52));
     }
 }

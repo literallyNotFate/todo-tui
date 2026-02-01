@@ -111,7 +111,7 @@ mod tests {
         let width: u16 = 80;
         let height: u16 = 24;
 
-        let theme: ThemeColors = Theme::Gruvbox.data();
+        let theme: ThemeColors = Theme::Gruvbox.colors();
         let colors: (Color, Color) = (theme.error, theme.success);
         let result: Vec<Line> = Fallback::fallback_message(&width, &height, colors, &theme);
 

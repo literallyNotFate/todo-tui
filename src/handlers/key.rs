@@ -80,7 +80,7 @@ pub fn handle_global_key(app: &mut Application, event: &KeyEvent) {
 
     match app.mode {
         ApplicationMode::Browsing => handle_browsing_keys(app, &event.code),
-        ApplicationMode::Task => handle_form_keys(app, &event),
+        ApplicationMode::Task => handle_form_keys(app, event),
     }
 }
 
@@ -107,18 +107,7 @@ pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
             KeyCode::Char('J') => app.state.move_task_down(),
             KeyCode::Char('K') => app.state.move_task_up(),
             KeyCode::Char('d') => open_remove_confirm(&mut app.ui),
-            KeyCode::Char('e') => {
-                if let Some(ui_index) = app.state.select_state.selected() {
-                    if let Some((_, task)) = app
-                        .state
-                        .filtered_stream(&app.ui.current_filter)
-                        .nth(ui_index)
-                    {
-                        app.ui.task_form = Some(Form::from(task));
-                        app.mode = ApplicationMode::Task;
-                    }
-                }
-            }
+            KeyCode::Char('e') => handle_update(&app.state, &mut app.ui, &mut app.mode),
             _ => {}
         },
     }
@@ -127,10 +116,7 @@ pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
         KeyCode::Char('q') => handle_close(&mut app.state, &mut app.ui, &mut app.running),
         KeyCode::Char('h') | KeyCode::Char('l') => app.ui.toggle_focus(),
         KeyCode::Char('t') => app.ui.switch_theme(),
-        KeyCode::Char('a') => {
-            app.ui.task_form = Some(Form::new());
-            app.mode = ApplicationMode::Task;
-        }
+        KeyCode::Char('a') => handle_append(&mut app.ui, &mut app.mode),
         KeyCode::Char('x') => open_clear_confirm(&mut app.ui),
         _ => {}
     }
@@ -143,7 +129,7 @@ pub fn handle_form_keys(app: &mut Application, event: &KeyEvent) {
     if let Some(form) = &mut app.ui.task_form {
         let response: WidgetResponse = form.handle_key(event);
         match response {
-            WidgetResponse::Continue => return,
+            WidgetResponse::Continue => (),
             WidgetResponse::Submit => {
                 let result = form.apply(&mut app.state);
                 let is_ok: bool = result.is_ok();
@@ -157,8 +143,6 @@ pub fn handle_form_keys(app: &mut Application, event: &KeyEvent) {
                     app.ui.task_form = None;
                     app.mode = ApplicationMode::Browsing;
                     app.ui.focus_area = FocusArea::MainContent
-                } else {
-                    return;
                 }
             }
             WidgetResponse::Cancel => {
@@ -175,6 +159,29 @@ pub fn handle_close(app_state: &mut ApplicationState, ui_state: &mut UIState, ru
         open_unsaved_exit_confirm(ui_state);
     } else {
         *running = false;
+    }
+}
+
+// Handle creating new form (on append)
+pub fn handle_append(ui_state: &mut UIState, mode: &mut ApplicationMode) {
+    ui_state.task_form = Some(Form::new());
+    *mode = ApplicationMode::Task;
+}
+
+// Handle updating existing form
+pub fn handle_update(
+    app_state: &ApplicationState,
+    ui_state: &mut UIState,
+    mode: &mut ApplicationMode,
+) {
+    if let Some(ui_index) = app_state.select_state.selected() {
+        if let Some((_, task)) = app_state
+            .filtered_stream(&ui_state.current_filter)
+            .nth(ui_index)
+        {
+            ui_state.task_form = Some(Form::from(task));
+            *mode = ApplicationMode::Task;
+        }
     }
 }
 

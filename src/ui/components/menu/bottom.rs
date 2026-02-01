@@ -1,50 +1,18 @@
-use crate::{enums::ApplicationMode, state::ApplicationState, theme::ThemeColors};
-use ratatui::{Frame, layout::Rect};
+use crate::{state::ApplicationState, theme::ThemeColors};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::Color,
+};
 
 pub struct MenuBottomBar;
 
 impl MenuBottomBar {
-    pub fn render(
-        frame: &mut Frame,
-        area: Rect,
-        state: &ApplicationState,
-        theme: &ThemeColors,
-        mode: &ApplicationMode,
-    ) {
-        use ratatui::{
-            layout::{Alignment, Constraint, Direction, Layout},
-            style::{Color, Stylize},
-            widgets::Paragraph,
-        };
+    pub fn render(frame: &mut Frame, area: Rect, state: &ApplicationState, theme: &ThemeColors) {
+        use ratatui::{layout::Alignment, style::Stylize, widgets::Paragraph};
 
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // Hotkeys
-                Constraint::Length(2),
-                Constraint::Length(1), // Stats + Messages + Status
-            ])
-            .split(area);
-
-        let hotkeys: &str = match mode {
-            ApplicationMode::Browsing => {
-                " Esc/q:Quit │ Enter:Toggle │ a:Add │ e:Edit │ d:Delete │ x:Clear │ t:Theme │ <C-s>:Save │ h/l:Focus │ ▲/▼/j/k:Navigate │ J/K:Move "
-            }
-            ApplicationMode::Task => " Esc:Cancel │ ▲/▼:Next │ ◄/►:Priority ",
-        };
-        frame.render_widget(
-            Paragraph::new(hotkeys).centered().fg(theme.text_dim),
-            chunks[0],
-        );
-
-        let status_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(30), // App name
-                Constraint::Percentage(40), // Notification
-                Constraint::Percentage(30), // Status
-            ])
-            .split(chunks[2]);
+        let chunks: std::rc::Rc<[Rect]> = Self::layout(area);
+        let status_layout: std::rc::Rc<[Rect]> = Self::status_layout(chunks[1]);
 
         frame.render_widget(
             Paragraph::new("todo-tui").fg(theme.accent),
@@ -57,17 +25,70 @@ impl MenuBottomBar {
             }
         }
 
-        let (status_str, status_color): (&str, Color) = if state.any_unsaved_changes() {
-            ("● Unsaved ", theme.error)
-        } else {
-            ("✓ Saved ", theme.success)
-        };
+        let (status_msg, status_color): (&str, Color) = Self::status(state, theme);
 
         frame.render_widget(
-            Paragraph::new(status_str)
+            Paragraph::new(status_msg)
                 .alignment(Alignment::Right)
                 .fg(status_color),
             status_layout[2],
         );
+    }
+
+    // Layout of whole bottom bar
+    fn layout(area: Rect) -> std::rc::Rc<[Rect]> {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(1), // App name + Messages + Status
+            ])
+            .split(area)
+    }
+
+    // Layout for status
+    fn status_layout(area: Rect) -> std::rc::Rc<[Rect]> {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(30), // App name
+                Constraint::Percentage(40), // Notification
+                Constraint::Percentage(30), // Status
+            ])
+            .split(area)
+    }
+
+    // Return status with corresponding theme color
+    fn status(state: &ApplicationState, theme: &ThemeColors) -> (&'static str, Color) {
+        if state.any_unsaved_changes() {
+            ("● Unsaved ", theme.error)
+        } else {
+            ("✓ Saved ", theme.success)
+        }
+    }
+}
+
+// Unit-tests for bottom bar
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Todo;
+
+    #[test]
+    fn should_return_status_for_bottom_bar() {
+        let mut state: ApplicationState = ApplicationState::default();
+        state.saved_todos_hash = state.calculate_todos_hash();
+        let mut status = MenuBottomBar::status(&state, &ThemeColors::TOKYO_NIGHT);
+
+        assert!(!state.any_unsaved_changes());
+        assert_eq!(status.0, "✓ Saved ");
+        assert_eq!(status.1, Color::Rgb(158, 206, 106));
+
+        state.append(Todo::new("test", "test", None)).unwrap();
+        status = MenuBottomBar::status(&state, &ThemeColors::TOKYO_NIGHT);
+
+        assert!(state.any_unsaved_changes());
+        assert_ne!(status.0, "✓ Saved ");
+        assert_eq!(status.1, Color::Rgb(247, 118, 118));
     }
 }

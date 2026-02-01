@@ -11,7 +11,7 @@ pub enum Theme {
 }
 
 impl Theme {
-    pub fn data(&self) -> ThemeColors {
+    pub fn colors(&self) -> ThemeColors {
         match self {
             Theme::Gruvbox => ThemeColors::GRUVBOX,
             Theme::Catppuccin => ThemeColors::CATPPUCCIN,
@@ -29,5 +29,32 @@ impl Theme {
             Self::Everforest => Self::OneDark,
             Self::OneDark => Self::Gruvbox,
         }
+    }
+}
+
+// Unit-tests for themes
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_toggle_themes_and_return_corresponding_colors() {
+        let mut theme: Theme = Theme::Gruvbox;
+        assert_eq!(theme.colors(), ThemeColors::GRUVBOX);
+
+        theme = theme.next();
+        assert_eq!(theme.colors(), ThemeColors::CATPPUCCIN);
+
+        theme = theme.next();
+        assert_eq!(theme.colors(), ThemeColors::TOKYO_NIGHT);
+
+        theme = theme.next();
+        assert_eq!(theme.colors(), ThemeColors::EVERFOREST);
+
+        theme = theme.next();
+        assert_eq!(theme.colors(), ThemeColors::ONE_DARK);
+
+        theme = theme.next();
+        assert_eq!(theme.colors(), ThemeColors::GRUVBOX);
     }
 }

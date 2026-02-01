@@ -23,7 +23,7 @@ impl Renderer {
             widgets::{Block, Clear},
         };
 
-        let theme_colors: ThemeColors = ui.theme.data();
+        let theme_colors: ThemeColors = ui.theme.colors();
         let area: Rect = frame.area();
 
         if is_terminal_small(area.width, area.height) {

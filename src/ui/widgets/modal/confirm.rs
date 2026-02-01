@@ -154,6 +154,7 @@ impl Modal for Confirm {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::style::Color;
 
     // Helper function to create frame for popup
     fn create_helper_frame() -> Rect {
@@ -178,8 +179,8 @@ mod tests {
         let expected_x = (100 - CONFIRM_WIDTH) / 2;
         let expected_y = (100 - CONFIRM_HEIGHT) / 2;
 
-        assert_eq!(area.x, expected_x as u16);
-        assert_eq!(area.y, expected_y as u16);
+        assert_eq!(area.x, expected_x);
+        assert_eq!(area.y, expected_y);
     }
 
     #[test]
@@ -244,5 +245,75 @@ mod tests {
             confirm.handle_key(KeyCode::Char('n')),
             Some(ModalResult::Cancelled)
         );
+    }
+
+    #[test]
+    fn should_return_proper_styles_for_buttons_with_theme() {
+        let mut confirm: Confirm = Confirm::new("Test");
+        let mut styles: (Style, Style) = confirm.button_styles(&ThemeColors::GRUVBOX);
+
+        assert_eq!(styles.0, Style::default().fg(Color::Rgb(168, 153, 132)));
+        assert_eq!(
+            styles.1,
+            Style::default()
+                .fg(Color::Rgb(251, 73, 52))
+                .add_modifier(Modifier::BOLD)
+        );
+
+        confirm.select = ConfirmOption::Yes;
+        styles = confirm.button_styles(&ThemeColors::GRUVBOX);
+
+        assert_eq!(
+            styles.0,
+            Style::default()
+                .fg(Color::Rgb(184, 187, 38))
+                .add_modifier(Modifier::BOLD)
+        );
+        assert_eq!(styles.1, Style::default().fg(Color::Rgb(168, 153, 132)));
+    }
+
+    #[test]
+    fn should_generate_buttons_with_theme() {
+        let mut confirm: Confirm = Confirm::new("Test");
+        let mut styles: (Style, Style) = confirm.button_styles(&ThemeColors::GRUVBOX);
+        let mut buttons: Line = confirm.button_line(styles, &ThemeColors::GRUVBOX);
+
+        let mut expected_line: Line = Line::from(vec![
+            Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::styled("Yes", Style::default().fg(Color::Rgb(168, 153, 132))),
+            Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::raw("    "),
+            Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::styled(
+                "Cancel",
+                Style::default()
+                    .fg(Color::Rgb(251, 73, 52))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
+        ]);
+
+        assert_eq!(buttons, expected_line);
+
+        confirm.select = ConfirmOption::Yes;
+        styles = confirm.button_styles(&ThemeColors::GRUVBOX);
+        buttons = confirm.button_line(styles, &ThemeColors::GRUVBOX);
+
+        expected_line = Line::from(vec![
+            Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::styled(
+                "Yes",
+                Style::default()
+                    .fg(Color::Rgb(184, 187, 38))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::raw("    "),
+            Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::styled("Cancel", Style::default().fg(Color::Rgb(168, 153, 132))),
+            Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
+        ]);
+
+        assert_eq!(buttons, expected_line);
     }
 }
