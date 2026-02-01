@@ -5,7 +5,7 @@ use crate::{
     handlers::{action::open_remove_confirm, open_clear_confirm},
     models::Filter,
     state::{ApplicationState, UIState},
-    traits::ModalAction,
+    traits::{Input, ModalAction},
     ui::{Form, Notification, WidgetResponse, is_terminal_small},
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -66,26 +66,32 @@ pub fn handle_global_key(app: &mut Application, event: &KeyEvent) {
             return;
         }
         KeyCode::Esc => {
-            if app.mode == ApplicationMode::Task {
-                app.ui.task_form = None;
-                app.mode = ApplicationMode::Browsing;
-            } else {
-                handle_close(&mut app.state, &mut app.ui, &mut app.running);
+            match app.mode {
+                ApplicationMode::Search => app.ui.search_input = None,
+                ApplicationMode::Form => app.ui.task_form = None,
+                _ => {
+                    handle_close(&mut app.state, &mut app.ui, &mut app.running);
+                    return;
+                }
             }
 
+            app.restore_base_mode();
             return;
         }
         _ => {}
     }
 
     match app.mode {
-        ApplicationMode::Browsing => handle_browsing_keys(app, &event.code),
-        ApplicationMode::Task => handle_form_keys(app, event),
+        ApplicationMode::Browsing | ApplicationMode::List => {
+            handle_browsing_and_list_keys(app, &code)
+        }
+        ApplicationMode::Form => handle_form_keys(app, event),
+        ApplicationMode::Search => handle_search_keys(app, &code),
     }
 }
 
-// Handle browsing mode keys
-pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
+// Handle browsing and list modes keys
+pub fn handle_browsing_and_list_keys(app: &mut Application, code: &KeyCode) {
     match app.ui.focus_area {
         FocusArea::LeftPanel => match code {
             KeyCode::Char('j') | KeyCode::Down => app.ui.next_tab_filter(),
@@ -101,20 +107,19 @@ pub fn handle_browsing_keys(app: &mut Application, code: &KeyCode) {
         FocusArea::MainContent => match code {
             KeyCode::Char('j') | KeyCode::Down => app.state.next_task(),
             KeyCode::Char('k') | KeyCode::Up => app.state.prev_task(),
-            KeyCode::Enter => app
-                .state
-                .toggle(&app.ui.current_filter, app.state.select_state.selected()),
+            KeyCode::Enter => handle_toggle(&mut app.state, &app.ui),
             KeyCode::Char('J') => app.state.move_task_down(),
             KeyCode::Char('K') => app.state.move_task_up(),
             KeyCode::Char('d') => open_remove_confirm(&mut app.ui),
             KeyCode::Char('e') => handle_update(&app.state, &mut app.ui, &mut app.mode),
+            KeyCode::Char('/') => handle_search(&mut app.ui, &mut app.mode),
             _ => {}
         },
     }
 
     match code {
         KeyCode::Char('q') => handle_close(&mut app.state, &mut app.ui, &mut app.running),
-        KeyCode::Char('h') | KeyCode::Char('l') => app.ui.toggle_focus(),
+        KeyCode::Char('h') | KeyCode::Char('l') => handle_focus(&mut app.ui, &mut app.mode),
         KeyCode::Char('t') => app.ui.switch_theme(),
         KeyCode::Char('a') => handle_append(&mut app.ui, &mut app.mode),
         KeyCode::Char('x') => open_clear_confirm(&mut app.ui),
@@ -141,14 +146,35 @@ pub fn handle_form_keys(app: &mut Application, event: &KeyEvent) {
 
                 if is_ok {
                     app.ui.task_form = None;
-                    app.mode = ApplicationMode::Browsing;
-                    app.ui.focus_area = FocusArea::MainContent
+                    app.restore_base_mode();
+                    // app.mode = ApplicationMode::List;
+                    // app.ui.focus_area = FocusArea::MainContent;
                 }
             }
             WidgetResponse::Cancel => {
                 app.ui.task_form = None;
-                app.mode = ApplicationMode::Browsing;
+                // app.mode = if app.ui.focus_area == FocusArea::LeftPanel {
+                //     ApplicationMode::Browsing
+                // } else {
+                //     ApplicationMode::List
+                // };
+                app.restore_base_mode();
             }
+        }
+    }
+}
+
+// Handle search keys
+pub fn handle_search_keys(app: &mut Application, code: &KeyCode) {
+    if let Some(input) = app.ui.search_input.as_mut() {
+        match input.handle_key(&code) {
+            WidgetResponse::Submit => app.mode = ApplicationMode::Browsing,
+            WidgetResponse::Cancel => {
+                // app.mode = ApplicationMode::Browsing;
+                app.ui.search_input = None;
+                app.restore_base_mode();
+            }
+            WidgetResponse::Continue => {}
         }
     }
 }
@@ -165,7 +191,27 @@ pub fn handle_close(app_state: &mut ApplicationState, ui_state: &mut UIState, ru
 // Handle creating new form (on append)
 pub fn handle_append(ui_state: &mut UIState, mode: &mut ApplicationMode) {
     ui_state.task_form = Some(Form::new());
-    *mode = ApplicationMode::Task;
+    *mode = ApplicationMode::Form;
+}
+
+// Handle search tasks by title
+pub fn handle_search(ui_state: &mut UIState, mode: &mut ApplicationMode) {
+    ui_state.show_search();
+    *mode = ApplicationMode::Search;
+}
+
+// Handle toggle completed
+pub fn handle_toggle(app_state: &mut ApplicationState, ui_state: &UIState) {
+    app_state.toggle(&ui_state.current_filter, app_state.select_state.selected())
+}
+
+// Handle focus
+pub fn handle_focus(ui_state: &mut UIState, mode: &mut ApplicationMode) {
+    ui_state.toggle_focus();
+    *mode = match ui_state.focus_area {
+        FocusArea::LeftPanel => ApplicationMode::Browsing,
+        FocusArea::MainContent => ApplicationMode::List,
+    };
 }
 
 // Handle updating existing form
@@ -180,7 +226,7 @@ pub fn handle_update(
             .nth(ui_index)
         {
             ui_state.task_form = Some(Form::from(task));
-            *mode = ApplicationMode::Task;
+            *mode = ApplicationMode::Form;
         }
     }
 }
@@ -338,7 +384,7 @@ mod tests {
     fn should_test_esc_logic_in_different_modes() {
         let mut app = setup_app();
 
-        app.mode = ApplicationMode::Task;
+        app.mode = ApplicationMode::Form;
         app.ui.task_form = Some(crate::ui::Form::new());
         let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         handle_global_key(&mut app, &esc);
@@ -407,6 +453,83 @@ mod tests {
     }
 
     #[test]
+    fn should_enter_search_mode_on_slash() {
+        let mut app = setup_app();
+        app.ui.focus_area = FocusArea::MainContent;
+
+        let key = KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE);
+        handle_global_key(&mut app, &key);
+
+        assert_eq!(app.mode, ApplicationMode::Search);
+        assert!(
+            app.ui.search_input.is_some(),
+            "Search input should be initialized"
+        );
+    }
+
+    #[test]
+    fn should_update_search_query_and_filter_sidebar_counts() {
+        let mut app = setup_app();
+        app.state
+            .append(Todo::new("Buy Milk", "Desc", None))
+            .unwrap();
+        app.state
+            .append(Todo::new("Code Rust", "Desc", None))
+            .unwrap();
+
+        handle_search(&mut app.ui, &mut app.mode);
+
+        let keys = vec!['m', 'i', 'l', 'k'];
+        for c in keys {
+            let key_event = KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE);
+            handle_search_keys(&mut app, &key_event.code);
+        }
+
+        let query = app.ui.search_input.as_ref().unwrap().buffer.as_str();
+        assert_eq!(query, "milk");
+
+        let filtered_count = Filter::All.count(&app.state.todos, query);
+        assert_eq!(filtered_count, 1, "Only one task should match 'milk'");
+    }
+
+    #[test]
+    fn should_exit_search_mode_on_submit_but_keep_query() {
+        let mut app = setup_app();
+        handle_search(&mut app.ui, &mut app.mode);
+
+        let key_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        handle_search_keys(&mut app, &key_a.code);
+
+        let key_enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        handle_search_keys(&mut app, &key_enter.code);
+
+        assert_eq!(app.mode, ApplicationMode::Browsing);
+        assert!(
+            app.ui.search_input.is_some(),
+            "Search query should persist after Submit"
+        );
+        assert_eq!(app.ui.search_input.as_ref().unwrap().buffer, "a");
+    }
+
+    #[test]
+    fn should_clear_search_and_exit_on_cancel() {
+        let mut app = setup_app();
+        handle_search(&mut app.ui, &mut app.mode);
+
+        let key_x = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE);
+        handle_search_keys(&mut app, &key_x.code);
+
+        let key_esc = KeyCode::Esc;
+        handle_search_keys(&mut app, &key_esc);
+
+        assert_eq!(app.mode, ApplicationMode::Browsing);
+        assert!(
+            app.ui.search_input.is_none(),
+            "Search input should be cleared on Cancel"
+        );
+    }
+
+    #[test]
     fn should_test_edit_and_create_task_keys() {
         let mut app = setup_app();
 
@@ -422,7 +545,7 @@ mod tests {
             &mut app,
             &KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
         );
-        assert_eq!(app.mode, ApplicationMode::Task);
+        assert_eq!(app.mode, ApplicationMode::Form);
         assert!(app.ui.task_form.is_some(), "Form must be create");
 
         if let Some(form) = &app.ui.task_form {
@@ -444,7 +567,7 @@ mod tests {
             &KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE),
         );
 
-        assert_eq!(app.mode, ApplicationMode::Task);
+        assert_eq!(app.mode, ApplicationMode::Form);
         assert!(app.ui.task_form.is_some());
 
         if let Some(form) = &app.ui.task_form {

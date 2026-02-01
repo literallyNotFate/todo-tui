@@ -22,7 +22,7 @@ impl<T> EnumInput<T> {
 
 impl<T> Input for EnumInput<T>
 where
-    T: InteractableEnum + Clone + 'static,
+    T: InteractableEnum + Clone + Default + 'static,
 {
     fn title(mut self, title: impl Into<String>) -> Self {
         self.title = title.into();
@@ -41,26 +41,36 @@ where
         WidgetResponse::Continue
     }
 
+    fn reset(&mut self) {
+        self.selected = Default::default();
+    }
+
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
         use ratatui::widgets::{Block, Paragraph};
 
-        let focused_style: Style = self.on_focused(focused, theme);
+        let (border_style, text_style): (Style, Style) = self.on_focused(focused, theme);
 
         let input_block: Block = Block::bordered()
-            .border_style(focused_style)
-            .title(self.title.as_str())
-            .title_style(Style::default().fg(theme.text_primary));
+            .border_style(border_style)
+            .style(text_style)
+            .title(self.title.as_str());
 
         let input = Paragraph::new(self.selected.to_string()).block(input_block);
 
         frame.render_widget(input, area);
     }
 
-    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> Style {
+    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> (Style, Style) {
         if focused {
-            Style::default().fg(theme.accent)
+            (
+                Style::default().fg(theme.accent),
+                Style::default().fg(theme.text_primary),
+            )
         } else {
-            Style::default().fg(theme.border)
+            (
+                Style::default().fg(theme.border),
+                Style::default().fg(theme.text_dim),
+            )
         }
     }
 }
@@ -143,10 +153,32 @@ mod tests {
     #[test]
     fn should_return_styles_if_focused() {
         let input = EnumInput::from(MockEnum::B);
-        let mut style: Style = input.on_focused(false, &ThemeColors::GRUVBOX);
-        assert_eq!(style, Style::default().fg(Color::Rgb(102, 92, 84)));
+        let mut styles: (Style, Style) = input.on_focused(false, &ThemeColors::GRUVBOX);
+        assert_eq!(
+            styles,
+            (
+                Style::default().fg(Color::Rgb(102, 92, 84)),
+                Style::default().fg(Color::Rgb(168, 153, 132))
+            )
+        );
 
-        style = input.on_focused(true, &ThemeColors::GRUVBOX);
-        assert_eq!(style, Style::default().fg(Color::Rgb(250, 189, 47)));
+        styles = input.on_focused(true, &ThemeColors::GRUVBOX);
+        assert_eq!(
+            styles,
+            (
+                Style::default().fg(Color::Rgb(250, 189, 47)),
+                Style::default().fg(Color::Rgb(235, 219, 178))
+            )
+        );
+    }
+
+    #[test]
+    fn should_handle_reset_enum_input() {
+        let mut input = EnumInput::from(MockEnum::B);
+        let initial_val = input.selected;
+        assert_eq!(input.selected, MockEnum::B);
+
+        input.reset();
+        assert_ne!(initial_val, input.selected);
     }
 }

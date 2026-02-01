@@ -19,14 +19,24 @@ impl MenuContent {
         use super::list::TaskList;
 
         match mode {
-            ApplicationMode::Browsing => {
-                let filtered = ui.current_filter.filter(&state.todos);
-                TaskList::render(frame, area, ui, &mut state.select_state, theme, &filtered);
-            }
-            ApplicationMode::Task => {
+            ApplicationMode::Form => {
                 if let Some(form) = &ui.task_form {
                     form.render(frame, area, theme);
                 }
+            }
+            _ => {
+                let query = ui.search_query();
+                let filtered = ui.current_filter.apply(&state.todos, &query);
+
+                TaskList::render(
+                    frame,
+                    area,
+                    ui,
+                    &mut state.select_state,
+                    theme,
+                    &filtered,
+                    mode,
+                );
             }
         }
     }

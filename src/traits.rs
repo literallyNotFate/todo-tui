@@ -53,6 +53,7 @@ pub trait InteractableEnum: Sized + Copy + PartialEq + 'static {
 pub trait Input {
     fn title(self, title: impl Into<String>) -> Self;
     fn handle_key(&mut self, key: &KeyCode) -> WidgetResponse;
+    fn reset(&mut self);
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors);
-    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> Style;
+    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> (Style, Style);
 }

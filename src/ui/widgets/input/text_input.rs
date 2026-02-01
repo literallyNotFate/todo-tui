@@ -3,7 +3,7 @@ use crate::{
 };
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct TextInput {
     pub title: String,
     pub buffer: String,
@@ -46,6 +46,12 @@ impl TextInput {
     }
 }
 
+impl Default for TextInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Input for TextInput {
     fn title(mut self, title: impl Into<String>) -> Self {
         self.title = title.into();
@@ -84,6 +90,11 @@ impl Input for TextInput {
         WidgetResponse::Continue
     }
 
+    fn reset(&mut self) {
+        self.buffer.clear();
+        self.cursor = 0;
+    }
+
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
         use ratatui::{
             layout::Position,
@@ -94,12 +105,12 @@ impl Input for TextInput {
         let scroll: usize = self.scroll(width);
         let text: String = self.displayed_content(width, scroll);
 
-        let focused_style: Style = self.on_focused(focused, theme);
+        let (border_style, text_style): (Style, Style) = self.on_focused(focused, theme);
 
         let input_block: Block = Block::bordered()
-            .border_style(focused_style)
-            .title(self.title.as_str())
-            .title_style(Style::default().fg(theme.text_primary));
+            .border_style(border_style)
+            .style(text_style)
+            .title(self.title.as_str());
 
         let paragraph = Paragraph::new(text).block(input_block);
         frame.render_widget(paragraph, area);
@@ -112,11 +123,17 @@ impl Input for TextInput {
         }
     }
 
-    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> Style {
+    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> (Style, Style) {
         if focused {
-            Style::default().fg(theme.accent)
+            (
+                Style::default().fg(theme.accent),
+                Style::default().fg(theme.text_primary),
+            )
         } else {
-            Style::default().fg(theme.border)
+            (
+                Style::default().fg(theme.border),
+                Style::default().fg(theme.text_dim),
+            )
         }
     }
 }
@@ -216,10 +233,40 @@ mod tests {
     #[test]
     fn should_return_styles_if_focused() {
         let input = TextInput::new();
-        let mut style: Style = input.on_focused(false, &ThemeColors::GRUVBOX);
-        assert_eq!(style, Style::default().fg(Color::Rgb(102, 92, 84)));
+        let mut styles: (Style, Style) = input.on_focused(false, &ThemeColors::GRUVBOX);
+        assert_eq!(
+            styles,
+            (
+                Style::default().fg(Color::Rgb(102, 92, 84)),
+                Style::default().fg(Color::Rgb(168, 153, 132))
+            )
+        );
 
-        style = input.on_focused(true, &ThemeColors::GRUVBOX);
-        assert_eq!(style, Style::default().fg(Color::Rgb(250, 189, 47)));
+        styles = input.on_focused(true, &ThemeColors::GRUVBOX);
+        assert_eq!(
+            styles,
+            (
+                Style::default().fg(Color::Rgb(250, 189, 47)),
+                Style::default().fg(Color::Rgb(235, 219, 178))
+            )
+        );
+    }
+
+    #[test]
+    fn should_handle_reset_text_input() {
+        let mut input = TextInput::new();
+
+        input.handle_key(&KeyCode::Char('a'));
+        input.handle_key(&KeyCode::Char('b'));
+        input.handle_key(&KeyCode::Char('c'));
+
+        assert_eq!(input.buffer, "abc");
+        assert_eq!(input.buffer.len(), 3);
+        assert_eq!(input.cursor, 3);
+
+        input.reset();
+        assert_eq!(input.buffer, "");
+        assert_eq!(input.buffer.len(), 0);
+        assert_eq!(input.cursor, 0);
     }
 }

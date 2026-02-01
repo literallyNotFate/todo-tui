@@ -35,29 +35,30 @@ impl InteractableEnum for Filter {
 }
 
 impl Filter {
-    pub fn count(&self, todos: &[Todo]) -> usize {
-        self.filter(todos).len()
+    pub fn count(&self, todos: &[Todo], query: &str) -> usize {
+        self.apply(todos, query).len()
     }
 
-    pub fn filter(&self, todos: &[Todo]) -> Vec<Todo> {
-        match self {
-            Self::All => todos.to_vec(),
-            Self::Active => todos.iter().filter(|t| !t.completed).cloned().collect(),
-            Self::Completed => todos.iter().filter(|t| t.completed).cloned().collect(),
-            Self::HighPriority => todos
-                .iter()
-                .filter(|t| matches!(t.priority, Priority::High))
-                .cloned()
-                .collect(),
-            Self::Today => {
-                let today = Local::now().date_naive();
-                todos
-                    .iter()
-                    .filter(|t| t.created_at.with_timezone(&Local).date_naive() == today)
-                    .cloned()
-                    .collect()
-            }
-        }
+    pub fn apply(&self, todos: &[Todo], query: &str) -> Vec<Todo> {
+        todos
+            .iter()
+            .filter(|t| {
+                let matches_type = match self {
+                    Self::All => true,
+                    Self::Active => !t.completed,
+                    Self::Completed => t.completed,
+                    Self::HighPriority => matches!(t.priority, Priority::High),
+                    Self::Today => {
+                        let today = Local::now().date_naive();
+                        t.created_at.with_timezone(&Local).date_naive() == today
+                    }
+                };
+
+                let matches_query = query.is_empty() || t.title.to_lowercase().contains(&query);
+                matches_type && matches_query
+            })
+            .cloned()
+            .collect()
     }
 }
 
@@ -89,22 +90,40 @@ mod tests {
     #[test]
     fn should_filter_todos_based_on_enum_value() {
         let todos = setup_test_todos();
+        assert_eq!(Filter::All.count(&todos, ""), 4);
 
-        assert_eq!(Filter::All.count(&todos), 4);
-
-        let active = Filter::Active.filter(&todos);
+        let active = Filter::Active.apply(&todos, "");
         assert_eq!(active.len(), 2);
         assert!(active.iter().all(|t| !t.completed));
 
-        let completed = Filter::Completed.filter(&todos);
+        let completed = Filter::Completed.apply(&todos, "");
         assert_eq!(completed.len(), 2);
         assert!(completed.iter().all(|t| t.completed));
 
-        let high = Filter::HighPriority.filter(&todos);
+        let high = Filter::HighPriority.apply(&todos, "");
         assert_eq!(high.len(), 2);
         assert!(high.iter().all(|t| matches!(t.priority, Priority::High)));
 
-        let today = Filter::Today.filter(&todos);
+        let today = Filter::Today.apply(&todos, "");
         assert_eq!(today.len(), 2);
+    }
+
+    #[test]
+    fn should_filter_todos_based_on_search_query() {
+        let todos = setup_test_todos();
+        let results = Filter::Active.apply(&todos, "Task 4");
+
+        assert_eq!(
+            results.len(),
+            0,
+            "Should not find completed tasks when Active filter is on"
+        );
+
+        let high_results = Filter::HighPriority.apply(&todos, "Task");
+        assert!(
+            high_results
+                .iter()
+                .all(|t| matches!(t.priority, Priority::High))
+        );
     }
 }

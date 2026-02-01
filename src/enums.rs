@@ -10,5 +10,7 @@ pub enum FocusArea {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ApplicationMode {
     Browsing,
-    Task,
+    List,
+    Form,
+    Search,
 }

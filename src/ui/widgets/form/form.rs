@@ -9,7 +9,7 @@ use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
+    style::Style,
     widgets::{Block, Paragraph},
 };
 
@@ -228,14 +228,24 @@ impl<'a> Form<'a> {
                     input.render(frame, chunks[i], is_focused, theme);
                 }
                 FieldType::Button => {
-                    let focused_style: Style = if is_focused {
-                        Style::default().fg(theme.accent).bold()
+                    let (border_style, text_style) = if is_focused {
+                        (
+                            Style::default().fg(theme.accent),
+                            Style::default().fg(theme.text_primary),
+                        )
                     } else {
-                        Style::default().fg(theme.text_dim)
+                        (
+                            Style::default().fg(theme.border),
+                            Style::default().fg(theme.text_dim),
+                        )
                     };
 
                     let button = Paragraph::new(" Save task ")
-                        .block(Block::bordered().border_style(focused_style))
+                        .block(
+                            Block::bordered()
+                                .border_style(border_style)
+                                .style(text_style),
+                        )
                         .centered();
 
                     frame.render_widget(button, button_layout[2]);

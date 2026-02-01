@@ -3,8 +3,8 @@ use crate::{
     models::Filter,
     state::ApplicationResult,
     theme::{Theme, ThemeColors},
-    traits::{InteractableEnum, Modal, ModalAction},
-    ui::{Form, Notification, Popup},
+    traits::{Input, InteractableEnum, Modal, ModalAction},
+    ui::{Form, Notification, Popup, TextInput},
 };
 use ratatui::style::Style;
 
@@ -20,6 +20,7 @@ pub struct UIState<'a> {
 
     pub modal: Option<ActiveModal>,
     pub task_form: Option<Form<'a>>,
+    pub search_input: Option<TextInput>,
 
     pub theme: Theme,
 }
@@ -73,6 +74,18 @@ impl<'a> UIState<'a> {
 
     pub fn close_modal(&mut self) {
         self.modal = None;
+    }
+
+    // Search input
+    pub fn show_search(&mut self) {
+        self.search_input = Some(TextInput::new().title(" Search "));
+    }
+
+    pub fn search_query(&self) -> String {
+        self.search_input
+            .as_ref()
+            .map(|i| i.buffer.to_lowercase())
+            .unwrap_or_default()
     }
 
     // Handle save result with popup
@@ -156,7 +169,6 @@ mod tests {
     #[test]
     fn should_show_close_dialog_with_ui_state() {
         let mut ui = UIState::default();
-
         ui.show_modal(Popup::info("Test"), ModalAction::Remove);
 
         assert!(ui.modal.is_some());
@@ -167,10 +179,22 @@ mod tests {
     }
 
     #[test]
+    fn should_show_search_input() {
+        let mut ui = UIState::default();
+        ui.show_search();
+
+        assert!(ui.search_input.is_some());
+        assert_eq!(ui.search_input.as_ref().unwrap().buffer, "");
+
+        ui.search_input = None;
+        assert!(ui.search_input.is_none());
+    }
+
+    #[test]
     fn should_handle_save_result_with_popup() {
         let mut ui = UIState::default();
-
         ui.handle_save_with_popup(Ok("Saved!".to_string()));
+
         assert!(ui.modal.is_some());
         assert_eq!(ui.modal.as_ref().unwrap().action, ModalAction::None);
 
@@ -181,9 +205,8 @@ mod tests {
     }
 
     #[test]
-    fn test_notification_expiration() {
+    fn should_test_notification_expiration() {
         let ui = UIState::default();
-
         let mut expired_notification = Some(Notification {
             created_at: Instant::now() - Duration::from_secs(10),
             ..Notification::success("Test")

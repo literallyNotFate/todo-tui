@@ -1,5 +1,5 @@
 use crate::{
-    enums::ApplicationMode,
+    enums::{ApplicationMode, FocusArea},
     handlers::handle_key_event,
     state::{ApplicationState, UIState},
     ui::Renderer,
@@ -75,7 +75,8 @@ impl<'a> Application<'a> {
 
     // Synchronize selection after tab switching
     pub fn sync_ui(&mut self) {
-        let indices = self.ui.current_filter.filter(&self.state.todos);
+        let query = self.ui.search_query();
+        let indices = self.ui.current_filter.apply(&self.state.todos, &query);
         let visible_count = indices.len();
 
         if visible_count == 0 {
@@ -90,6 +91,14 @@ impl<'a> Application<'a> {
                 _ => {}
             }
         }
+    }
+
+    // Restore base mode (after forms)
+    pub fn restore_base_mode(&mut self) {
+        self.mode = match self.ui.focus_area {
+            FocusArea::LeftPanel => ApplicationMode::Browsing,
+            FocusArea::MainContent => ApplicationMode::List,
+        };
     }
 
     // Rendering

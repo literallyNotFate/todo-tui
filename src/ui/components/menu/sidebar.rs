@@ -41,7 +41,8 @@ impl MenuSidebar {
         let filters_inner_area: Rect = filters_block.inner(sidebar_layout[0]);
         let filter_tab_layout: std::rc::Rc<[Rect]> = Self::filters_tab_layout(filters_inner_area);
 
-        let list: List = Self::construct_list(todos, &ui.current_filter, theme);
+        let query = ui.search_query();
+        let list: List = Self::construct_list(todos, &ui.current_filter, &query, theme);
 
         let mut state: ListState = ListState::default();
         state.select(Some(ui.current_filter.index()));
@@ -127,6 +128,7 @@ impl MenuSidebar {
     fn construct_list(
         todos: &[Todo],
         current_filter: &Filter,
+        query: &str,
         theme: &ThemeColors,
     ) -> List<'static> {
         use ratatui::widgets::ListItem;
@@ -134,7 +136,7 @@ impl MenuSidebar {
         let items: Vec<ListItem> = Filter::all_variants()
             .iter()
             .map(|tab| {
-                let count = tab.count(todos);
+                let count = tab.count(todos, query);
                 let text = format!(" {} ({})", tab.to_string(), count);
                 let style = if tab == current_filter {
                     Style::default().fg(theme.accent).bold()
@@ -187,9 +189,15 @@ impl MenuSidebar {
     fn hotkeys(mode: &ApplicationMode) -> &'static str {
         match mode {
             ApplicationMode::Browsing => {
-                " Esc/q -> Quit \n Enter -> Toggle \n a -> Add \n e -> Edit \n d -> Delete \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate \n J/K -> Move "
+                " Esc/q -> Quit \n a -> Add \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate "
             }
-            ApplicationMode::Task => " Esc -> Cancel \n ▲/▼ -> Next \n ◄/► -> Priority ",
+            ApplicationMode::List => {
+                " Esc/q -> Quit \n Enter -> Toggle \n / -> Search \n a -> Add \n e -> Edit \n d -> Delete \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate \n J/K -> Move "
+            }
+            ApplicationMode::Form => " Esc -> Cancel \n ▲/▼ -> Next \n ◄/► -> Priority ",
+            ApplicationMode::Search => {
+                " Esc -> Quit \n Enter -> Search \n Backspace -> Remove char \n ◄/► -> Cursor "
+            }
         }
     }
 }
@@ -235,14 +243,14 @@ mod tests {
         let current_filter: Filter = Filter::All;
 
         let list: List =
-            MenuSidebar::construct_list(&todos, &current_filter, &ThemeColors::GRUVBOX);
+            MenuSidebar::construct_list(&todos, &current_filter, "", &ThemeColors::GRUVBOX);
         assert_eq!(list.len(), Filter::all_variants().len());
     }
 
     #[test]
     fn should_switch_hotkeys_depending_on_mode() {
         let browsing_keys = MenuSidebar::hotkeys(&ApplicationMode::Browsing);
-        let task_keys = MenuSidebar::hotkeys(&ApplicationMode::Task);
+        let task_keys = MenuSidebar::hotkeys(&ApplicationMode::Form);
 
         assert!(browsing_keys.contains("Quit"));
         assert!(task_keys.contains("Cancel"));
