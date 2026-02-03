@@ -4,14 +4,16 @@ use crate::{
     state::UIState,
     theme::ThemeColors,
     traits::{Input, InteractableEnum},
-    ui::center,
+    ui::{AdaptiveScroll, center},
 };
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{Block, Cell, Paragraph, Row, TableState},
+    widgets::{
+        Block, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, TableState,
+    },
 };
 
 pub struct TaskList;
@@ -22,6 +24,7 @@ impl TaskList {
         area: Rect,
         ui: &UIState,
         select_state: &mut TableState,
+        scroll: &mut AdaptiveScroll,
         theme: &ThemeColors,
         todos: &[Todo],
         mode: &ApplicationMode,
@@ -99,7 +102,15 @@ impl TaskList {
 
         Self::render_scrollbar_if_needed(frame, inner_table[1], todos.len(), select_state, theme);
         frame.render_stateful_widget(table, inner_table[0], select_state);
-        Self::render_description_for_selected(frame, main_layout[2], select_state, todos, theme);
+
+        scroll.max_scroll = Self::render_description_for_selected(
+            frame,
+            main_layout[2],
+            select_state,
+            todos,
+            theme,
+            scroll,
+        );
     }
 
     // Render fallback if list is empty
@@ -135,29 +146,63 @@ impl TaskList {
         frame.render_widget(paragraph, message_area);
     }
 
-    // Render description for selected task
+    // Render description for selected task with scroll
     fn render_description_for_selected(
         frame: &mut Frame,
         area: Rect,
         select_state: &mut TableState,
         filtered: &[Todo],
         theme: &ThemeColors,
-    ) {
+        scroll: &AdaptiveScroll,
+    ) -> u16 {
         use ratatui::widgets::Wrap;
 
         if let Some(selected_index) = select_state.selected() {
             if let Some(todo) = filtered.get(selected_index) {
-                let details_block = Block::bordered()
-                    .title(format!(" Details: {} ", todo.title))
+                let description: &str = todo.description.as_str();
+
+                let inner_width: u16 = area.width.saturating_sub(2);
+                let inner_height: u16 = area.height.saturating_sub(2);
+
+                let wrapped_lines: usize = textwrap::wrap(description, inner_width as usize).len();
+                let max_scroll: u16 = wrapped_lines.saturating_sub(inner_height as usize) as u16;
+
+                let effective_scroll: u16 = scroll.current.min(max_scroll);
+
+                let desc_block = Block::bordered()
+                    .title(format!(" Description: {} ", todo.title))
                     .border_style(Style::default().fg(theme.border));
 
-                let details: Paragraph = Paragraph::new(todo.description.as_str())
-                    .block(details_block)
-                    .wrap(Wrap { trim: true });
+                let desc = Paragraph::new(description)
+                    .block(desc_block)
+                    .style(Style::default().fg(theme.text_primary))
+                    .wrap(Wrap { trim: true })
+                    .scroll((effective_scroll, 0));
 
-                frame.render_widget(details, area);
+                frame.render_widget(desc, area);
+
+                if wrapped_lines > inner_height as usize {
+                    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                        .begin_symbol(Some("↑"))
+                        .end_symbol(Some("↓"))
+                        .track_symbol(Some("│"))
+                        .thumb_symbol("▉")
+                        .thumb_style(Style::default().fg(theme.border))
+                        .track_style(Style::default().fg(theme.border))
+                        .begin_style(Style::default().fg(theme.border))
+                        .end_style(Style::default().fg(theme.border));
+
+                    let mut scrollbar_state = ScrollbarState::new(max_scroll as usize)
+                        .position(effective_scroll as usize);
+
+                    frame.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
+                }
+
+                return max_scroll;
             }
         }
+
+        0
     }
 
     // Dynamic scroll for list
@@ -168,8 +213,6 @@ impl TaskList {
         select_state: &mut TableState,
         theme: &ThemeColors,
     ) {
-        use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
-
         let visible_height: usize = area.height.saturating_sub(2) as usize;
 
         if content_lines > visible_height {

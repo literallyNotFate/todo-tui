@@ -33,6 +33,7 @@ impl MenuContent {
                     area,
                     ui,
                     &mut state.select_state,
+                    &mut state.scroll,
                     theme,
                     &filtered,
                     mode,

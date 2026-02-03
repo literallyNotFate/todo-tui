@@ -1,9 +1,10 @@
 use crate::{
+    enums::WidgetResponse,
     models::{Priority, Todo},
     state::{ApplicationResult, ApplicationState},
     theme::ThemeColors,
     traits::Input,
-    ui::{Field, FieldType, WidgetResponse},
+    ui::{Field, FieldType},
 };
 use ratatui::{
     Frame,

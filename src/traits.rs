@@ -1,4 +1,4 @@
-use crate::{theme::ThemeColors, ui::WidgetResponse};
+use crate::{enums::WidgetResponse, theme::ThemeColors};
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 
 // Modal trait for interactable widgets (handle_key()) for popup and confirm

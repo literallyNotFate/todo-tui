@@ -8,7 +8,7 @@ pub const MIN_HEIGHT: u16 = 24;
 pub fn main_layout(area: Rect) -> (Rect, Rect, Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(4)])
+        .constraints([Constraint::Min(0), Constraint::Length(2)])
         .split(area);
 
     let upper_area = chunks[0];

@@ -1,7 +1,7 @@
 use crate::{
     models::{Filter, Priority, Todo},
     state::{ApplicationError, StorageError, TodoError},
-    ui::Notification,
+    ui::{AdaptiveScroll, Notification},
 };
 use chrono::Local;
 use ratatui::widgets::TableState;
@@ -17,6 +17,7 @@ use uuid::Uuid;
 pub struct ApplicationState {
     pub todos: Vec<Todo>,
     pub select_state: TableState,
+    pub scroll: AdaptiveScroll,
 
     pub notification: Option<Notification>,
     pub saved_todos_hash: u64,
@@ -41,6 +42,7 @@ impl ApplicationState {
             select_state: TableState::default(),
             notification: None,
             saved_todos_hash: 0,
+            scroll: AdaptiveScroll::default(),
         }
     }
 
@@ -62,6 +64,7 @@ impl ApplicationState {
             None => 0,
         };
 
+        self.scroll.reset();
         self.select_state.select(Some(i));
     }
 
@@ -83,6 +86,7 @@ impl ApplicationState {
             None => 0,
         };
 
+        self.scroll.reset();
         self.select_state.select(Some(i));
     }
 

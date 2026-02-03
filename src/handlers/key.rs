@@ -1,12 +1,12 @@
 use super::{handle_modal_result, open_save_confirm, open_unsaved_exit_confirm};
 use crate::{
     app::Application,
-    enums::{ApplicationMode, FocusArea},
+    enums::{ApplicationMode, FocusArea, WidgetResponse},
     handlers::{action::open_remove_confirm, open_clear_confirm},
     models::Filter,
     state::{ApplicationState, UIState},
     traits::{Input, ModalAction},
-    ui::{Form, Notification, WidgetResponse, is_terminal_small},
+    ui::{Form, Notification, is_terminal_small},
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -107,6 +107,8 @@ pub fn handle_browsing_and_list_keys(app: &mut Application, code: &KeyCode) {
         FocusArea::MainContent => match code {
             KeyCode::Char('j') | KeyCode::Down => app.state.next_task(),
             KeyCode::Char('k') | KeyCode::Up => app.state.prev_task(),
+            KeyCode::Char('[') => app.state.scroll.scroll_up(),
+            KeyCode::Char(']') => app.state.scroll.scroll_down(),
             KeyCode::Enter => handle_toggle(&mut app.state, &app.ui),
             KeyCode::Char('J') => app.state.move_task_down(),
             KeyCode::Char('K') => app.state.move_task_up(),
@@ -147,17 +149,10 @@ pub fn handle_form_keys(app: &mut Application, event: &KeyEvent) {
                 if is_ok {
                     app.ui.task_form = None;
                     app.restore_base_mode();
-                    // app.mode = ApplicationMode::List;
-                    // app.ui.focus_area = FocusArea::MainContent;
                 }
             }
             WidgetResponse::Cancel => {
                 app.ui.task_form = None;
-                // app.mode = if app.ui.focus_area == FocusArea::LeftPanel {
-                //     ApplicationMode::Browsing
-                // } else {
-                //     ApplicationMode::List
-                // };
                 app.restore_base_mode();
             }
         }
@@ -170,7 +165,6 @@ pub fn handle_search_keys(app: &mut Application, code: &KeyCode) {
         match input.handle_key(&code) {
             WidgetResponse::Submit => app.mode = ApplicationMode::Browsing,
             WidgetResponse::Cancel => {
-                // app.mode = ApplicationMode::Browsing;
                 app.ui.search_input = None;
                 app.restore_base_mode();
             }
@@ -249,7 +243,7 @@ mod tests {
     use crate::{
         models::Todo,
         state::{ApplicationResult, ApplicationState},
-        ui::{FieldType, Popup},
+        ui::{AdaptiveScroll, FieldType, Popup},
     };
     use std::{
         fs::{self, File},
@@ -612,5 +606,25 @@ mod tests {
             app.ui.modal.is_none(),
             "Modal should be closed after handling"
         );
+    }
+
+    #[test]
+    fn should_handle_description_scroll_keys() {
+        let mut scroll: AdaptiveScroll = AdaptiveScroll {
+            current: 0,
+            max_scroll: 5,
+        };
+
+        let keys = vec![KeyCode::Char(']'), KeyCode::Char(']')];
+
+        for key in keys {
+            match key {
+                KeyCode::Char('[') => scroll.scroll_up(),
+                KeyCode::Char(']') => scroll.scroll_down(),
+                _ => {}
+            }
+        }
+
+        assert_eq!(scroll.current, 2);
     }
 }

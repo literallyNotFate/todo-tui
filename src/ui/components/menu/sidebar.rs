@@ -30,7 +30,9 @@ impl MenuSidebar {
             widgets::{Block, List, ListState, Paragraph},
         };
 
-        let sidebar_layout: std::rc::Rc<[Rect]> = Self::layout(area);
+        let (hotkeys, hotkeys_len): (&str, u16) = Self::hotkeys(mode);
+
+        let sidebar_layout: std::rc::Rc<[Rect]> = Self::layout(area, hotkeys_len + 4);
         let focused_style: Style = ui.focused_on(&FocusArea::LeftPanel);
 
         let filters_block: Block = Block::bordered()
@@ -62,31 +64,29 @@ impl MenuSidebar {
         frame.render_widget(summary_block, sidebar_layout[1]);
         frame.render_widget(Paragraph::new(summary_text), summary_inner_layout[1]);
 
-        let controls_block: Block = Block::bordered()
-            .title(" Controls ")
+        let hotkeys_block: Block = Block::bordered()
+            .title(" Hotkeys ")
             .border_style(Style::default().fg(theme.border))
             .bg(theme.bg_dim);
 
-        let controls_inner_area: Rect = controls_block.inner(sidebar_layout[2]);
-        let controls_layout: std::rc::Rc<[Rect]> = Self::controls_layout(controls_inner_area);
+        let hotkeys_inner_area: Rect = hotkeys_block.inner(sidebar_layout[2]);
+        let hotkeys_layout: std::rc::Rc<[Rect]> = Self::hotkeys_layout(hotkeys_inner_area);
 
-        let hotkeys: &str = Self::hotkeys(mode);
-
-        frame.render_widget(controls_block, sidebar_layout[2]);
+        frame.render_widget(hotkeys_block, sidebar_layout[2]);
         frame.render_widget(
             Paragraph::new(hotkeys).style(Style::default().fg(theme.text_primary)),
-            controls_layout[1],
+            hotkeys_layout[1],
         );
     }
 
     // Layout for sidebar
-    fn layout(area: Rect) -> std::rc::Rc<[Rect]> {
+    fn layout(area: Rect, hotkeys_length: u16) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(0),     // Filters
-                Constraint::Length(7),  // Summary
-                Constraint::Length(15), // Controls
+                Constraint::Fill(1),                // Filters
+                Constraint::Length(7),              // Summary
+                Constraint::Length(hotkeys_length), // Hotkeys
             ])
             .split(area)
     }
@@ -113,13 +113,13 @@ impl MenuSidebar {
             .split(area)
     }
 
-    // Layout for controls
-    fn controls_layout(area: Rect) -> std::rc::Rc<[Rect]> {
+    // Layout for hotkeys
+    fn hotkeys_layout(area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1), // Controls margin
-                Constraint::Min(0),    // Controls
+                Constraint::Length(1), // Hotkeys margin
+                Constraint::Min(0),    // Hotkeys
             ])
             .split(area)
     }
@@ -186,18 +186,21 @@ impl MenuSidebar {
     }
 
     // Get hotkeys depending on application mode
-    fn hotkeys(mode: &ApplicationMode) -> &'static str {
+    fn hotkeys(mode: &ApplicationMode) -> (&'static str, u16) {
         match mode {
-            ApplicationMode::Browsing => {
-                " Esc/q -> Quit \n a -> Add \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate "
-            }
-            ApplicationMode::List => {
-                " Esc/q -> Quit \n Enter -> Toggle \n / -> Search \n a -> Add \n e -> Edit \n d -> Delete \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate \n J/K -> Move "
-            }
-            ApplicationMode::Form => " Esc -> Cancel \n ▲/▼ -> Next \n ◄/► -> Priority ",
-            ApplicationMode::Search => {
-                " Esc -> Quit \n Enter -> Search \n Backspace -> Remove char \n ◄/► -> Cursor "
-            }
+            ApplicationMode::Browsing => (
+                " Esc/q -> Quit \n a -> Add \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate ",
+                7,
+            ),
+            ApplicationMode::List => (
+                " Esc/q -> Quit \n Enter -> Toggle \n / -> Search \n a -> Add \n e -> Edit \n d -> Delete \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate \n J/K -> Move \n ]/[ -> Scroll description ",
+                13,
+            ),
+            ApplicationMode::Form => (" Esc -> Cancel \n ▲/▼ -> Next \n ◄/► -> Priority ", 3),
+            ApplicationMode::Search => (
+                " Esc -> Quit \n Enter -> Search \n Backspace -> Remove char \n ◄/► -> Cursor ",
+                4,
+            ),
         }
     }
 }
@@ -249,11 +252,12 @@ mod tests {
 
     #[test]
     fn should_switch_hotkeys_depending_on_mode() {
-        let browsing_keys = MenuSidebar::hotkeys(&ApplicationMode::Browsing);
-        let task_keys = MenuSidebar::hotkeys(&ApplicationMode::Form);
+        let (browsing_keys, browsing_key_len) = MenuSidebar::hotkeys(&ApplicationMode::Browsing);
+        let (task_keys, task_key_len) = MenuSidebar::hotkeys(&ApplicationMode::Form);
 
         assert!(browsing_keys.contains("Quit"));
         assert!(task_keys.contains("Cancel"));
         assert_ne!(browsing_keys, task_keys);
+        assert_ne!(browsing_key_len, task_key_len);
     }
 }

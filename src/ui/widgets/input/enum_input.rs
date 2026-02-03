@@ -1,7 +1,7 @@
 use crate::{
+    enums::WidgetResponse,
     theme::ThemeColors,
     traits::{Input, InteractableEnum},
-    ui::WidgetResponse,
 };
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 

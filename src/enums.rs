@@ -14,3 +14,11 @@ pub enum ApplicationMode {
     Form,
     Search,
 }
+
+// What is being return from handle_key widget function
+#[derive(Debug, PartialEq)]
+pub enum WidgetResponse {
+    Continue,
+    Submit,
+    Cancel,
+}

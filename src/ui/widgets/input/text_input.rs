@@ -1,5 +1,6 @@
 use crate::{
-    theme::ThemeColors, traits::Input, ui::WidgetResponse, utils::constants::TEXT_INPUT_MAX_CHARS,
+    enums::WidgetResponse, theme::ThemeColors, traits::Input,
+    utils::constants::TEXT_INPUT_MAX_CHARS,
 };
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 
