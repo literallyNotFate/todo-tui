@@ -128,7 +128,7 @@ impl Popup {
 impl Modal for Popup {
     // Calculate area for popup
     fn area(&self, frame_area: Rect) -> Rect {
-        center(POPUP_WIDTH, POPUP_HEIGHT, frame_area)
+        center(frame_area, POPUP_WIDTH, POPUP_HEIGHT)
     }
 
     // Rendering

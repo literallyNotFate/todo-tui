@@ -5,27 +5,35 @@ use ratatui::{
     style::Color,
 };
 
-pub struct MenuBottomBar;
+pub struct BottomBarWidget<'a> {
+    state: &'a ApplicationState,
+    theme: &'a ThemeColors,
+}
 
-impl MenuBottomBar {
-    pub fn render(frame: &mut Frame, area: Rect, state: &ApplicationState, theme: &ThemeColors) {
+impl<'a> BottomBarWidget<'a> {
+    pub fn new(state: &'a ApplicationState, theme: &'a ThemeColors) -> Self {
+        Self { state, theme }
+    }
+
+    // Rendering
+    pub fn render(&self, frame: &mut Frame, area: Rect) {
         use ratatui::{layout::Alignment, style::Stylize, widgets::Paragraph};
 
-        let chunks: std::rc::Rc<[Rect]> = Self::layout(area);
-        let status_layout: std::rc::Rc<[Rect]> = Self::status_layout(chunks[1]);
+        let chunks: std::rc::Rc<[Rect]> = self.layout(area);
+        let status_layout: std::rc::Rc<[Rect]> = self.status_layout(chunks[1]);
 
         frame.render_widget(
-            Paragraph::new("todo-tui").fg(theme.accent),
+            Paragraph::new("todo-tui").fg(self.theme.accent),
             status_layout[0],
         );
 
-        if let Some(n) = &state.notification {
+        if let Some(n) = &self.state.notification {
             if !n.is_expired() {
-                n.render(frame, status_layout[1], theme);
+                n.render(frame, status_layout[1], self.theme);
             }
         }
 
-        let (status_msg, status_color): (&str, Color) = Self::status(state, theme);
+        let (status_msg, status_color): (&str, Color) = self.status();
 
         frame.render_widget(
             Paragraph::new(status_msg)
@@ -36,7 +44,7 @@ impl MenuBottomBar {
     }
 
     // Layout of whole bottom bar
-    fn layout(area: Rect) -> std::rc::Rc<[Rect]> {
+    fn layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -47,7 +55,7 @@ impl MenuBottomBar {
     }
 
     // Layout for status
-    fn status_layout(area: Rect) -> std::rc::Rc<[Rect]> {
+    fn status_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -59,11 +67,11 @@ impl MenuBottomBar {
     }
 
     // Return status with corresponding theme color
-    fn status(state: &ApplicationState, theme: &ThemeColors) -> (&'static str, Color) {
-        if state.any_unsaved_changes() {
-            ("● Unsaved ", theme.error)
+    fn status(&self) -> (&str, Color) {
+        if self.state.any_unsaved_changes() {
+            ("● Unsaved ", self.theme.error)
         } else {
-            ("✓ Saved ", theme.success)
+            ("✓ Saved ", self.theme.success)
         }
     }
 }
@@ -78,14 +86,17 @@ mod tests {
     fn should_return_status_for_bottom_bar() {
         let mut state: ApplicationState = ApplicationState::default();
         state.saved_todos_hash = state.calculate_todos_hash();
-        let mut status = MenuBottomBar::status(&state, &ThemeColors::TOKYO_NIGHT);
+
+        let mut bottom: BottomBarWidget = BottomBarWidget::new(&state, &ThemeColors::TOKYO_NIGHT);
+        let mut status: (&str, Color) = bottom.status();
 
         assert!(!state.any_unsaved_changes());
         assert_eq!(status.0, "✓ Saved ");
         assert_eq!(status.1, Color::Rgb(158, 206, 106));
 
         state.append(Todo::new("test", "test", None)).unwrap();
-        status = MenuBottomBar::status(&state, &ThemeColors::TOKYO_NIGHT);
+        bottom = BottomBarWidget::new(&state, &ThemeColors::TOKYO_NIGHT);
+        status = bottom.status();
 
         assert!(state.any_unsaved_changes());
         assert_ne!(status.0, "✓ Saved ");

@@ -6,25 +6,22 @@ pub const MIN_HEIGHT: u16 = 24;
 
 // Get main_layout for menu widget
 pub fn main_layout(area: Rect) -> (Rect, Rect, Rect) {
-    let chunks = Layout::default()
+    let [upper_area, bottom_area] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(2)])
-        .split(area);
+        .areas(area);
 
-    let upper_area = chunks[0];
-    let bottom_area = chunks[1];
-
-    let body_chunks = Layout::default()
+    let [sidebar, main] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
-        .split(upper_area);
+        .areas(upper_area);
 
-    (body_chunks[0], body_chunks[1], bottom_area)
+    (sidebar, main, bottom_area)
 }
 
 // Center a widget in a rect
-pub fn center(percent_x: u16, percent_y: u16, rect: Rect) -> Rect {
-    let popup_layout = Layout::default()
+pub fn center(rect: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let widget_area = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Percentage((100 - percent_y) / 2),
@@ -40,7 +37,7 @@ pub fn center(percent_x: u16, percent_y: u16, rect: Rect) -> Rect {
             Constraint::Percentage(percent_x),
             Constraint::Percentage((100 - percent_x) / 2),
         ])
-        .split(popup_layout[1])[1]
+        .split(widget_area[1])[1]
 }
 
 // Check if terminal/frame area is small

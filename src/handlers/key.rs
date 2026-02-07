@@ -242,8 +242,8 @@ mod tests {
     use super::*;
     use crate::{
         models::Todo,
-        state::{ApplicationResult, ApplicationState},
-        ui::{AdaptiveScroll, FieldType, Popup},
+        state::{AdaptiveScroll, ApplicationResult, ApplicationState},
+        ui::{FieldType, Popup},
     };
     use std::{
         fs::{self, File},

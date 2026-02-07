@@ -1,9 +1,8 @@
 use crate::{
     enums::ApplicationMode,
     state::{ApplicationState, UIState},
-    theme::ThemeColors,
 };
-use ratatui::Frame;
+use ratatui::{Frame, widgets::Widget};
 
 pub struct Renderer;
 
@@ -15,36 +14,34 @@ impl Renderer {
         ui: &UIState,
         mode: ApplicationMode,
     ) {
-        use super::Fallback;
-        use crate::ui::{Menu, is_terminal_small, main_layout};
+        use crate::{
+            theme::ThemeColors,
+            ui::{Dashboard, FeedbackKind, FeedbackWidget, is_terminal_small},
+        };
         use ratatui::{
             layout::Rect,
-            style::{Modifier, Style},
+            style::{Style, Stylize},
             widgets::{Block, Clear},
         };
 
-        let theme_colors: ThemeColors = ui.theme.colors();
+        let colors: ThemeColors = ui.theme.colors();
         let area: Rect = frame.area();
 
         if is_terminal_small(area.width, area.height) {
-            Fallback::render(frame, area, &theme_colors);
+            FeedbackWidget::new(FeedbackKind::SmallTerminal, &colors)
+                .render(area, frame.buffer_mut());
             return;
         }
 
-        let layouts: (Rect, Rect, Rect) = main_layout(area);
-        Menu::render(frame, layouts, state, ui, &mode);
+        Dashboard::new(state, ui, &mode, &colors).render(frame, area);
 
-        let blackout: Block = Block::default().style(
-            Style::default()
-                .bg(theme_colors.modal_bg)
-                .add_modifier(Modifier::DIM),
-        );
+        let blackout: Block = Block::default().style(Style::default().bg(colors.modal_bg).dim());
 
         if let Some(dialog) = &ui.modal {
             let dialog_area: Rect = dialog.modal.area(area);
             frame.render_widget(&blackout, area);
             frame.render_widget(Clear, dialog_area);
-            dialog.modal.render(frame, dialog_area, &theme_colors);
+            dialog.modal.render(frame, dialog_area, &colors);
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    enums::{ApplicationMode, FocusArea},
+    enums::ApplicationMode,
     models::{Filter, Todo},
     state::UIState,
     theme::ThemeColors,
@@ -13,74 +13,84 @@ use ratatui::{
     widgets::List,
 };
 
-pub struct MenuSidebar;
+pub struct SidebarWidget<'a> {
+    ui: &'a UIState<'a>,
+    todos: &'a [Todo],
+    mode: &'a ApplicationMode,
+    theme: &'a ThemeColors,
+}
 
-impl MenuSidebar {
-    pub fn render(
-        frame: &mut Frame,
-        area: Rect,
-        ui: &UIState,
-        theme: &ThemeColors,
-        todos: &[Todo],
-        mode: &ApplicationMode,
-    ) {
-        use ratatui::{
-            style::{Style, Stylize},
-            text::Line,
-            widgets::{Block, List, ListState, Paragraph},
-        };
+impl<'a> SidebarWidget<'a> {
+    pub fn new(
+        ui: &'a UIState,
+        todos: &'a [Todo],
+        mode: &'a ApplicationMode,
+        theme: &'a ThemeColors,
+    ) -> Self {
+        Self {
+            ui,
+            todos,
+            mode,
+            theme,
+        }
+    }
 
-        let (hotkeys, hotkeys_len): (&str, u16) = Self::hotkeys(mode);
+    // Rendering
+    pub fn render(&self, frame: &mut Frame, area: Rect) {
+        use crate::enums::FocusArea;
+        use ratatui::widgets::{Block, ListState, Paragraph};
 
-        let sidebar_layout: std::rc::Rc<[Rect]> = Self::layout(area, hotkeys_len + 4);
-        let focused_style: Style = ui.focused_on(&FocusArea::LeftPanel);
+        let (hotkeys, hotkeys_len): (&str, u16) = self.hotkeys();
+
+        let sidebar_layout: std::rc::Rc<[Rect]> = self.layout(area, hotkeys_len + 4);
+        let focused_style: Style = self.ui.focused_on(&FocusArea::LeftPanel);
 
         let filters_block: Block = Block::bordered()
             .title(" Filters ")
             .border_style(focused_style)
-            .bg(theme.bg_dim);
+            .bg(self.theme.bg_dim);
 
         let filters_inner_area: Rect = filters_block.inner(sidebar_layout[0]);
-        let filter_tab_layout: std::rc::Rc<[Rect]> = Self::filters_tab_layout(filters_inner_area);
+        let filter_tab_layout: std::rc::Rc<[Rect]> = self.filters_tab_layout(filters_inner_area);
 
-        let query = ui.search_query();
-        let list: List = Self::construct_list(todos, &ui.current_filter, &query, theme);
+        let query: String = self.ui.search_query();
+        let list: List = self.construct_list(&query);
 
         let mut state: ListState = ListState::default();
-        state.select(Some(ui.current_filter.index()));
+        state.select(Some(self.ui.current_filter.index()));
 
         frame.render_widget(filters_block, sidebar_layout[0]);
         frame.render_stateful_widget(list, filter_tab_layout[1], &mut state);
 
         let summary_block: Block = Block::bordered()
             .title(" Summary ")
-            .border_style(Style::default().fg(theme.border))
-            .bg(theme.bg_dim);
+            .border_style(Style::default().fg(self.theme.border))
+            .bg(self.theme.bg_dim);
 
         let summary_inner_area: Rect = summary_block.inner(sidebar_layout[1]);
-        let summary_inner_layout: std::rc::Rc<[Rect]> = Self::summary_layout(summary_inner_area);
-        let summary_text: Vec<Line> = Self::summary_text(todos, theme);
+        let summary_inner_layout: std::rc::Rc<[Rect]> = self.summary_layout(summary_inner_area);
+        let summary_text: Vec<Line> = self.summary_text();
 
         frame.render_widget(summary_block, sidebar_layout[1]);
         frame.render_widget(Paragraph::new(summary_text), summary_inner_layout[1]);
 
         let hotkeys_block: Block = Block::bordered()
             .title(" Hotkeys ")
-            .border_style(Style::default().fg(theme.border))
-            .bg(theme.bg_dim);
+            .border_style(Style::default().fg(self.theme.border))
+            .bg(self.theme.bg_dim);
 
         let hotkeys_inner_area: Rect = hotkeys_block.inner(sidebar_layout[2]);
-        let hotkeys_layout: std::rc::Rc<[Rect]> = Self::hotkeys_layout(hotkeys_inner_area);
+        let hotkeys_layout: std::rc::Rc<[Rect]> = self.hotkeys_layout(hotkeys_inner_area);
 
         frame.render_widget(hotkeys_block, sidebar_layout[2]);
         frame.render_widget(
-            Paragraph::new(hotkeys).style(Style::default().fg(theme.text_primary)),
+            Paragraph::new(hotkeys).style(Style::default().fg(self.theme.text_primary)),
             hotkeys_layout[1],
         );
     }
 
     // Layout for sidebar
-    fn layout(area: Rect, hotkeys_length: u16) -> std::rc::Rc<[Rect]> {
+    fn layout(&self, area: Rect, hotkeys_length: u16) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -92,7 +102,7 @@ impl MenuSidebar {
     }
 
     // Layout for filters tab
-    fn filters_tab_layout(area: Rect) -> std::rc::Rc<[Rect]> {
+    fn filters_tab_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -103,7 +113,7 @@ impl MenuSidebar {
     }
 
     // Layout for summary
-    fn summary_layout(area: Rect) -> std::rc::Rc<[Rect]> {
+    fn summary_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -114,7 +124,7 @@ impl MenuSidebar {
     }
 
     // Layout for hotkeys
-    fn hotkeys_layout(area: Rect) -> std::rc::Rc<[Rect]> {
+    fn hotkeys_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -125,23 +135,18 @@ impl MenuSidebar {
     }
 
     // Construct a list based on filtered todo values
-    fn construct_list(
-        todos: &[Todo],
-        current_filter: &Filter,
-        query: &str,
-        theme: &ThemeColors,
-    ) -> List<'static> {
+    fn construct_list(&self, query: &str) -> List<'static> {
         use ratatui::widgets::ListItem;
 
         let items: Vec<ListItem> = Filter::all_variants()
             .iter()
             .map(|tab| {
-                let count = tab.count(todos, query);
+                let count = tab.count(self.todos, query);
                 let text = format!(" {} ({})", tab.to_string(), count);
-                let style = if tab == current_filter {
-                    Style::default().fg(theme.accent).bold()
+                let style = if *tab == self.ui.current_filter {
+                    Style::default().fg(self.theme.accent).bold()
                 } else {
-                    Style::default().fg(theme.text_primary)
+                    Style::default().fg(self.theme.text_primary)
                 };
 
                 ListItem::new(Span::styled(text, style))
@@ -149,16 +154,16 @@ impl MenuSidebar {
             .collect();
 
         List::new(items)
-            .highlight_style(Style::default().bg(theme.surface))
+            .highlight_style(Style::default().bg(self.theme.surface))
             .highlight_symbol("→ ")
     }
 
     // Get summary text
-    fn summary_text(todos: &[Todo], theme: &ThemeColors) -> Vec<Line<'static>> {
-        use ratatui::text::Span;
-
-        let (total, completed): (usize, usize) =
-            (todos.len(), todos.iter().filter(|t| t.completed).count());
+    fn summary_text(&self) -> Vec<Line<'static>> {
+        let (total, completed): (usize, usize) = (
+            self.todos.len(),
+            self.todos.iter().filter(|t| t.completed).count(),
+        );
 
         let percent: u8 = if total > 0 {
             (completed as f32 / total as f32 * 100.0) as u8
@@ -171,23 +176,26 @@ impl MenuSidebar {
 
         vec![
             Line::from(vec![
-                Span::styled(" Theme: ", Style::default().fg(theme.text_dim)),
-                Span::styled(theme.name, Style::default().fg(theme.accent).bold()),
-            ]),
-            Line::from(vec![
-                Span::styled(" Progress: ", Style::default().fg(theme.text_dim)),
+                Span::styled(" Theme: ", Style::default().fg(self.theme.text_dim)),
                 Span::styled(
-                    format!("{}%", percent),
-                    Style::default().fg(theme.success).bold(),
+                    self.theme.name,
+                    Style::default().fg(self.theme.accent).bold(),
                 ),
             ]),
-            Line::from(Span::styled(gauge, Style::default().fg(theme.success))),
+            Line::from(vec![
+                Span::styled(" Progress: ", Style::default().fg(self.theme.text_dim)),
+                Span::styled(
+                    format!("{}%", percent),
+                    Style::default().fg(self.theme.success).bold(),
+                ),
+            ]),
+            Line::from(Span::styled(gauge, Style::default().fg(self.theme.success))),
         ]
     }
 
     // Get hotkeys depending on application mode
-    fn hotkeys(mode: &ApplicationMode) -> (&'static str, u16) {
-        match mode {
+    fn hotkeys(&self) -> (&str, u16) {
+        match self.mode {
             ApplicationMode::Browsing => (
                 " Esc/q -> Quit \n a -> Add \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate ",
                 7,
@@ -223,11 +231,19 @@ mod tests {
             },
         ];
 
-        let summary = MenuSidebar::summary_text(&todos, &ThemeColors::GRUVBOX);
-        let line_text = summary[1].to_string();
+        let ui = UIState::default();
+        let sidebar: SidebarWidget = SidebarWidget::new(
+            &ui,
+            &todos,
+            &ApplicationMode::Browsing,
+            &ThemeColors::GRUVBOX,
+        );
+
+        let summary: Vec<Line> = sidebar.summary_text();
+        let line_text: String = summary[1].to_string();
         assert!(line_text.contains("50%"));
 
-        let gauge_text = summary[2].to_string();
+        let gauge_text: String = summary[2].to_string();
         assert!(gauge_text.contains("■■■■■□□□□□"));
     }
 
@@ -235,7 +251,15 @@ mod tests {
     fn should_make_summary_for_empty_todos() {
         let todos: Vec<Todo> = vec![];
 
-        let summary = MenuSidebar::summary_text(&todos, &ThemeColors::GRUVBOX);
+        let ui = UIState::default();
+        let sidebar: SidebarWidget = SidebarWidget::new(
+            &ui,
+            &todos,
+            &ApplicationMode::Browsing,
+            &ThemeColors::GRUVBOX,
+        );
+
+        let summary: Vec<Line> = sidebar.summary_text();
         assert!(summary[1].to_string().contains("0%"));
         assert!(summary[2].to_string().contains("□□□□□□□□□□"));
     }
@@ -243,21 +267,47 @@ mod tests {
     #[test]
     fn should_construct_list_with_highlighting() {
         let todos = vec![];
-        let current_filter: Filter = Filter::All;
 
-        let list: List =
-            MenuSidebar::construct_list(&todos, &current_filter, "", &ThemeColors::GRUVBOX);
+        let mut ui = UIState::default();
+        ui.current_filter = Filter::All;
+        let sidebar: SidebarWidget = SidebarWidget::new(
+            &ui,
+            &todos,
+            &ApplicationMode::Browsing,
+            &ThemeColors::GRUVBOX,
+        );
+
+        let list: List = sidebar.construct_list("");
         assert_eq!(list.len(), Filter::all_variants().len());
     }
 
     #[test]
-    fn should_switch_hotkeys_depending_on_mode() {
-        let (browsing_keys, browsing_key_len) = MenuSidebar::hotkeys(&ApplicationMode::Browsing);
-        let (task_keys, task_key_len) = MenuSidebar::hotkeys(&ApplicationMode::Form);
+    fn should_return_hotkeys_for_browsing_mode() {
+        let todos = vec![];
+        let ui = UIState::default();
+        let sidebar: SidebarWidget = SidebarWidget::new(
+            &ui,
+            &todos,
+            &ApplicationMode::Browsing,
+            &ThemeColors::GRUVBOX,
+        );
+
+        let (browsing_keys, browsing_key_len) = sidebar.hotkeys();
 
         assert!(browsing_keys.contains("Quit"));
+        assert_eq!(browsing_key_len, 7);
+    }
+
+    #[test]
+    fn should_return_hotkeys_for_form_mode() {
+        let todos = vec![];
+        let ui = UIState::default();
+        let sidebar: SidebarWidget =
+            SidebarWidget::new(&ui, &todos, &ApplicationMode::Form, &ThemeColors::GRUVBOX);
+
+        let (task_keys, task_key_len) = sidebar.hotkeys();
+
         assert!(task_keys.contains("Cancel"));
-        assert_ne!(browsing_keys, task_keys);
-        assert_ne!(browsing_key_len, task_key_len);
+        assert_eq!(task_key_len, 3);
     }
 }

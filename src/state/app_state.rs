@@ -1,7 +1,7 @@
 use crate::{
     models::{Filter, Priority, Todo},
-    state::{ApplicationError, StorageError, TodoError},
-    ui::{AdaptiveScroll, Notification},
+    state::{AdaptiveScroll, ApplicationError, StorageError, TodoError},
+    ui::Notification,
 };
 use chrono::Local;
 use ratatui::widgets::TableState;

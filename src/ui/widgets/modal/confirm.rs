@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Style, Stylize},
     text::{Line, Span},
 };
 
@@ -61,16 +61,12 @@ impl Confirm {
     fn button_styles(&self, theme: &ThemeColors) -> (Style, Style) {
         match self.select {
             ConfirmOption::Yes => (
-                Style::default()
-                    .fg(theme.success)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(theme.success).bold(),
                 Style::default().fg(theme.text_dim),
             ),
             ConfirmOption::Cancel => (
                 Style::default().fg(theme.text_dim),
-                Style::default()
-                    .fg(theme.error)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(theme.error).bold(),
             ),
         }
     }
@@ -92,7 +88,7 @@ impl Confirm {
 impl Modal for Confirm {
     // Calculate area for confirm
     fn area(&self, frame_area: Rect) -> Rect {
-        center(CONFIRM_WIDTH, CONFIRM_HEIGHT, frame_area)
+        center(frame_area, CONFIRM_WIDTH, CONFIRM_HEIGHT)
     }
 
     // Rendering
@@ -255,9 +251,7 @@ mod tests {
         assert_eq!(styles.0, Style::default().fg(Color::Rgb(168, 153, 132)));
         assert_eq!(
             styles.1,
-            Style::default()
-                .fg(Color::Rgb(251, 73, 52))
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Rgb(251, 73, 52)).bold()
         );
 
         confirm.select = ConfirmOption::Yes;
@@ -265,9 +259,7 @@ mod tests {
 
         assert_eq!(
             styles.0,
-            Style::default()
-                .fg(Color::Rgb(184, 187, 38))
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Rgb(184, 187, 38)).bold()
         );
         assert_eq!(styles.1, Style::default().fg(Color::Rgb(168, 153, 132)));
     }
@@ -286,9 +278,7 @@ mod tests {
             Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
             Span::styled(
                 "Cancel",
-                Style::default()
-                    .fg(Color::Rgb(251, 73, 52))
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::Rgb(251, 73, 52)).bold(),
             ),
             Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
         ]);
@@ -301,12 +291,7 @@ mod tests {
 
         expected_line = Line::from(vec![
             Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
-            Span::styled(
-                "Yes",
-                Style::default()
-                    .fg(Color::Rgb(184, 187, 38))
-                    .add_modifier(Modifier::BOLD),
-            ),
+            Span::styled("Yes", Style::default().fg(Color::Rgb(184, 187, 38)).bold()),
             Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
             Span::raw("    "),
             Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
