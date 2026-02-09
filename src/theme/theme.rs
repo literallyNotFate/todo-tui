@@ -1,5 +1,6 @@
 use super::ThemeColors;
 
+/// Themes for application
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum Theme {
     #[default]
@@ -11,6 +12,7 @@ pub enum Theme {
 }
 
 impl Theme {
+    /// Return colors based on theme selection
     pub fn colors(&self) -> ThemeColors {
         match self {
             Theme::Gruvbox => ThemeColors::GRUVBOX,
@@ -21,6 +23,7 @@ impl Theme {
         }
     }
 
+    /// Next theme
     pub fn next(&self) -> Self {
         match self {
             Self::Gruvbox => Self::Catppuccin,
@@ -32,7 +35,7 @@ impl Theme {
     }
 }
 
-// Unit-tests for themes
+/// Unit-tests for themes
 #[cfg(test)]
 mod tests {
     use super::*;

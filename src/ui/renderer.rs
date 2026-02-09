@@ -4,6 +4,7 @@ use crate::{
 };
 use ratatui::{Frame, widgets::Widget};
 
+/// Application render
 pub struct Renderer;
 
 impl Renderer {

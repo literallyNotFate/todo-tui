@@ -1,7 +1,8 @@
-use super::{Priority, Todo};
+use super::Todo;
 use crate::traits::InteractableEnum;
 use chrono::Local;
 
+/// Selected filter enum
 #[derive(Default, Clone, Copy, Debug, PartialEq)]
 pub enum Filter {
     #[default]
@@ -39,25 +40,18 @@ impl Filter {
         self.apply(todos, query).len()
     }
 
-    pub fn apply(&self, todos: &[Todo], query: &str) -> Vec<Todo> {
+    pub fn apply<'a>(&self, todos: &'a [Todo], query: &str) -> Vec<&'a Todo> {
+        let query: String = query.to_lowercase().trim().to_string();
+        let today = Local::now().date_naive();
+
         todos
             .iter()
             .filter(|t| {
-                let matches_type = match self {
-                    Self::All => true,
-                    Self::Active => !t.completed,
-                    Self::Completed => t.completed,
-                    Self::HighPriority => matches!(t.priority, Priority::High),
-                    Self::Today => {
-                        let today = Local::now().date_naive();
-                        t.created_at.with_timezone(&Local).date_naive() == today
-                    }
-                };
-
+                let matches_type = t.matches_filter(self, &today);
                 let matches_query = query.is_empty() || t.title.to_lowercase().contains(&query);
+
                 matches_type && matches_query
             })
-            .cloned()
             .collect()
     }
 }
@@ -66,6 +60,7 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Priority;
     use chrono::{Duration, Utc};
 
     fn setup_test_todos() -> Vec<Todo> {

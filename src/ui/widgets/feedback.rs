@@ -10,7 +10,7 @@ use ratatui::{
     widgets::{Block, Clear, Paragraph, Widget, Wrap},
 };
 
-// Type of message
+/// Type of feedback message
 #[derive(Debug, PartialEq)]
 pub enum FeedbackKind {
     EmptyList,
@@ -30,6 +30,7 @@ impl<'a> FeedbackWidget<'a> {
 }
 
 impl Widget for FeedbackWidget<'_> {
+    /// Feedback rendering
     fn render(self, area: Rect, buf: &mut Buffer) {
         let result_area: Rect = center(area, 50, 50);
         let colors: (Color, Color) = self.dimension_colors(&area);
@@ -63,7 +64,7 @@ impl Widget for FeedbackWidget<'_> {
 }
 
 impl<'a> FeedbackWidget<'a> {
-    // Render message based on feedback kind
+    /// Return message based on feedback kind
     fn message(&self, width: &u16, height: &u16, colors: (Color, Color)) -> Vec<Line<'static>> {
         use ratatui::text::Span;
 
@@ -112,7 +113,7 @@ impl<'a> FeedbackWidget<'a> {
         message
     }
 
-    // Get colors for width/height while resized
+    /// Get colors for width/height while resized
     fn dimension_colors(&self, area: &Rect) -> (Color, Color) {
         let width_color = if area.width >= MIN_WIDTH {
             self.theme.success
@@ -130,7 +131,7 @@ impl<'a> FeedbackWidget<'a> {
     }
 }
 
-// Unit-tests for feedback widget
+/// Unit-tests for feedback widget
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -2,7 +2,6 @@ use crate::{
     theme::ThemeColors,
     traits::{Modal, ModalResult},
     ui::center,
-    utils::constants::{CONFIRM_HEIGHT, CONFIRM_WIDTH},
 };
 use ratatui::{
     Frame,
@@ -12,18 +11,24 @@ use ratatui::{
     text::{Line, Span},
 };
 
+pub const CONFIRM_WIDTH: u16 = 30;
+pub const CONFIRM_HEIGHT: u16 = 25;
+
+/// Confirm selection options
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfirmOption {
     Yes,
     Cancel,
 }
 
+/// Popup modal widget
 pub struct Confirm {
     pub message: String,
     pub select: ConfirmOption,
 }
 
 impl Confirm {
+    /// New confirm widget
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -31,7 +36,7 @@ impl Confirm {
         }
     }
 
-    // Vertical layout for inner content
+    /// Vertical layout for inner content
     fn vertical_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
@@ -45,7 +50,7 @@ impl Confirm {
             .split(area)
     }
 
-    // Horizontal layout for inner content
+    /// Horizontal layout for inner content
     fn horizontal_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Horizontal)
@@ -57,7 +62,7 @@ impl Confirm {
             .split(area)
     }
 
-    // Style for buttons based on selection
+    /// Style for buttons based on selection
     fn button_styles(&self, theme: &ThemeColors) -> (Style, Style) {
         match self.select {
             ConfirmOption::Yes => (
@@ -71,7 +76,7 @@ impl Confirm {
         }
     }
 
-    // Render buttons
+    /// Render buttons
     fn button_line(&self, styles: (Style, Style), theme: &ThemeColors) -> Line<'static> {
         Line::from(vec![
             Span::styled("[ ", Style::default().fg(theme.text_primary)),
@@ -86,12 +91,12 @@ impl Confirm {
 }
 
 impl Modal for Confirm {
-    // Calculate area for confirm
+    /// Calculate area for confirm
     fn area(&self, frame_area: Rect) -> Rect {
         center(frame_area, CONFIRM_WIDTH, CONFIRM_HEIGHT)
     }
 
-    // Rendering
+    /// Confirm rendering
     fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
         use ratatui::{
             layout::Alignment,
@@ -126,7 +131,7 @@ impl Modal for Confirm {
         frame.render_widget(buttons_widget, buttons_area);
     }
 
-    // Key event handling
+    /// Key event handling
     fn handle_key(&mut self, key: KeyCode) -> Option<ModalResult> {
         match key {
             KeyCode::Char('y') => return Some(ModalResult::Confirmed),
@@ -146,13 +151,12 @@ impl Modal for Confirm {
     }
 }
 
-// Unit-tests for confirm widget
+/// Unit-tests for confirm widget
 #[cfg(test)]
 mod tests {
     use super::*;
     use ratatui::style::Color;
 
-    // Helper function to create frame for popup
     fn create_helper_frame() -> Rect {
         Rect::new(0, 0, 100, 100)
     }

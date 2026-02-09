@@ -1,9 +1,9 @@
-use crate::{
-    enums::WidgetResponse, theme::ThemeColors, traits::Input,
-    utils::constants::TEXT_INPUT_MAX_CHARS,
-};
+use crate::{enums::WidgetResponse, theme::ThemeColors, traits::Input};
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 
+pub const TEXT_INPUT_MAX_CHARS: usize = 256;
+
+/// Input text widget
 #[derive(Debug, Clone)]
 pub struct TextInput {
     pub title: String,
@@ -13,6 +13,7 @@ pub struct TextInput {
 }
 
 impl TextInput {
+    /// New text input
     pub fn new() -> Self {
         Self {
             buffer: String::default(),
@@ -22,6 +23,7 @@ impl TextInput {
         }
     }
 
+    /// New edit text input
     pub fn from(buffer: impl Into<String>) -> Self {
         let initial_buffer: String = buffer.into();
         let cursor_value: usize = initial_buffer.len();
@@ -34,6 +36,7 @@ impl TextInput {
         }
     }
 
+    /// Scrolls if text too big
     fn scroll(&self, area_width: usize) -> usize {
         if self.cursor < area_width {
             0
@@ -42,6 +45,7 @@ impl TextInput {
         }
     }
 
+    /// Displays the buffer content using scroll
     fn displayed_content(&self, area_width: usize, scroll: usize) -> String {
         self.buffer.chars().skip(scroll).take(area_width).collect()
     }
@@ -59,6 +63,7 @@ impl Input for TextInput {
         self
     }
 
+    /// Key event handling
     fn handle_key(&mut self, key: &KeyCode) -> WidgetResponse {
         match key {
             KeyCode::Enter => return WidgetResponse::Submit,
@@ -91,11 +96,13 @@ impl Input for TextInput {
         WidgetResponse::Continue
     }
 
+    /// Resetting input
     fn reset(&mut self) {
         self.buffer.clear();
         self.cursor = 0;
     }
 
+    /// Text input rendering
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
         use ratatui::{
             layout::Position,
@@ -124,6 +131,7 @@ impl Input for TextInput {
         }
     }
 
+    /// Return styles if input is being focused
     fn on_focused(&self, focused: bool, theme: &ThemeColors) -> (Style, Style) {
         if focused {
             (
@@ -139,7 +147,7 @@ impl Input for TextInput {
     }
 }
 
-// Unit-tests for text input
+/// Unit-tests for text input
 #[cfg(test)]
 mod tests {
     use super::*;

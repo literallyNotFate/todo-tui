@@ -1,4 +1,4 @@
-// Simple scroll state (for task description)
+/// Simple scroll state (for task description)
 #[derive(Debug, Default)]
 pub struct AdaptiveScroll {
     pub current: u16,
@@ -22,7 +22,7 @@ impl AdaptiveScroll {
     }
 }
 
-// Unit-tests for adaptive scroll
+/// Unit-tests for adaptive scroll
 #[cfg(test)]
 mod tests {
     use super::*;

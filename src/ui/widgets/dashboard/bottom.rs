@@ -5,6 +5,7 @@ use ratatui::{
     style::Color,
 };
 
+/// Bottom bar widget
 pub struct BottomBarWidget<'a> {
     state: &'a ApplicationState,
     theme: &'a ThemeColors,
@@ -15,7 +16,7 @@ impl<'a> BottomBarWidget<'a> {
         Self { state, theme }
     }
 
-    // Rendering
+    /// Bottom bar rendering
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         use ratatui::{layout::Alignment, style::Stylize, widgets::Paragraph};
 
@@ -43,7 +44,7 @@ impl<'a> BottomBarWidget<'a> {
         );
     }
 
-    // Layout of whole bottom bar
+    /// Layout of whole bottom bar
     fn layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
@@ -54,7 +55,7 @@ impl<'a> BottomBarWidget<'a> {
             .split(area)
     }
 
-    // Layout for status
+    /// Layout for status
     fn status_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Horizontal)
@@ -66,7 +67,7 @@ impl<'a> BottomBarWidget<'a> {
             .split(area)
     }
 
-    // Return status with corresponding theme color
+    /// Return status with corresponding theme color
     fn status(&self) -> (&str, Color) {
         if self.state.any_unsaved_changes() {
             ("● Unsaved ", self.theme.error)
@@ -76,7 +77,7 @@ impl<'a> BottomBarWidget<'a> {
     }
 }
 
-// Unit-tests for bottom bar
+/// Unit-tests for bottom bar
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,7 +86,7 @@ mod tests {
     #[test]
     fn should_return_status_for_bottom_bar() {
         let mut state: ApplicationState = ApplicationState::default();
-        state.saved_todos_hash = state.calculate_todos_hash();
+        state.saved_todos_hash = state.hash_state();
 
         let mut bottom: BottomBarWidget = BottomBarWidget::new(&state, &ThemeColors::TOKYO_NIGHT);
         let mut status: (&str, Color) = bottom.status();
@@ -94,7 +95,7 @@ mod tests {
         assert_eq!(status.0, "✓ Saved ");
         assert_eq!(status.1, Color::Rgb(158, 206, 106));
 
-        state.append(Todo::new("test", "test", None)).unwrap();
+        state.todos.push(Todo::new("test", "test", None));
         bottom = BottomBarWidget::new(&state, &ThemeColors::TOKYO_NIGHT);
         status = bottom.status();
 

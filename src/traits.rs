@@ -1,7 +1,7 @@
 use crate::{enums::WidgetResponse, theme::ThemeColors};
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 
-// Modal trait for interactable widgets (handle_key()) for popup and confirm
+/// Modal trait for interactable widgets such as popup and confirm
 pub trait Modal {
     fn area(&self, frame_area: Rect) -> Rect;
     fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors);
@@ -14,7 +14,7 @@ pub enum ModalResult {
     Cancelled,
 }
 
-// Modal actions (remove todo, clear, save, none - for popup)
+/// Actions that being performed after confirmation
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModalAction {
     None,
@@ -24,7 +24,7 @@ pub enum ModalAction {
     UnsavedExit,
 }
 
-// Trait made for EnumInput field, so you are able to switch enum value (in that case Priority/Filter)
+/// Trait made for EnumInput field, so you are able to switch enum value (in that case Priority/Filter)
 pub trait InteractableEnum: Sized + Copy + PartialEq + 'static {
     fn all_variants() -> &'static [Self];
     fn to_string(&self) -> &'static str;
@@ -49,7 +49,7 @@ pub trait InteractableEnum: Sized + Copy + PartialEq + 'static {
     }
 }
 
-// Trait for input widgets (TextInput/EnumInput<T>)
+/// Trait for input widgets (TextInput/EnumInput<T>)
 pub trait Input {
     fn title(self, title: impl Into<String>) -> Self;
     fn handle_key(&mut self, key: &KeyCode) -> WidgetResponse;

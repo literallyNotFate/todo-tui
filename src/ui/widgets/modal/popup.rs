@@ -2,7 +2,6 @@ use crate::{
     theme::ThemeColors,
     traits::{Modal, ModalResult},
     ui::center,
-    utils::constants::{POPUP_HEIGHT, POPUP_WIDTH},
 };
 use ratatui::{
     Frame,
@@ -12,12 +11,17 @@ use ratatui::{
     text::{Line, Span},
 };
 
+pub const POPUP_WIDTH: u16 = 40;
+pub const POPUP_HEIGHT: u16 = 25;
+
+/// Defines how popup is getting closed (on any key or on specific)
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupCloseBehavior {
     AnyKey,
     Specific(KeyCode),
 }
 
+/// Type of a popup
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupKind {
     Info,
@@ -25,6 +29,7 @@ pub enum PopupKind {
     Success,
 }
 
+/// Popup modal widget
 #[derive(Debug, Clone)]
 pub struct Popup {
     pub message: String,
@@ -34,6 +39,7 @@ pub struct Popup {
 }
 
 impl Popup {
+    /// Creating info popup template
     pub fn info(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Info,
@@ -43,6 +49,7 @@ impl Popup {
         }
     }
 
+    /// Creating success popup template
     pub fn success(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Success,
@@ -50,6 +57,7 @@ impl Popup {
         }
     }
 
+    /// Creating error popup template
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Error,
@@ -72,7 +80,7 @@ impl Popup {
         self
     }
 
-    // Vertical layout for inner content
+    /// Vertical layout for inner content
     fn vertical_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
@@ -80,7 +88,7 @@ impl Popup {
             .split(area)
     }
 
-    // Horizontal layout for inner content
+    /// Horizontal layout for inner content
     fn horizontal_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Horizontal)
@@ -92,7 +100,7 @@ impl Popup {
             .split(area)
     }
 
-    // Generate bottom title based on close behavior
+    /// Generate bottom title based on close behavior
     fn bottom_title(&self, theme: &ThemeColors) -> Line<'static> {
         let key: String = match self.close_behavior {
             PopupCloseBehavior::AnyKey => "any key".to_string(),
@@ -115,7 +123,7 @@ impl Popup {
         .centered()
     }
 
-    // Return color based on kind
+    /// Return color based on kind
     fn color_on_kind(&self, theme: &ThemeColors) -> Color {
         match self.kind {
             PopupKind::Info => theme.accent,
@@ -126,12 +134,12 @@ impl Popup {
 }
 
 impl Modal for Popup {
-    // Calculate area for popup
+    /// Calculate area for popup
     fn area(&self, frame_area: Rect) -> Rect {
         center(frame_area, POPUP_WIDTH, POPUP_HEIGHT)
     }
 
-    // Rendering
+    /// Popup rendering
     fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
         use ratatui::{
             layout::Alignment,
@@ -159,7 +167,7 @@ impl Modal for Popup {
         frame.render_widget(message, message_area);
     }
 
-    // Key event handling
+    /// Key event handling
     fn handle_key(&mut self, key: KeyCode) -> Option<ModalResult> {
         match self.close_behavior {
             PopupCloseBehavior::AnyKey => Some(ModalResult::Cancelled),
@@ -169,12 +177,11 @@ impl Modal for Popup {
     }
 }
 
-// Unit-tests for popup widget
+/// Unit-tests for popup widget
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Helper function to create frame for popup
     fn create_helper_frame() -> Rect {
         Rect::new(0, 0, 100, 100)
     }

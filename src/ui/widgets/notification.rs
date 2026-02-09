@@ -21,6 +21,7 @@ pub struct Notification {
 }
 
 impl Notification {
+    /// Creating success notification template
     pub fn success(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -30,6 +31,7 @@ impl Notification {
         }
     }
 
+    /// Creating error notification template
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -39,7 +41,7 @@ impl Notification {
         }
     }
 
-    // Rendering
+    /// Notification rendering
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
         use ratatui::style::Style;
         use ratatui::widgets::Paragraph;
@@ -54,18 +56,19 @@ impl Notification {
         frame.render_widget(text_block, area);
     }
 
-    // To count remaining seconds for title bottom and check if expired that period
+    /// To count remaining seconds for title bottom and check if that time has been expired
     pub fn remaining_secs(&self) -> u64 {
         self.duration
             .saturating_sub(self.created_at.elapsed())
             .as_secs()
     }
 
+    /// Check whether notification duration time is passed
     pub fn is_expired(&self) -> bool {
         self.created_at.elapsed() >= self.duration
     }
 
-    // Get icon with corresponding color
+    /// Get icon with corresponding color
     fn icon_with_color(&self, theme: &ThemeColors) -> (&'static str, Color) {
         match self.kind {
             NotificationKind::Success => ("✔", theme.success),
@@ -74,13 +77,13 @@ impl Notification {
     }
 }
 
-// Unit-tests for notification widget
+/// Unit-tests for notification widget
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::thread::sleep;
 
-    // Mock application for tick() and automatic notifcation closing
+    /// Mock application for tick() and automatic notifcation closing
     struct MockApplication {
         pub notification: Option<Notification>,
     }

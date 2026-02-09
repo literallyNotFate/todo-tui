@@ -5,6 +5,7 @@ use crate::{
 };
 use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
 
+/// Input widget made for enum types
 #[derive(Debug, Default, Clone)]
 pub struct EnumInput<T> {
     pub title: String,
@@ -29,6 +30,7 @@ where
         self
     }
 
+    /// Key event handling
     fn handle_key(&mut self, key: &KeyCode) -> WidgetResponse {
         match key {
             KeyCode::Enter => return WidgetResponse::Submit,
@@ -41,10 +43,12 @@ where
         WidgetResponse::Continue
     }
 
+    /// Resetting input
     fn reset(&mut self) {
         self.selected = Default::default();
     }
 
+    /// Enum input rendering
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
         use ratatui::widgets::{Block, Paragraph};
 
@@ -60,6 +64,7 @@ where
         frame.render_widget(input, area);
     }
 
+    /// Returns styles if input is being focused
     fn on_focused(&self, focused: bool, theme: &ThemeColors) -> (Style, Style) {
         if focused {
             (

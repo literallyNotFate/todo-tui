@@ -1,4 +1,4 @@
-// Basically shows which area of menu is being selected
+/// Which area of menu is being selected
 #[derive(Default, PartialEq, Debug)]
 pub enum FocusArea {
     #[default]
@@ -6,7 +6,7 @@ pub enum FocusArea {
     MainContent, // Task list/form
 }
 
-// Made for key handling (handles specific controls for each modes)
+/// Which mode user selects (for input handling)
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ApplicationMode {
     Browsing,
@@ -15,7 +15,7 @@ pub enum ApplicationMode {
     Search,
 }
 
-// What is being return from handle_key widget function
+/// What is being returned from handle_key() widget function
 #[derive(Debug, PartialEq)]
 pub enum WidgetResponse {
     Continue,

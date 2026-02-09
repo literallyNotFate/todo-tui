@@ -1,9 +1,10 @@
-use super::Priority;
-use chrono::{DateTime, TimeDelta, Utc};
+use super::{Filter, Priority};
+use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 use uuid::Uuid;
 
+/// Main todo entity with unique id
 #[derive(Serialize, Deserialize, Debug, Clone, Default, Hash)]
 pub struct Todo {
     pub id: Uuid,
@@ -11,29 +12,63 @@ pub struct Todo {
     pub description: String,
     pub completed: bool,
     pub priority: Priority,
+
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl Todo {
+    /// Create new todo object
     pub fn new(
         title: impl Into<String>,
         description: impl Into<String>,
         priority: Option<Priority>,
     ) -> Self {
+        let now: DateTime<Utc> = Utc::now();
         Self {
             id: Uuid::new_v4(),
             title: title.into(),
             description: description.into(),
             completed: false,
             priority: priority.unwrap_or_default(),
-            created_at: Utc::now(),
+            created_at: now,
+            updated_at: now,
         }
     }
 
+    /// Creating new todo based on existing id (for update)
+    pub fn from_id(
+        id: Uuid,
+        title: impl Into<String>,
+        description: impl Into<String>,
+        priority: Option<Priority>,
+    ) -> Self {
+        let now: DateTime<Utc> = Utc::now();
+        Self {
+            id,
+            title: title.into(),
+            description: description.into(),
+            priority: priority.unwrap_or(Priority::Low),
+            completed: false,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Update todo using other todo
+    pub fn update(&mut self, other: Todo) {
+        self.title = other.title;
+        self.description = other.description;
+        self.priority = other.priority;
+        self.updated_at = Utc::now();
+    }
+
+    /// Toggle completed on Enter
     pub fn toggle_completed(&mut self) {
         self.completed = !self.completed;
     }
 
+    /// Return created at string for table
     pub fn time_ago(&self) -> String {
         let now: DateTime<Utc> = Utc::now();
         let time_passed: TimeDelta = now.signed_duration_since(self.created_at);
@@ -65,20 +100,31 @@ impl Todo {
             "just now".to_string()
         }
     }
+
+    /// Checks whether specific todo matches current filter conditions (for filter)
+    pub fn matches_filter(&self, filter: &Filter, today: &NaiveDate) -> bool {
+        match filter {
+            Filter::All => true,
+            Filter::Active => !self.completed,
+            Filter::Completed => self.completed,
+            Filter::HighPriority => self.priority == Priority::High,
+            Filter::Today => self.created_at.with_timezone(&Local).date_naive() == *today,
+        }
+    }
 }
 
-// Unit-tests for todo model (basic methods)
+/// Unit-tests for todo model (basic methods)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Days, Months};
+    use chrono::{Days, Duration, Months};
 
     #[test]
     fn should_create_todo_item() {
         let todo: Todo = Todo::new("Test", "Test", None);
 
         assert_eq!(todo.title, "Test");
-        assert_eq!(todo.title, "Test");
+        assert_eq!(todo.description, "Test");
         assert_eq!(todo.priority, Priority::Low);
         assert!(!todo.completed);
     }
@@ -99,6 +145,36 @@ mod tests {
             Some(uuid::Version::Random),
             "UUID should be version 4"
         );
+    }
+
+    #[test]
+    fn should_return_todo_with_id() {
+        let original_id: Uuid = Uuid::new_v4();
+        let task: Todo =
+            Todo::from_id(original_id, "Original", "Description", Some(Priority::High));
+
+        assert_eq!(task.id, original_id);
+        assert_eq!(task.title, "Original");
+        assert!(!task.completed);
+    }
+
+    #[test]
+    fn should_update_todo_fields() {
+        let mut todo: Todo = Todo::new("Test", "Test", None);
+        todo.completed = true;
+
+        assert_eq!(todo.title, "Test");
+        assert_eq!(todo.description, "Test");
+        assert_eq!(todo.priority, Priority::Low);
+        assert!(todo.completed);
+
+        let new: Todo = Todo::new("Edit", "Edit", Some(Priority::High));
+        todo.update(new);
+
+        assert_eq!(todo.title, "Edit");
+        assert_eq!(todo.description, "Edit");
+        assert_eq!(todo.priority, Priority::High);
+        assert!(todo.completed);
     }
 
     #[test]
@@ -129,5 +205,23 @@ mod tests {
 
         todo.created_at = Utc::now().checked_sub_days(Days::new(365)).unwrap();
         assert_eq!(todo.time_ago(), "1 year ago");
+    }
+
+    #[test]
+    fn should_test_todo_filter_matching() {
+        let today: NaiveDate = Local::now().date_naive();
+        let mut todo = Todo::new("Test", "Desc", Some(Priority::High));
+
+        assert!(todo.matches_filter(&Filter::HighPriority, &today));
+
+        assert!(todo.matches_filter(&Filter::Active, &today));
+        todo.completed = true;
+        assert!(todo.matches_filter(&Filter::Completed, &today));
+        assert!(!todo.matches_filter(&Filter::Active, &today));
+
+        assert!(todo.matches_filter(&Filter::Today, &today));
+
+        todo.created_at = Utc::now() - Duration::days(1);
+        assert!(!todo.matches_filter(&Filter::Today, &today));
     }
 }

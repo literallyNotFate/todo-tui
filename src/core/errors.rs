@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-// Errors in application (storage - refers to save/load, todo - state methods)
+/// Errors in application (storage - refers to save/load, todo - state methods)
 #[derive(Error, Debug, PartialEq)]
 pub enum ApplicationError {
     #[error("{0}")]
@@ -9,6 +9,7 @@ pub enum ApplicationError {
     Storage(StorageError),
 }
 
+/// Errors related to todo operations only
 #[derive(Error, Debug, PartialEq)]
 pub enum TodoError {
     #[error("No task was selected!")]
@@ -19,8 +20,11 @@ pub enum TodoError {
     EmptyTitle,
     #[error("Cannot clear the tasks! The list is already empty!")]
     ListEmpty,
+    #[error("Cannot move the tasks!")]
+    MoveForbidden,
 }
 
+/// Errors related to storage operations only
 #[derive(Error, Debug, PartialEq)]
 pub enum StorageError {
     #[error("Requested path was not found!")]
@@ -31,7 +35,7 @@ pub enum StorageError {
     JSONError,
 }
 
-// For error casting
+/// Casting
 impl From<std::io::Error> for StorageError {
     fn from(_: std::io::Error) -> Self {
         StorageError::IOError
@@ -56,7 +60,7 @@ impl From<StorageError> for ApplicationError {
     }
 }
 
-// Unit-tests for application state errors (testing messages)
+/// Unit-tests for application state errors (testing messages)
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,6 +96,14 @@ mod tests {
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
         assert_eq!(s, "Cannot clear the tasks! The list is already empty!");
+    }
+
+    #[test]
+    fn should_return_text_for_move_forbidden_error() {
+        let error = TodoError::MoveForbidden;
+        let mut s = String::new();
+        write!(&mut s, "{}", error).unwrap();
+        assert_eq!(s, "Cannot move the tasks!");
     }
 
     #[test]

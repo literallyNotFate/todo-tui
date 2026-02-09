@@ -7,9 +7,10 @@ use crate::{
 };
 use ratatui::{Frame, layout::Rect};
 
+/// Content widget (tasks table/form)
 pub struct ContentWidget<'a> {
     state: &'a mut ApplicationState,
-    ui: &'a UIState<'a>,
+    ui: &'a UIState,
     mode: &'a ApplicationMode,
     theme: &'a ThemeColors,
 }
@@ -29,7 +30,7 @@ impl<'a> ContentWidget<'a> {
         }
     }
 
-    // Rendering
+    // Content rendering
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
         match self.mode {
             ApplicationMode::Form => {
@@ -39,7 +40,7 @@ impl<'a> ContentWidget<'a> {
             }
             _ => {
                 let query: &str = &self.ui.search_query();
-                let filtered: Vec<Todo> = self.ui.current_filter.apply(&self.state.todos, query);
+                let filtered: Vec<&Todo> = self.ui.current_filter.apply(&self.state.todos, query);
 
                 if filtered.is_empty() && query.is_empty() {
                     frame.render_widget(
@@ -49,7 +50,7 @@ impl<'a> ContentWidget<'a> {
                     return;
                 }
 
-                ListTasks::new(self.ui, &filtered, query, self.mode, self.theme).render(
+                ListTasks::new(self.ui, filtered, query, self.mode, self.theme).render(
                     frame,
                     area,
                     &mut self.state.select_state,

@@ -17,9 +17,10 @@ use ratatui::{
     },
 };
 
+/// List widget for tasks
 pub struct ListTasks<'a> {
-    ui: &'a UIState<'a>,
-    todos: &'a [Todo],
+    ui: &'a UIState,
+    todos: Vec<&'a Todo>,
     query: &'a str,
     mode: &'a ApplicationMode,
     theme: &'a ThemeColors,
@@ -28,7 +29,7 @@ pub struct ListTasks<'a> {
 impl<'a> ListTasks<'a> {
     pub fn new(
         ui: &'a UIState,
-        todos: &'a [Todo],
+        todos: Vec<&'a Todo>,
         query: &'a str,
         mode: &'a ApplicationMode,
         theme: &'a ThemeColors,
@@ -42,7 +43,7 @@ impl<'a> ListTasks<'a> {
         }
     }
 
-    // Rendering
+    /// List rendering
     pub fn render(
         &self,
         frame: &mut Frame,
@@ -85,7 +86,7 @@ impl<'a> ListTasks<'a> {
         }
     }
 
-    // Helper method to build table
+    /// Helper method to build table
     fn build_table(&self, frame: &mut Frame, area: Rect, select_state: &mut TableState) {
         use ratatui::{
             style::Color,
@@ -143,7 +144,7 @@ impl<'a> ListTasks<'a> {
         frame.render_stateful_widget(tasks_table, table, select_state);
     }
 
-    // Calculate main layout for TaskList (list + details w/dynamic search)
+    /// Calculate main layout for TaskList (list + details w/dynamic search)
     fn calculate_main_layout(&self, area: Rect, show_search: bool, has_results: bool) -> [Rect; 3] {
         let search_constraint: Constraint = if show_search {
             Constraint::Length(3)
@@ -188,7 +189,7 @@ impl<'a> ListTasks<'a> {
         .bottom_margin(1)
     }
 
-    // Highlight title if satisfies query string
+    /// Highlight title if satisfies query string
     fn highlight_search(&self, title: &'a str, query: &str) -> Line<'a> {
         use ratatui::text::Span;
 
@@ -210,7 +211,7 @@ impl<'a> ListTasks<'a> {
         }
     }
 
-    // Render description for selected task with scroll
+    /// Render description for selected task with scroll
     fn max_scroll_for_description(
         &self,
         frame: &mut Frame,
@@ -268,7 +269,7 @@ impl<'a> ListTasks<'a> {
         0
     }
 
-    // Dynamic scroll for list
+    /// Dynamic scroll for list
     fn render_scrollbar_if_needed(
         &self,
         frame: &mut Frame,

@@ -1,10 +1,10 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
-// Min possible terminal size
+/// Min possible terminal size values
 pub const MIN_WIDTH: u16 = 80;
 pub const MIN_HEIGHT: u16 = 24;
 
-// Get main_layout for menu widget
+/// Get layout for dashboard widget
 pub fn main_layout(area: Rect) -> (Rect, Rect, Rect) {
     let [upper_area, bottom_area] = Layout::default()
         .direction(Direction::Vertical)
@@ -19,7 +19,7 @@ pub fn main_layout(area: Rect) -> (Rect, Rect, Rect) {
     (sidebar, main, bottom_area)
 }
 
-// Center a widget in a rect
+/// Center a widget in a rect
 pub fn center(rect: Rect, percent_x: u16, percent_y: u16) -> Rect {
     let widget_area = Layout::default()
         .direction(Direction::Vertical)
@@ -40,7 +40,7 @@ pub fn center(rect: Rect, percent_x: u16, percent_y: u16) -> Rect {
         .split(widget_area[1])[1]
 }
 
-// Check if terminal/frame area is small
+/// Check if terminal/frame area is small
 pub fn is_terminal_small(width: u16, height: u16) -> bool {
     width < MIN_WIDTH || height < MIN_HEIGHT
 }

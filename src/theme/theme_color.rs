@@ -1,5 +1,6 @@
 use ratatui::style::Color;
 
+/// Colors for selected theme
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct ThemeColors {
     pub name: &'static str,
@@ -16,6 +17,7 @@ pub struct ThemeColors {
 }
 
 impl ThemeColors {
+    /// Gruvbox color palette
     pub const GRUVBOX: Self = Self {
         name: "Gruvbox",
         accent: Color::Rgb(250, 189, 47),
@@ -30,6 +32,7 @@ impl ThemeColors {
         error: Color::Rgb(251, 73, 52),
     };
 
+    /// Catppuccin color palette
     pub const CATPPUCCIN: Self = Self {
         name: "Catppuccin",
         accent: Color::Rgb(203, 166, 247),
@@ -44,6 +47,7 @@ impl ThemeColors {
         error: Color::Rgb(243, 139, 168),
     };
 
+    /// TokyoNight color palette
     pub const TOKYO_NIGHT: Self = Self {
         name: "Tokyo Night",
         accent: Color::Rgb(122, 162, 247),
@@ -58,6 +62,7 @@ impl ThemeColors {
         error: Color::Rgb(247, 118, 118),
     };
 
+    /// Everforest color palette
     pub const EVERFOREST: Self = Self {
         name: "Everforest",
         accent: Color::Rgb(167, 192, 128),
@@ -72,6 +77,7 @@ impl ThemeColors {
         error: Color::Rgb(230, 126, 128),
     };
 
+    /// One dark color palette
     pub const ONE_DARK: Self = Self {
         name: "One Dark",
         accent: Color::Rgb(97, 175, 239),

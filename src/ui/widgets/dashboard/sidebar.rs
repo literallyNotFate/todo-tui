@@ -13,8 +13,9 @@ use ratatui::{
     widgets::List,
 };
 
+/// Sidebar widget
 pub struct SidebarWidget<'a> {
-    ui: &'a UIState<'a>,
+    ui: &'a UIState,
     todos: &'a [Todo],
     mode: &'a ApplicationMode,
     theme: &'a ThemeColors,
@@ -35,7 +36,7 @@ impl<'a> SidebarWidget<'a> {
         }
     }
 
-    // Rendering
+    /// Sidebar rendering
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         use crate::enums::FocusArea;
         use ratatui::widgets::{Block, ListState, Paragraph};
@@ -89,7 +90,7 @@ impl<'a> SidebarWidget<'a> {
         );
     }
 
-    // Layout for sidebar
+    /// Layout for sidebar
     fn layout(&self, area: Rect, hotkeys_length: u16) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
@@ -101,7 +102,7 @@ impl<'a> SidebarWidget<'a> {
             .split(area)
     }
 
-    // Layout for filters tab
+    /// Layout for filters tab
     fn filters_tab_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
@@ -112,7 +113,7 @@ impl<'a> SidebarWidget<'a> {
             .split(area)
     }
 
-    // Layout for summary
+    /// Layout for summary
     fn summary_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
@@ -123,7 +124,7 @@ impl<'a> SidebarWidget<'a> {
             .split(area)
     }
 
-    // Layout for hotkeys
+    /// Layout for hotkeys
     fn hotkeys_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
@@ -158,7 +159,7 @@ impl<'a> SidebarWidget<'a> {
             .highlight_symbol("→ ")
     }
 
-    // Get summary text
+    /// Get summary text
     fn summary_text(&self) -> Vec<Line<'static>> {
         let (total, completed): (usize, usize) = (
             self.todos.len(),
@@ -193,7 +194,7 @@ impl<'a> SidebarWidget<'a> {
         ]
     }
 
-    // Get hotkeys depending on application mode
+    /// Get hotkeys depending on application mode
     fn hotkeys(&self) -> (&str, u16) {
         match self.mode {
             ApplicationMode::Browsing => (
@@ -213,7 +214,7 @@ impl<'a> SidebarWidget<'a> {
     }
 }
 
-// Unit-tests for sidebar
+/// Unit-tests for sidebar
 #[cfg(test)]
 mod tests {
     use super::*;

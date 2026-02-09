@@ -2,14 +2,15 @@ use crate::{theme::ThemeColors, traits::InteractableEnum};
 use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
+/// Task priority
 #[derive(
     Serialize, Deserialize, Debug, Clone, Default, Hash, Eq, PartialEq, Copy, PartialOrd, Ord,
 )]
 pub enum Priority {
-    High,
-    Medium,
     #[default]
     Low,
+    Medium,
+    High,
 }
 
 impl InteractableEnum for Priority {
@@ -36,12 +37,11 @@ impl Priority {
     }
 }
 
-// Unit-tests for priority
+/// Unit-tests for priority
 #[cfg(test)]
 mod tests {
-    use crate::theme::Theme;
-
     use super::*;
+    use crate::theme::Theme;
 
     #[test]
     fn should_return_string_from_enum() {
@@ -63,6 +63,13 @@ mod tests {
         assert_eq!(Priority::Low.index(), 0);
         assert_eq!(Priority::Medium.index(), 1);
         assert_eq!(Priority::High.index(), 2);
+    }
+
+    #[test]
+    fn should_compare_priorities() {
+        assert!(Priority::High > Priority::Low);
+        assert!(Priority::Medium > Priority::Low);
+        assert!(Priority::High > Priority::Medium);
     }
 
     #[test]

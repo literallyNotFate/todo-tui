@@ -1,27 +1,30 @@
 use crate::{
     enums::WidgetResponse,
     models::{Priority, Todo},
-    state::{ApplicationResult, ApplicationState},
     theme::ThemeColors,
     traits::Input,
     ui::{Field, FieldType},
 };
 use ratatui::{
     Frame,
-    crossterm::event::{KeyCode, KeyEvent},
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     widgets::{Block, Paragraph},
 };
+use tui_textarea::TextArea;
+use uuid::Uuid;
 
+/// Form for appending/updating task
 #[derive(Clone, Debug)]
-pub struct Form<'a> {
-    pub task_id: Option<uuid::Uuid>,
+pub struct Form {
+    pub task_id: Option<Uuid>,
     pub focused: usize,
-    pub fields: Vec<Field<'a>>,
+    pub fields: Vec<Field>,
 }
 
-impl<'a> Form<'a> {
+impl Form {
+    /// Creates new form (for append)
     pub fn new() -> Self {
         Self {
             fields: vec![
@@ -35,6 +38,7 @@ impl<'a> Form<'a> {
         }
     }
 
+    /// Creates new form (for update) with id
     pub fn from(task: &Todo) -> Self {
         Self {
             fields: vec![
@@ -48,63 +52,8 @@ impl<'a> Form<'a> {
         }
     }
 
-    // Focus on the next field
-    pub fn next_focus(&mut self) {
-        if !self.fields.is_empty() {
-            self.focused = (self.focused + 1) % self.fields.len();
-        }
-    }
-
-    // Focus on the prev field
-    pub fn prev_focus(&mut self) {
-        if !self.fields.is_empty() {
-            self.focused = (self.focused + self.fields.len() - 1) % self.fields.len();
-        }
-    }
-
-    // Checks whether button is selected
-    pub fn is_button_selected(&self) -> bool {
-        matches!(
-            self.fields.get(self.focused).map(|f| &f.field_type),
-            Some(FieldType::Button)
-        )
-    }
-
-    // Checks whether textarea is selected
-    fn is_textarea_focused(&self) -> bool {
-        if let Some(f) = self.fields.get(self.focused) {
-            matches!(f.field_type, FieldType::Multiline { .. })
-        } else {
-            false
-        }
-    }
-
-    // Check if cursor of textarea is on the top (to focus to prev field)
-    fn is_cursor_at_top(&self) -> bool {
-        if let Some(field) = self.fields.get(self.focused) {
-            if let FieldType::Multiline { input } = &field.field_type {
-                let (row, _) = input.cursor();
-                return row == 0;
-            }
-        }
-
-        false
-    }
-
-    // Check if cursor of textarea is on the bottom (to focus to next field)
-    fn is_cursor_at_bottom(&self) -> bool {
-        if let Some(field) = self.fields.get(self.focused) {
-            if let FieldType::Multiline { input } = &field.field_type {
-                let (row, _) = input.cursor();
-                return row == input.lines().len() - 1;
-            }
-        }
-
-        false
-    }
-
-    // Submit form
-    pub fn apply(&self, state: &mut ApplicationState) -> ApplicationResult<String> {
+    /// Returs all values from form inputs to append/update
+    pub fn data(&self) -> (Option<Uuid>, String, String, Priority) {
         let mut title: String = String::new();
         let mut description: String = String::new();
         let mut priority: Priority = Priority::Low;
@@ -118,18 +67,18 @@ impl<'a> Form<'a> {
             }
         }
 
-        let todo: Todo = Todo::new(title, description, Some(priority));
-        if let Some(id) = self.task_id {
-            state.update(&id, todo)
-        } else {
-            state.append(todo)
-        }
+        (self.task_id, title, description, priority)
     }
 
+    /// Key event handling
     pub fn handle_key(&mut self, event: &KeyEvent) -> WidgetResponse {
         let key: KeyCode = event.code;
+        let modifiers: KeyModifiers = event.modifiers;
 
         match key {
+            KeyCode::Enter if modifiers.contains(KeyModifiers::ALT) => {
+                return WidgetResponse::Submit;
+            }
             KeyCode::Enter if self.is_button_selected() => return WidgetResponse::Submit,
             KeyCode::Esc => return WidgetResponse::Cancel,
             KeyCode::Down => {
@@ -144,7 +93,6 @@ impl<'a> Form<'a> {
                     return WidgetResponse::Continue;
                 }
             }
-
             _ => {}
         }
 
@@ -166,7 +114,78 @@ impl<'a> Form<'a> {
         WidgetResponse::Continue
     }
 
-    // Main layout method
+    /// Helper function to initialize field values (textbased only) using field key/name (for tests)
+    pub fn set_value(&mut self, key: &str, value: &str) {
+        if let Some(field) = self.fields.iter_mut().find(|f| f.name == key) {
+            match &mut field.field_type {
+                FieldType::Text { input } => {
+                    input.buffer = value.to_string();
+                }
+                FieldType::Multiline { input } => {
+                    let lines: Vec<String> = value.lines().map(|s| s.to_string()).collect();
+                    *input = TextArea::new(lines);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Focus on the next field
+    pub fn next_focus(&mut self) {
+        if !self.fields.is_empty() {
+            self.focused = (self.focused + 1) % self.fields.len();
+        }
+    }
+
+    /// Focus on the prev field
+    pub fn prev_focus(&mut self) {
+        if !self.fields.is_empty() {
+            self.focused = (self.focused + self.fields.len() - 1) % self.fields.len();
+        }
+    }
+
+    /// Checks whether button is selected
+    pub fn is_button_selected(&self) -> bool {
+        matches!(
+            self.fields.get(self.focused).map(|f| &f.field_type),
+            Some(FieldType::Button)
+        )
+    }
+
+    /// Checks whether textarea is selected
+    fn is_textarea_focused(&self) -> bool {
+        if let Some(f) = self.fields.get(self.focused) {
+            matches!(f.field_type, FieldType::Multiline { .. })
+        } else {
+            false
+        }
+    }
+
+    /// Check if cursor of textarea is on the top (to focus to prev field)
+    fn is_cursor_at_top(&self) -> bool {
+        if let Some(field) = self.fields.get(self.focused) {
+            if let FieldType::Multiline { input } = &field.field_type {
+                let (row, _) = input.cursor();
+                return row == 0;
+            }
+        }
+
+        false
+    }
+
+    /// Check if cursor of textarea is on the bottom (to focus to next field)
+    fn is_cursor_at_bottom(&self) -> bool {
+        if let Some(field) = self.fields.get(self.focused) {
+            if let FieldType::Multiline { input } = &field.field_type {
+                let (row, _) = input.cursor();
+                return row == input.lines().len() - 1;
+            }
+        }
+
+        false
+    }
+
+    /// Main form layout method
     fn layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
@@ -180,7 +199,7 @@ impl<'a> Form<'a> {
             .split(area)
     }
 
-    // Buttons layout method
+    /// Form buttons layout method
     fn button_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Horizontal)
@@ -192,7 +211,7 @@ impl<'a> Form<'a> {
             .split(area)
     }
 
-    // Rendering
+    /// Form rendering
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
         let chunks: std::rc::Rc<[Rect]> = self.layout(area);
         let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
@@ -256,13 +275,12 @@ impl<'a> Form<'a> {
     }
 }
 
-// Unit-tests for form
+/// Unit-tests for form
 #[cfg(test)]
 mod tests {
     use super::*;
     use ratatui::crossterm::event::{KeyCode, KeyEventKind, KeyEventState, KeyModifiers};
 
-    // Helper function to create key events
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent {
             code,
@@ -391,8 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn should_apply_creating_task_with_textarea_data() {
-        let mut state = ApplicationState::default();
+    fn should_return_all_data_on_append() {
         let mut form = Form::new();
 
         if let FieldType::Text { input } = &mut form.fields[0].field_type {
@@ -403,30 +420,38 @@ mod tests {
             input.insert_str("Multiline content");
         }
 
-        let result = form.apply(&mut state);
-        assert!(result.is_ok());
-        assert_eq!(state.todos[0].title, "Task");
-        assert_eq!(state.todos[0].description, "Multiline content");
+        let (_, title, desc, priority) = form.data();
+        assert_eq!(title, "Task");
+        assert_eq!(desc, "Multiline content");
+        assert_eq!(priority, Priority::Low);
     }
 
     #[test]
-    fn should_apply_editing_existing_task() {
-        let mut state = ApplicationState::default();
+    fn should_return_all_data_on_update() {
         let task = Todo::new("Old Title", "", None);
-        let task_id = task.id;
-        state.append(task).unwrap();
-
-        let mut form = Form::from(&state.todos[0]);
+        let task_id: Uuid = task.id;
+        let mut form = Form::from(&task);
 
         if let FieldType::Text { input } = &mut form.fields[0].field_type {
             input.buffer = "Updated Title".to_string();
         }
 
-        let result = form.apply(&mut state);
-        assert!(result.is_ok());
+        let (id, title, desc, priority) = form.data();
+        assert_eq!(id, Some(task_id));
+        assert_eq!(title, "Updated Title");
+        assert_eq!(desc, "");
+        assert_eq!(priority, Priority::Low);
+    }
 
-        assert_eq!(state.todos.len(), 1);
-        assert_eq!(state.todos[0].title, "Updated Title");
-        assert_eq!(state.todos[0].id, task_id);
+    #[test]
+    fn should_properly_set_value_for_text_input() {
+        let mut form = Form::new();
+
+        form.set_value("title", "Title test");
+        form.set_value("description", "Desc test");
+
+        let (_, title, desc, _) = form.data();
+        assert_eq!(title, "Title test");
+        assert_eq!(desc, "Desc test");
     }
 }

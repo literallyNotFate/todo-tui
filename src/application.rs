@@ -1,43 +1,37 @@
 use crate::{
     enums::{ApplicationMode, FocusArea},
-    handlers::handle_key_event,
+    events::EventHandler,
     state::{ApplicationState, UIState},
     ui::Renderer,
 };
 use color_eyre::Result;
 use ratatui::{
-    crossterm::event::{self, Event},
-    {DefaultTerminal, Frame},
+    DefaultTerminal, Frame,
+    crossterm::{
+        event::{self, Event},
+        terminal,
+    },
 };
 
-pub struct Application<'a> {
+pub struct Application {
     pub mode: ApplicationMode,
-    pub state: ApplicationState,
+    pub data: ApplicationState,
     pub running: bool,
-    pub ui: UIState<'a>,
+    pub ui: UIState,
     pub renderer: Renderer,
+    pub size: (u16, u16),
 }
 
-impl<'a> Application<'a> {
+impl Application {
     pub fn new() -> Self {
+        let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
         Self {
             mode: ApplicationMode::Browsing,
-            state: ApplicationState::new(),
+            data: ApplicationState::new(),
             running: true,
             ui: UIState::default(),
             renderer: Renderer,
-        }
-    }
-
-    // Create mock application (for testing)
-    #[cfg(test)]
-    pub fn test() -> Self {
-        Self {
-            state: ApplicationState::default(),
-            ui: UIState::default(),
-            mode: ApplicationMode::Browsing,
-            running: true,
-            renderer: Renderer,
+            size,
         }
     }
 
@@ -52,11 +46,14 @@ impl<'a> Application<'a> {
 
             let timeout: Duration = TICK_RATE.saturating_sub(last_tick.elapsed());
 
-            if event::poll(timeout)?
-                && let Event::Key(key_event) = event::read()?
-                && let Ok(size) = terminal.size()
-            {
-                handle_key_event(self, key_event, (size.width, size.height));
+            if event::poll(timeout)? {
+                match event::read()? {
+                    Event::Resize(w, h) => self.size = (w, h),
+                    Event::Key(key_event) => {
+                        EventHandler::handle_key(self, key_event);
+                    }
+                    _ => {}
+                }
             }
 
             if last_tick.elapsed() >= TICK_RATE {
@@ -68,32 +65,38 @@ impl<'a> Application<'a> {
         Ok(())
     }
 
-    // Tick function (for notification)
-    pub fn tick(&mut self) {
-        self.ui.expire_notification(&mut self.state.notification);
+    /// Rendering application using Renderer
+    pub fn render(&mut self, frame: &mut Frame) {
+        self.renderer
+            .render(frame, &mut self.data, &self.ui, self.mode);
     }
 
-    // Synchronize selection after tab switching
+    /// Tick function (for notification)
+    pub fn tick(&mut self) {
+        self.ui.expire_notification(&mut self.data.notification);
+    }
+
+    /// Synchronizing selection after tab switching
     pub fn sync_ui(&mut self) {
         let query = self.ui.search_query();
-        let indices = self.ui.current_filter.apply(&self.state.todos, &query);
+        let indices = self.ui.current_filter.apply(&self.data.todos, &query);
         let visible_count = indices.len();
 
         if visible_count == 0 {
-            self.state.select_state.select(None);
+            self.data.select_state.select(None);
         } else {
-            let current = self.state.select_state.selected();
+            let current = self.data.select_state.selected();
             match current {
-                None => self.state.select_state.select(Some(0)),
+                None => self.data.select_state.select(Some(0)),
                 Some(idx) if idx >= visible_count => {
-                    self.state.select_state.select(Some(visible_count - 1));
+                    self.data.select_state.select(Some(visible_count - 1));
                 }
                 _ => {}
             }
         }
     }
 
-    // Restore base mode (after forms)
+    /// Restoring base mode (after form exit)
     pub fn restore_base_mode(&mut self) {
         self.mode = match self.ui.focus_area {
             FocusArea::LeftPanel => ApplicationMode::Browsing,
@@ -101,14 +104,21 @@ impl<'a> Application<'a> {
         };
     }
 
-    // Rendering
-    pub fn render(&mut self, frame: &mut Frame) {
-        self.renderer
-            .render(frame, &mut self.state, &self.ui, self.mode);
+    /// Create mock application (for testing)
+    #[cfg(test)]
+    pub fn test() -> Self {
+        Self {
+            data: ApplicationState::default(),
+            ui: UIState::default(),
+            mode: ApplicationMode::Browsing,
+            running: true,
+            renderer: Renderer,
+            size: (80, 24),
+        }
     }
 }
 
-// Unit-tests for application structure
+/// Unit-tests for application structure
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,9 +133,9 @@ mod tests {
         let app = Application::test();
 
         assert!(app.running, "running should be true by default");
-        assert_eq!(app.state.todos.len(), 0, "todos should be empty");
+        assert_eq!(app.data.todos.len(), 0, "todos should be empty");
         assert!(
-            app.state.notification.is_none(),
+            app.data.notification.is_none(),
             "notification should be none"
         );
         assert!(app.ui.modal.is_none(), "modal should be none");
@@ -138,12 +148,12 @@ mod tests {
 
         let mut notification: Notification = Notification::success("Test");
         notification.created_at = old_time;
-        app.state.notification = Some(notification);
+        app.data.notification = Some(notification);
 
         app.tick();
 
         assert!(
-            app.state.notification.is_none(),
+            app.data.notification.is_none(),
             "expired notification should be removed"
         );
     }
@@ -151,13 +161,13 @@ mod tests {
     #[test]
     fn should_select_none_if_empty_with_sync_ui() {
         let mut app = Application::test();
-        app.state.select_state.select(Some(5));
-        app.state.todos.clear();
+        app.data.select_state.select(Some(5));
+        app.data.todos.clear();
 
         app.sync_ui();
 
         assert_eq!(
-            app.state.select_state.selected(),
+            app.data.select_state.selected(),
             None,
             "If list is empty, should select None"
         );
@@ -167,17 +177,17 @@ mod tests {
     fn should_adjust_out_of_bounds_index_with_sync_ui() {
         let mut app = Application::test();
 
-        app.state.append(Todo::new("1", "", None)).unwrap();
-        app.state.append(Todo::new("2", "", None)).unwrap();
-        app.state.append(Todo::new("3", "", None)).unwrap();
+        app.data.todos.push(Todo::new("1", "", None));
+        app.data.todos.push(Todo::new("2", "", None));
+        app.data.todos.push(Todo::new("3", "", None));
 
-        app.state.select_state.select(Some(2));
-        app.state.todos.truncate(1);
+        app.data.select_state.select(Some(2));
+        app.data.todos.truncate(1);
 
         app.sync_ui();
 
         assert_eq!(
-            app.state.select_state.selected(),
+            app.data.select_state.selected(),
             Some(0),
             "Index must stay at last accessible task"
         );
@@ -187,13 +197,13 @@ mod tests {
     fn should_initialize_selection_with_sync_ui() {
         let mut app = Application::test();
 
-        app.state.append(Todo::new("Task", "", None)).unwrap();
-        app.state.select_state.select(None);
+        app.data.todos.push(Todo::new("Task", "", None));
+        app.data.select_state.select(None);
 
         app.sync_ui();
 
         assert_eq!(
-            app.state.select_state.selected(),
+            app.data.select_state.selected(),
             Some(0),
             "If selection was None, but there are tasks, choose first"
         );
@@ -203,15 +213,15 @@ mod tests {
     fn should_adjust_selection_on_filter_change_with_sync_ui() {
         let mut app = Application::test();
 
-        app.state.append(Todo::new("Active", "", None)).unwrap();
-        app.state.append(Todo::new("Done", "", None)).unwrap();
-        app.state.todos[1].completed = true;
+        app.data.todos.push(Todo::new("Active", "", None));
+        app.data.todos.push(Todo::new("Done", "", None));
+        app.data.todos[1].completed = true;
 
         app.ui.current_filter = Filter::Completed;
-        app.state.select_state.select(Some(1));
+        app.data.select_state.select(Some(1));
 
         app.sync_ui();
 
-        assert_eq!(app.state.select_state.selected(), Some(0));
+        assert_eq!(app.data.select_state.selected(), Some(0));
     }
 }

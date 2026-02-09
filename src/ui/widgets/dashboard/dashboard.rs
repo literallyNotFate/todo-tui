@@ -5,9 +5,10 @@ use crate::{
 };
 use ratatui::{Frame, layout::Rect};
 
+/// Main menu widget (combines sidebar, content, bottom)
 pub struct Dashboard<'a> {
     pub state: &'a mut ApplicationState,
-    pub ui: &'a UIState<'a>,
+    pub ui: &'a UIState,
     pub mode: &'a ApplicationMode,
     pub theme: &'a ThemeColors,
 }
@@ -27,7 +28,7 @@ impl<'a> Dashboard<'a> {
         }
     }
 
-    // Rendering
+    // Dashboard rendering
     pub fn render(self, frame: &mut Frame, area: Rect) {
         use crate::ui::{
             main_layout,
