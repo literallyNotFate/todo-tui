@@ -39,8 +39,14 @@ impl<'a> Dashboard<'a> {
 
         let (left_area, content_area, bottom_area): (Rect, Rect, Rect) = main_layout(area);
 
-        SidebarWidget::new(self.ui, &self.state.todos, self.mode, self.theme)
-            .render(frame, left_area);
+        SidebarWidget::new(
+            self.ui,
+            &self.state.todos,
+            self.mode,
+            self.state.sort.clone(),
+            self.theme,
+        )
+        .render(frame, left_area);
         ContentWidget::new(self.state, self.ui, self.mode, self.theme).render(frame, content_area);
         BottomBarWidget::new(self.state, self.theme).render(frame, bottom_area);
     }

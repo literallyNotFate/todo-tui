@@ -1,6 +1,6 @@
 use crate::{
     core::TodoError,
-    models::{Filter, Priority, Todo},
+    models::{Filter, Priority, Sort, Todo},
     state::ApplicationResult,
 };
 use chrono::Local;
@@ -11,20 +11,29 @@ pub struct TodoService;
 /// Main service methods (only for todos)
 impl TodoService {
     /// Append new task to the end of list
-    pub fn append_task(todos: &mut Vec<Todo>, task: Todo) -> ApplicationResult<String> {
+    pub fn append_task(
+        todos: &mut Vec<Todo>,
+        task: Todo,
+        sort: &Sort,
+    ) -> ApplicationResult<String> {
         if task.title.trim().is_empty() {
             return Err(TodoError::EmptyTitle.into());
         }
 
         let title: String = task.title.clone();
         todos.push(task);
-        Self::sorting(todos);
+        Self::sorting(todos, sort);
 
         Ok(title)
     }
 
     /// Update task by id
-    pub fn update_task(todos: &mut Vec<Todo>, id: &Uuid, task: Todo) -> ApplicationResult<usize> {
+    pub fn update_task(
+        todos: &mut [Todo],
+        id: &Uuid,
+        task: Todo,
+        sort: &Sort,
+    ) -> ApplicationResult<usize> {
         if task.title.trim().is_empty() {
             return Err(TodoError::EmptyTitle.into());
         }
@@ -35,7 +44,7 @@ impl TodoService {
             .ok_or(TodoError::TaskNotFound)?;
 
         todos[index].update(task);
-        Self::sorting(todos);
+        Self::sorting(todos, sort);
 
         let new_index: usize = todos.iter().position(|t| t.id == *id).unwrap();
         Ok(new_index)
@@ -51,7 +60,7 @@ impl TodoService {
     }
 
     /// Toggle completed/uncompleted by id
-    pub fn toggle_task(todos: &mut Vec<Todo>, id: &Uuid) -> ApplicationResult<()> {
+    pub fn toggle_task(todos: &mut [Todo], id: &Uuid) -> ApplicationResult<()> {
         let task: &mut Todo = todos
             .iter_mut()
             .find(|t| t.id == *id)
@@ -80,37 +89,26 @@ impl TodoService {
     }
 
     /// Automatic soritng by priority (considering updated_at also) after operation
-    pub fn sorting(todos: &mut Vec<Todo>) {
-        todos.sort_by(|a, b| {
-            let res = b.priority.cmp(&a.priority);
-            if res == std::cmp::Ordering::Equal {
-                return b.updated_at.cmp(&a.updated_at);
-            }
-
-            res
-        });
+    pub fn sorting(todos: &mut [Todo], sort: &Sort) {
+        todos.sort_by(|a, b| sort.compare(a, b));
     }
 
-    /// Move tasks (change order of them)
-    pub fn move_task(
-        todos: &mut Vec<Todo>,
-        current_index: usize,
-        delta: i32,
-    ) -> ApplicationResult<usize> {
-        let new_index: usize = if delta > 0 {
-            current_index.saturating_add(delta as usize)
-        } else {
-            current_index.saturating_sub(delta.unsigned_abs() as usize)
-        };
-
-        if new_index < todos.len() && new_index != current_index {
-            if todos[current_index].priority == todos[new_index].priority {
-                todos.swap(current_index, new_index);
-                return Ok(new_index);
-            }
+    /// Move tasks by indices (change order of them)
+    pub fn move_tasks(todos: &mut [Todo], a: usize, b: usize) -> ApplicationResult<()> {
+        if a >= todos.len() || b >= todos.len() {
+            return Err(TodoError::TaskNotFound.into());
         }
 
-        Err(TodoError::MoveForbidden.into())
+        if a == b {
+            return Ok(());
+        }
+
+        if todos[a].priority != todos[b].priority {
+            return Err(TodoError::MoveForbidden.into());
+        }
+
+        todos.swap(a, b);
+        Ok(())
     }
 }
 
@@ -125,7 +123,8 @@ mod tests {
         let mut todos: Vec<Todo> = Vec::new();
         let task_to_add: Todo = Todo::new("Buy stuff", "Just buy stuff", Some(Priority::High));
 
-        let result: ApplicationResult<String> = TodoService::append_task(&mut todos, task_to_add);
+        let result: ApplicationResult<String> =
+            TodoService::append_task(&mut todos, task_to_add, &Sort::default());
         let added_task: &Todo = &todos[0];
 
         assert!(result.is_ok());
@@ -137,7 +136,8 @@ mod tests {
     fn should_fail_append_task_service_on_empty_title() {
         let mut todos: Vec<Todo> = Vec::new();
         let task_to_add: Todo = Todo::new("", "Just buy stuff", Some(Priority::High));
-        let result: ApplicationResult<String> = TodoService::append_task(&mut todos, task_to_add);
+        let result: ApplicationResult<String> =
+            TodoService::append_task(&mut todos, task_to_add, &Sort::default());
 
         assert!(matches!(
             result,
@@ -157,7 +157,7 @@ mod tests {
         let updated_data: Todo = Todo::new("New Title", "Description", Some(Priority::High));
 
         let result: ApplicationResult<usize> =
-            TodoService::update_task(&mut todos, &id, updated_data);
+            TodoService::update_task(&mut todos, &id, updated_data, &Sort::default());
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(0));
@@ -172,7 +172,7 @@ mod tests {
         let invalid_data: Todo = Todo::new("", "Desc", None);
 
         let result: ApplicationResult<usize> =
-            TodoService::update_task(&mut todos, &id, invalid_data);
+            TodoService::update_task(&mut todos, &id, invalid_data, &Sort::default());
 
         assert!(result.is_err());
         assert_eq!(result, Err(ApplicationError::Todo(TodoError::EmptyTitle)));
@@ -184,8 +184,12 @@ mod tests {
         let mut todos: Vec<Todo> = vec![Todo::new("Task", "", None)];
         let fake_id: Uuid = Uuid::new_v4();
 
-        let result: ApplicationResult<usize> =
-            TodoService::update_task(&mut todos, &fake_id, Todo::new("X", "", None));
+        let result: ApplicationResult<usize> = TodoService::update_task(
+            &mut todos,
+            &fake_id,
+            Todo::new("X", "", None),
+            &Sort::default(),
+        );
 
         assert!(result.is_err());
         assert_eq!(result, Err(ApplicationError::Todo(TodoError::TaskNotFound)));
@@ -265,7 +269,7 @@ mod tests {
             Todo::new("High Task", "", Some(Priority::High)),
         ];
 
-        TodoService::sorting(&mut todos);
+        TodoService::sorting(&mut todos, &Sort::default());
 
         assert_eq!(todos[0].title, "High Task");
         assert_eq!(todos[1].title, "Low Task");
@@ -278,11 +282,11 @@ mod tests {
             Todo::new("Task 2", "", Some(Priority::High)),
         ];
 
-        let result: ApplicationResult<usize> = TodoService::move_task(&mut todos, 0, 1);
+        let result: ApplicationResult<()> = TodoService::move_tasks(&mut todos, 0, 1);
 
+        assert!(result.is_ok());
         assert_eq!(todos[0].title, "Task 2");
         assert_eq!(todos[1].title, "Task 1");
-        assert_eq!(result, Ok(1));
     }
 
     #[test]
@@ -292,7 +296,7 @@ mod tests {
             Todo::new("Medium Task", "", Some(Priority::Medium)),
         ];
 
-        let result: ApplicationResult<usize> = TodoService::move_task(&mut todos, 1, -1);
+        let result: ApplicationResult<()> = TodoService::move_tasks(&mut todos, 0, 1);
 
         assert_eq!(
             result,
@@ -304,15 +308,21 @@ mod tests {
 
     #[test]
     fn should_test_boundaries_on_move_tasks_service() {
-        let mut todos: Vec<Todo> = vec![Todo::new("Task 1", "", None)];
+        let mut todos: Vec<Todo> = vec![
+            Todo::new("Task 1", "", Some(Priority::Low)),
+            Todo::new("Task 2", "", Some(Priority::High)),
+        ];
 
-        let res_up = TodoService::move_task(&mut todos, 0, -1);
-        assert!(res_up.is_err(), "Should be MoveForbidden");
+        let res_same = TodoService::move_tasks(&mut todos, 0, 0);
+        assert!(
+            res_same.is_ok(),
+            "Moving to the same index should be ignored"
+        );
 
-        let res_down = TodoService::move_task(&mut todos, 0, 1);
-        assert!(res_down.is_err(), "Should be MoveForbidden");
-
-        let res_out = TodoService::move_task(&mut todos, 10, 1);
-        assert!(res_out.is_err(), "Should be error on wrong index");
+        let res_diff = TodoService::move_tasks(&mut todos, 0, 1);
+        assert!(
+            res_diff.is_err(),
+            "Should be MoveForbidden due to priority difference"
+        );
     }
 }

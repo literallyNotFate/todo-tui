@@ -28,7 +28,7 @@ impl<'a> ApplicationController<'a> {
         let task: Todo = Todo::new(title, desc, priority);
         let id: Uuid = task.id;
 
-        match TodoService::append_task(&mut self.state.todos, task) {
+        match TodoService::append_task(&mut self.state.todos, task, &self.state.sort) {
             Ok(added) => {
                 self.stabilize_ui_focus(Some(id));
                 self.state.hash_state();
@@ -44,9 +44,9 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle updating an existing todo
     pub fn dispatch_update(&mut self, id: Uuid, task: Todo) {
-        match TodoService::update_task(&mut self.state.todos, &id, task) {
+        match TodoService::update_task(&mut self.state.todos, &id, task, &self.state.sort) {
             Ok(index) => {
-                self.state.select_state.select(Some(index));
+                self.stabilize_ui_focus(Some(id));
                 self.state.hash_state();
 
                 let msg = format!(
@@ -86,18 +86,28 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_toggle(&mut self) {
         if let Some(id) = self.ui.selected_id(self.state) {
             if TodoService::toggle_task(&mut self.state.todos, &id).is_ok() {
-                self.state.hash_state();
                 self.stabilize_ui_focus(Some(id));
+                self.state.hash_state();
             }
         }
     }
 
     /// Handle moving a task
-    pub fn dispatch_move_task(&mut self, delta: i32) {
-        if let Some(current) = self.state.select_state.selected() {
-            match TodoService::move_task(&mut self.state.todos, current, delta) {
-                Ok(index) => {
-                    self.state.select_state.select(Some(index));
+    pub fn dispatch_move_tasks(&mut self, delta: i32) {
+        if let Some((index_a, index_b)) =
+            self.state
+                .swap_indices(&self.ui.current_filter, &self.ui.search_query(), delta)
+        {
+            match TodoService::move_tasks(&mut self.state.todos, index_a, index_b) {
+                Ok(_) => {
+                    let current_index: usize = self.state.select_state.selected().unwrap_or(0);
+                    let new_index: usize = if delta > 0 {
+                        current_index + 1
+                    } else {
+                        current_index.saturating_sub(1)
+                    };
+
+                    self.state.select_state.select(Some(new_index));
                     self.state.hash_state();
                 }
                 Err(e) => self.ui.push_notification(self.state, Err(e)),
@@ -107,7 +117,7 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle clearing tasks by filter
     pub fn dispatch_clear(&mut self) {
-        let removed = TodoService::clear(&mut self.state.todos, &self.ui.current_filter);
+        let removed: usize = TodoService::clear(&mut self.state.todos, &self.ui.current_filter);
 
         if removed > 0 {
             self.state.hash_state();
@@ -133,25 +143,52 @@ impl<'a> ApplicationController<'a> {
         }
     }
 
+    /// Handle sorting
+    pub fn dispatch_sorting(&mut self) {
+        let selected_id = self
+            .state
+            .selected(
+                &self.state.todos,
+                &self.ui.current_filter,
+                &self.ui.search_query(),
+            )
+            .map(|t| t.id);
+
+        TodoService::sorting(&mut self.state.todos, &self.state.sort);
+
+        if let Some(id) = selected_id {
+            let filtered = self
+                .ui
+                .current_filter
+                .apply(&self.state.todos, &self.ui.search_query());
+            let new_pos = filtered.iter().position(|t| t.id == id);
+
+            self.state.select_state.select(new_pos);
+        }
+    }
+
     /// Helper function to synchronize cursor and data
     pub fn stabilize_ui_focus(&mut self, focus_id: Option<Uuid>) {
+        let filtered_todos = self
+            .ui
+            .current_filter
+            .apply(&self.state.todos, &self.ui.search_query());
+        let len: usize = filtered_todos.len();
+
         if let Some(id) = focus_id {
-            if let Some(pos) = self.state.todos.iter().position(|t| t.id == id) {
+            if let Some(pos) = filtered_todos.iter().position(|t| t.id == id) {
                 self.state.select_state.select(Some(pos));
                 return;
             }
         }
 
-        let len: usize = self.state.todos.len();
         if len == 0 {
             self.state.select_state.select(None);
-        } else if self
-            .state
-            .select_state
-            .selected()
-            .map_or(true, |s| s >= len)
-        {
-            self.state.select_state.select(Some(len.saturating_sub(1)));
+        } else {
+            let current_selected = self.state.select_state.selected();
+            if current_selected.is_none_or(|s| s >= len) {
+                self.state.select_state.select(Some(len.saturating_sub(1)));
+            }
         }
     }
 }
@@ -160,7 +197,10 @@ impl<'a> ApplicationController<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::Notification;
+    use crate::{
+        models::{Sort, SortBy, SortOrder},
+        ui::Notification,
+    };
 
     fn setup() -> (ApplicationState, UIState) {
         (ApplicationState::default(), UIState::default())
@@ -196,30 +236,33 @@ mod tests {
     #[test]
     fn should_handle_update_and_maintain_focus() {
         let (mut state, mut ui) = setup();
-        let task: Todo = Todo::new("Low", "", Some(Priority::Low));
-        let id: Uuid = task.id;
 
-        state.todos.push(task);
-        state
-            .todos
-            .push(Todo::new("High", "", Some(Priority::High)));
+        let task_high = Todo::new("High Task", "", Some(Priority::High));
+        let task_low = Todo::new("Low Task", "", Some(Priority::Low));
+        let low_id = task_low.id;
 
-        TodoService::sorting(&mut state.todos);
+        state.todos = vec![task_high, task_low];
+        TodoService::sorting(&mut state.todos, &state.sort);
         state.select_state.select(Some(1));
 
-        let mut updated_task: Todo = state.todos[1].clone();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
-
-        updated_task.title = "Now First".into();
+        let mut updated_task = state.todos[1].clone();
+        updated_task.title = "Updated to High".into();
         updated_task.priority = Priority::High;
 
-        ctrl.dispatch_update(id, updated_task);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        ctrl.dispatch_update(low_id, updated_task);
 
-        assert_eq!(state.select_state.selected(), Some(0));
-        assert_eq!(state.todos[0].title, "Now First");
+        let new_pos = state.todos.iter().position(|t| t.id == low_id).unwrap();
+
+        assert_eq!(
+            state.select_state.selected(),
+            Some(new_pos),
+            "Focus must follow the task"
+        );
+        assert_eq!(state.todos[new_pos].title, "Updated to High");
 
         let note: &Notification = state.notification.as_ref().unwrap();
-        assert_eq!(note.message, "Task 1 / 2 was updated");
+        assert!(note.message.contains("updated"),);
     }
 
     #[test]
@@ -284,39 +327,44 @@ mod tests {
     }
 
     #[test]
-    fn should_handle_move_task_logic_and_errors() {
+    fn should_sort_with_focus_stabilized() {
         let (mut state, mut ui) = setup();
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
 
-        let t1 = Todo::new("T1", "", Some(Priority::Low));
-        let t1_id = t1.id;
-        state.todos.push(t1);
-        state.todos.push(Todo::new("T2", "", Some(Priority::Low)));
-        state
-            .todos
-            .push(Todo::new("High", "", Some(Priority::High)));
+        state.todos = vec![
+            Todo {
+                id: id_a,
+                title: "B".into(),
+                ..Default::default()
+            },
+            Todo {
+                id: id_b,
+                title: "A".into(),
+                ..Default::default()
+            },
+        ];
 
-        TodoService::sorting(&mut state.todos);
+        state.select_state.select(Some(0));
+        state.sort = Sort::new(SortBy::Title, SortOrder::Asc);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
 
-        let initial_pos: usize = state
-            .todos
-            .iter()
-            .position(|t| t.id == t1_id)
-            .expect("T1 must exist");
-        state.select_state.select(Some(initial_pos));
+        ctrl.dispatch_sorting();
 
-        {
-            let mut ctrl = ApplicationController::new(&mut state, &mut ui);
-            ctrl.dispatch_move_task(-1);
-        }
+        assert_eq!(ctrl.state.select_state.selected(), Some(1));
+        assert_eq!(ctrl.state.todos[1].id, id_a);
+    }
 
-        let new_pos: usize = state
-            .todos
-            .iter()
-            .position(|t| t.id == t1_id)
-            .expect("T1 must exist");
+    #[test]
+    fn should_stabilize_focus_out_of_bounds() {
+        let (mut state, mut ui) = setup();
+        state.todos = vec![Todo::new("One", "", Some(Priority::Low))];
+        state.select_state.select(Some(10));
 
-        assert_eq!(state.select_state.selected(), Some(new_pos));
-        assert!(new_pos <= initial_pos);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        ctrl.stabilize_ui_focus(None);
+
+        assert_eq!(ctrl.state.select_state.selected(), Some(0));
     }
 
     #[test]

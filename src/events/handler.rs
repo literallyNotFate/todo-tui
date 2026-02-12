@@ -54,8 +54,8 @@ impl EventHandler {
         }
 
         let mut ctrl = ApplicationController::new(&mut app.data, &mut app.ui);
-        match event.code {
-            KeyCode::Char('q') | KeyCode::Esc => {
+        match (event.code, event.modifiers) {
+            (KeyCode::Char('q') | KeyCode::Esc, KeyModifiers::NONE) => {
                 if ctrl.state.any_unsaved_changes() {
                     ctrl.ui.unsaved_confirm();
                 } else {
@@ -63,15 +63,21 @@ impl EventHandler {
                     app.running = false;
                 }
             }
-            KeyCode::Char('a') => {
+            (KeyCode::Char('a'), KeyModifiers::NONE) => {
                 ctrl.ui.task_form = Some(Form::new());
                 app.mode = ApplicationMode::Form;
             }
-            KeyCode::Char('s') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-                ctrl.ui.save_confirm();
+            (KeyCode::Char('s'), KeyModifiers::CONTROL) => ctrl.ui.save_confirm(),
+            (KeyCode::Char('t'), KeyModifiers::NONE) => ctrl.ui.switch_theme(),
+            (KeyCode::Char('x'), KeyModifiers::NONE) => ctrl.ui.clear_confirm(),
+            (KeyCode::Char('s'), KeyModifiers::NONE) => {
+                ctrl.state.sort.parameter = ctrl.state.sort.parameter.next();
+                ctrl.dispatch_sorting();
             }
-            KeyCode::Char('t') => ctrl.ui.switch_theme(),
-            KeyCode::Char('x') => ctrl.ui.clear_confirm(),
+            (KeyCode::Char('r'), KeyModifiers::NONE) => {
+                ctrl.state.sort.order = ctrl.state.sort.order.next();
+                ctrl.dispatch_sorting();
+            }
             _ => Self::handle_main_mode(event, &mut ctrl, &mut app.mode, &mut app.running),
         }
     }
@@ -151,8 +157,8 @@ impl EventHandler {
                 }
             }
             KeyCode::Char('d') => ctrl.ui.remove_confirm(),
-            KeyCode::Char('J') => ctrl.dispatch_move_task(1),
-            KeyCode::Char('K') => ctrl.dispatch_move_task(-1),
+            KeyCode::Char('J') => ctrl.dispatch_move_tasks(1),
+            KeyCode::Char('K') => ctrl.dispatch_move_tasks(-1),
             KeyCode::Char('[') => ctrl.state.scroll.scroll_up(),
             KeyCode::Char(']') => ctrl.state.scroll.scroll_down(),
             KeyCode::Char('/') => {
@@ -247,7 +253,10 @@ pub fn is_exit_key(key_event: &KeyEvent) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{ApplicationState, UIState};
+    use crate::{
+        models::{SortBy, SortOrder},
+        state::{ApplicationState, UIState},
+    };
 
     fn setup_app() -> Application {
         let mut app = Application::test();
@@ -334,6 +343,25 @@ mod tests {
         EventHandler::handle_key(&mut app, event);
 
         assert!(app.ui.modal.is_some(), "Save modal should appear");
+    }
+
+    #[test]
+    fn should_handle_sort_keys() {
+        let mut app = setup_app();
+
+        assert_eq!(app.data.sort.parameter, SortBy::Priority);
+        assert_eq!(app.data.sort.order, SortOrder::Desc);
+
+        let mut event = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
+        EventHandler::handle_key(&mut app, event);
+        assert_eq!(app.data.sort.parameter, SortBy::Title);
+
+        EventHandler::handle_key(&mut app, event);
+        assert_eq!(app.data.sort.parameter, SortBy::CreatedAt);
+
+        event = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
+        EventHandler::handle_key(&mut app, event);
+        assert_eq!(app.data.sort.order, SortOrder::Asc);
     }
 
     #[test]

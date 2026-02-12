@@ -1,6 +1,6 @@
 use crate::{
     enums::ApplicationMode,
-    models::{Filter, Todo},
+    models::{Filter, Sort, Todo},
     state::UIState,
     theme::ThemeColors,
     traits::InteractableEnum,
@@ -18,6 +18,7 @@ pub struct SidebarWidget<'a> {
     ui: &'a UIState,
     todos: &'a [Todo],
     mode: &'a ApplicationMode,
+    sort: Sort,
     theme: &'a ThemeColors,
 }
 
@@ -26,12 +27,14 @@ impl<'a> SidebarWidget<'a> {
         ui: &'a UIState,
         todos: &'a [Todo],
         mode: &'a ApplicationMode,
+        sort: Sort,
         theme: &'a ThemeColors,
     ) -> Self {
         Self {
             ui,
             todos,
             mode,
+            sort,
             theme,
         }
     }
@@ -96,7 +99,7 @@ impl<'a> SidebarWidget<'a> {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Fill(1),                // Filters
-                Constraint::Length(7),              // Summary
+                Constraint::Length(8),              // Summary
                 Constraint::Length(hotkeys_length), // Hotkeys
             ])
             .split(area)
@@ -191,6 +194,13 @@ impl<'a> SidebarWidget<'a> {
                 ),
             ]),
             Line::from(Span::styled(gauge, Style::default().fg(self.theme.success))),
+            Line::from(vec![
+                Span::styled(" Sort: ", Style::default().fg(self.theme.text_dim)),
+                Span::styled(
+                    self.sort.label(),
+                    Style::default().fg(self.theme.accent).bold(),
+                ),
+            ]),
         ]
     }
 
@@ -198,16 +208,19 @@ impl<'a> SidebarWidget<'a> {
     fn hotkeys(&self) -> (&str, u16) {
         match self.mode {
             ApplicationMode::Browsing => (
-                " Esc/q -> Quit \n a -> Add \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate ",
-                7,
+                " Esc/q:Quit \n a:Add \n x:Clear \n t:Theme \n s:Select sort \n r:Reverse sort order \n <C-s>:Save \n h/l:Focus \n ▲/▼/j/k:Navigate ",
+                9,
             ),
             ApplicationMode::List => (
-                " Esc/q -> Quit \n Enter -> Toggle \n / -> Search \n a -> Add \n e -> Edit \n d -> Delete \n x -> Clear \n t -> Theme \n <C-s> -> Save \n h/l -> Focus \n ▲/▼/j/k -> Navigate \n J/K -> Move \n ]/[ -> Scroll description ",
-                13,
+                " Esc/q:Quit \n Enter:Toggle \n /:Search \n a:Add \n e:Edit \n d:Delete \n x:Clear \n t:Theme \n s:Select sort \n r:Reverse sort order \n <C-s>:Save \n h/l:Focus \n ▲/▼/j/k:Navigate \n J/K:Move \n ]/[:Scroll description ",
+                15,
             ),
-            ApplicationMode::Form => (" Esc -> Cancel \n ▲/▼ -> Next \n ◄/► -> Priority ", 3),
+            ApplicationMode::Form => (
+                " <A-Enter>:Submit \n Esc:Cancel \n ▲/▼:Next \n ◄/►:Priority ",
+                4,
+            ),
             ApplicationMode::Search => (
-                " Esc -> Quit \n Enter -> Search \n Backspace -> Remove char \n ◄/► -> Cursor ",
+                " Esc:Quit \n Enter:Search \n Backspace:Remove char \n ◄/►:Cursor ",
                 4,
             ),
         }
@@ -220,7 +233,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shoukd_make_summary_for_todos_with_progress() {
+    fn should_make_summary_for_todos_with_progress() {
         let todos = vec![
             Todo {
                 completed: true,
@@ -237,6 +250,7 @@ mod tests {
             &ui,
             &todos,
             &ApplicationMode::Browsing,
+            Sort::default(),
             &ThemeColors::GRUVBOX,
         );
 
@@ -246,6 +260,9 @@ mod tests {
 
         let gauge_text: String = summary[2].to_string();
         assert!(gauge_text.contains("■■■■■□□□□□"));
+
+        let sort_text: String = summary[3].to_string();
+        assert_eq!(sort_text, " Sort: Priority ▼");
     }
 
     #[test]
@@ -257,6 +274,7 @@ mod tests {
             &ui,
             &todos,
             &ApplicationMode::Browsing,
+            Sort::default(),
             &ThemeColors::GRUVBOX,
         );
 
@@ -275,6 +293,7 @@ mod tests {
             &ui,
             &todos,
             &ApplicationMode::Browsing,
+            Sort::default(),
             &ThemeColors::GRUVBOX,
         );
 
@@ -290,25 +309,31 @@ mod tests {
             &ui,
             &todos,
             &ApplicationMode::Browsing,
+            Sort::default(),
             &ThemeColors::GRUVBOX,
         );
 
         let (browsing_keys, browsing_key_len) = sidebar.hotkeys();
 
         assert!(browsing_keys.contains("Quit"));
-        assert_eq!(browsing_key_len, 7);
+        assert_eq!(browsing_key_len, 9);
     }
 
     #[test]
     fn should_return_hotkeys_for_form_mode() {
         let todos = vec![];
         let ui = UIState::default();
-        let sidebar: SidebarWidget =
-            SidebarWidget::new(&ui, &todos, &ApplicationMode::Form, &ThemeColors::GRUVBOX);
+        let sidebar: SidebarWidget = SidebarWidget::new(
+            &ui,
+            &todos,
+            &ApplicationMode::Form,
+            Sort::default(),
+            &ThemeColors::GRUVBOX,
+        );
 
         let (task_keys, task_key_len) = sidebar.hotkeys();
 
         assert!(task_keys.contains("Cancel"));
-        assert_eq!(task_key_len, 3);
+        assert_eq!(task_key_len, 4);
     }
 }
