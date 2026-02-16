@@ -124,7 +124,7 @@ impl<'a> ApplicationController<'a> {
             self.stabilize_ui_focus(None);
 
             let msg: String = format!(
-                "Cleared {} tasks from filter {}",
+                "Cleared {} tasks from '{}'",
                 removed,
                 self.ui.current_filter.to_string()
             );
@@ -165,6 +165,13 @@ impl<'a> ApplicationController<'a> {
 
             self.state.select_state.select(new_pos);
         }
+    }
+
+    /// Handle selection change
+    pub fn dispatch_move_selection(&mut self, delta: i32) {
+        let len = self.state.filter(&self.ui.current_filter).count();
+        self.state.move_selection(delta, len);
+        self.ui.desc_scroll.reset();
     }
 
     /// Helper function to synchronize cursor and data

@@ -1,5 +1,5 @@
 use crate::{
-    enums::ApplicationMode,
+    core::ApplicationMode,
     state::{ApplicationState, UIState},
 };
 use ratatui::{Frame, widgets::Widget};

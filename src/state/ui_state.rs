@@ -1,7 +1,7 @@
 use crate::{
     enums::FocusArea,
     models::Filter,
-    state::{ApplicationResult, ApplicationState},
+    state::{AdaptiveScroll, ApplicationResult, ApplicationState},
     theme::{Theme, ThemeColors},
     traits::{Input, InteractableEnum, Modal, ModalAction},
     ui::{Confirm, Form, Notification, Popup, TextInput},
@@ -24,6 +24,9 @@ pub struct UIState {
     pub modal: Option<ActiveModal>,
     pub task_form: Option<Form>,
     pub search_input: Option<TextInput>,
+
+    pub desc_scroll: AdaptiveScroll,
+    pub sidebar_scroll: AdaptiveScroll,
 
     pub theme: Theme,
 }
@@ -117,6 +120,7 @@ impl UIState {
             FocusArea::LeftPanel => FocusArea::MainContent,
             FocusArea::MainContent => FocusArea::LeftPanel,
         };
+        self.sidebar_scroll.reset();
     }
 
     /// Returns styles if focused

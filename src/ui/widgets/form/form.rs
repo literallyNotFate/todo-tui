@@ -75,19 +75,21 @@ impl Form {
         let key: KeyCode = event.code;
         let modifiers: KeyModifiers = event.modifiers;
 
-        match key {
-            KeyCode::Enter if modifiers.contains(KeyModifiers::ALT) => {
+        match (key, modifiers) {
+            (KeyCode::Enter, KeyModifiers::ALT) => {
                 return WidgetResponse::Submit;
             }
-            KeyCode::Enter if self.is_button_selected() => return WidgetResponse::Submit,
-            KeyCode::Esc => return WidgetResponse::Cancel,
-            KeyCode::Down => {
+            (KeyCode::Enter, KeyModifiers::NONE) if self.is_button_selected() => {
+                return WidgetResponse::Submit;
+            }
+            (KeyCode::Esc, KeyModifiers::NONE) => return WidgetResponse::Cancel,
+            (KeyCode::Down, KeyModifiers::NONE) => {
                 if !self.is_textarea_focused() || self.is_cursor_at_bottom() {
                     self.next_focus();
                     return WidgetResponse::Continue;
                 }
             }
-            KeyCode::Up => {
+            (KeyCode::Up, KeyModifiers::NONE) => {
                 if !self.is_textarea_focused() || self.is_cursor_at_top() {
                     self.prev_focus();
                     return WidgetResponse::Continue;

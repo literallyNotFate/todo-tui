@@ -1,7 +1,8 @@
 use crate::{
     Application,
     app::ApplicationController,
-    enums::{ApplicationMode, FocusArea, WidgetResponse},
+    core::ApplicationMode,
+    enums::{FocusArea, WidgetResponse},
     models::{Filter, Todo},
     traits::{Input, ModalAction, ModalResult},
     ui::{Form, is_terminal_small},
@@ -70,6 +71,8 @@ impl EventHandler {
             (KeyCode::Char('s'), KeyModifiers::CONTROL) => ctrl.ui.save_confirm(),
             (KeyCode::Char('t'), KeyModifiers::NONE) => ctrl.ui.switch_theme(),
             (KeyCode::Char('x'), KeyModifiers::NONE) => ctrl.ui.clear_confirm(),
+            (KeyCode::Char('j'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_down(),
+            (KeyCode::Char('k'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_up(),
             (KeyCode::Char('s'), KeyModifiers::NONE) => {
                 ctrl.state.sort.parameter = ctrl.state.sort.parameter.next();
                 ctrl.dispatch_sorting();
@@ -139,14 +142,8 @@ impl EventHandler {
         mode: &mut ApplicationMode,
     ) {
         match code {
-            KeyCode::Char('j') | KeyCode::Down => {
-                let len = ctrl.state.filter(&ctrl.ui.current_filter).count();
-                ctrl.state.move_selection(1, len);
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                let len = ctrl.state.filter(&ctrl.ui.current_filter).count();
-                ctrl.state.move_selection(-1, len);
-            }
+            KeyCode::Char('j') | KeyCode::Down => ctrl.dispatch_move_selection(1),
+            KeyCode::Char('k') | KeyCode::Up => ctrl.dispatch_move_selection(-1),
             KeyCode::Enter => ctrl.dispatch_toggle(),
             KeyCode::Char('e') => {
                 if let Some(id) = ctrl.ui.selected_id(ctrl.state) {
@@ -159,8 +156,8 @@ impl EventHandler {
             KeyCode::Char('d') => ctrl.ui.remove_confirm(),
             KeyCode::Char('J') => ctrl.dispatch_move_tasks(1),
             KeyCode::Char('K') => ctrl.dispatch_move_tasks(-1),
-            KeyCode::Char('[') => ctrl.state.scroll.scroll_up(),
-            KeyCode::Char(']') => ctrl.state.scroll.scroll_down(),
+            KeyCode::Char('[') => ctrl.ui.desc_scroll.scroll_up(),
+            KeyCode::Char(']') => ctrl.ui.desc_scroll.scroll_down(),
             KeyCode::Char('/') => {
                 ctrl.ui.show_search();
                 *mode = ApplicationMode::Search;
@@ -362,6 +359,26 @@ mod tests {
         event = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
         EventHandler::handle_key(&mut app, event);
         assert_eq!(app.data.sort.order, SortOrder::Asc);
+    }
+
+    #[test]
+    fn should_scroll_through_sidebar() {
+        let mut app = setup_app();
+
+        app.ui.sidebar_scroll.current.set(10);
+        app.ui.sidebar_scroll.max_scroll.set(20);
+
+        let mut event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::ALT);
+        EventHandler::handle_key(&mut app, event);
+        assert_eq!(app.ui.sidebar_scroll.current.get(), 11);
+
+        event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::ALT);
+        EventHandler::handle_key(&mut app, event);
+        assert_eq!(app.ui.sidebar_scroll.current.get(), 12);
+
+        event = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::ALT);
+        EventHandler::handle_key(&mut app, event);
+        assert_eq!(app.ui.sidebar_scroll.current.get(), 11);
     }
 
     #[test]
@@ -580,17 +597,19 @@ mod tests {
     #[test]
     fn should_scroll_through_description() {
         let (mut state, mut ui, mut mode, _) = setup_ctx();
-        state.scroll.current = 10;
+
+        ui.desc_scroll.current.set(10);
+        ui.desc_scroll.max_scroll.set(20);
         let mut ctrl = ApplicationController::new(&mut state, &mut ui);
 
         EventHandler::handle_main_content(KeyCode::Char('['), &mut ctrl, &mut mode);
-        assert_eq!(ctrl.state.scroll.current, 9);
+        assert_eq!(ctrl.ui.desc_scroll.current.get(), 9);
 
         EventHandler::handle_main_content(KeyCode::Char('['), &mut ctrl, &mut mode);
-        assert_eq!(ctrl.state.scroll.current, 8);
+        assert_eq!(ctrl.ui.desc_scroll.current.get(), 8);
 
         EventHandler::handle_main_content(KeyCode::Char(']'), &mut ctrl, &mut mode);
-        assert_eq!(ctrl.state.scroll.current, 8);
+        assert_eq!(ctrl.ui.desc_scroll.current.get(), 9);
     }
 
     #[test]

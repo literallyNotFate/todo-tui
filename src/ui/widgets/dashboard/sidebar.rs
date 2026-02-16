@@ -1,16 +1,17 @@
 use crate::{
-    enums::ApplicationMode,
+    core::ApplicationMode,
     models::{Filter, Sort, Todo},
     state::UIState,
     theme::ThemeColors,
     traits::InteractableEnum,
+    ui::scrollable,
 };
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span},
-    widgets::List,
+    widgets::{List, Wrap},
 };
 
 /// Sidebar widget
@@ -44,9 +45,7 @@ impl<'a> SidebarWidget<'a> {
         use crate::enums::FocusArea;
         use ratatui::widgets::{Block, ListState, Paragraph};
 
-        let (hotkeys, hotkeys_len): (&str, u16) = self.hotkeys();
-
-        let sidebar_layout: std::rc::Rc<[Rect]> = self.layout(area, hotkeys_len + 4);
+        let sidebar_layout: std::rc::Rc<[Rect]> = self.layout(area);
         let focused_style: Style = self.ui.focused_on(&FocusArea::LeftPanel);
 
         let filters_block: Block = Block::bordered()
@@ -78,29 +77,40 @@ impl<'a> SidebarWidget<'a> {
         frame.render_widget(summary_block, sidebar_layout[1]);
         frame.render_widget(Paragraph::new(summary_text), summary_inner_layout[1]);
 
-        let hotkeys_block: Block = Block::bordered()
+        let hotkeys_block = Block::bordered()
             .title(" Hotkeys ")
             .border_style(Style::default().fg(self.theme.border))
             .bg(self.theme.bg_dim);
 
-        let hotkeys_inner_area: Rect = hotkeys_block.inner(sidebar_layout[2]);
-        let hotkeys_layout: std::rc::Rc<[Rect]> = self.hotkeys_layout(hotkeys_inner_area);
+        let mut hotkeys_lines = self.mode.hotkeys(self.theme, &self.ui.focus_area);
+        hotkeys_lines.insert(0, Line::from(""));
 
-        frame.render_widget(hotkeys_block, sidebar_layout[2]);
-        frame.render_widget(
-            Paragraph::new(hotkeys).style(Style::default().fg(self.theme.text_primary)),
-            hotkeys_layout[1],
+        scrollable(
+            frame,
+            sidebar_layout[2],
+            hotkeys_block,
+            &self.ui.sidebar_scroll,
+            &hotkeys_lines,
+            false,
+            Style::default().fg(self.theme.border),
+            |f, rect| {
+                let p = Paragraph::new(hotkeys_lines.clone())
+                    .wrap(Wrap { trim: false })
+                    .scroll((self.ui.sidebar_scroll.current.get(), 0))
+                    .style(Style::default().fg(self.theme.text_primary));
+                f.render_widget(p, rect);
+            },
         );
     }
 
     /// Layout for sidebar
-    fn layout(&self, area: Rect, hotkeys_length: u16) -> std::rc::Rc<[Rect]> {
+    fn layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Fill(1),                // Filters
-                Constraint::Length(8),              // Summary
-                Constraint::Length(hotkeys_length), // Hotkeys
+                Constraint::Fill(1),   // Filters
+                Constraint::Length(8), // Summary
+                Constraint::Max(12),   // Hotkeys
             ])
             .split(area)
     }
@@ -127,18 +137,7 @@ impl<'a> SidebarWidget<'a> {
             .split(area)
     }
 
-    /// Layout for hotkeys
-    fn hotkeys_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // Hotkeys margin
-                Constraint::Min(0),    // Hotkeys
-            ])
-            .split(area)
-    }
-
-    // Construct a list based on filtered todo values
+    /// Construct a list based on filtered todo values
     fn construct_list(&self, query: &str) -> List<'static> {
         use ratatui::widgets::ListItem;
 
@@ -202,28 +201,6 @@ impl<'a> SidebarWidget<'a> {
                 ),
             ]),
         ]
-    }
-
-    /// Get hotkeys depending on application mode
-    fn hotkeys(&self) -> (&str, u16) {
-        match self.mode {
-            ApplicationMode::Browsing => (
-                " Esc/q:Quit \n a:Add \n x:Clear \n t:Theme \n s:Select sort \n r:Reverse sort order \n <C-s>:Save \n h/l:Focus \n ▲/▼/j/k:Navigate ",
-                9,
-            ),
-            ApplicationMode::List => (
-                " Esc/q:Quit \n Enter:Toggle \n /:Search \n a:Add \n e:Edit \n d:Delete \n x:Clear \n t:Theme \n s:Select sort \n r:Reverse sort order \n <C-s>:Save \n h/l:Focus \n ▲/▼/j/k:Navigate \n J/K:Move \n ]/[:Scroll description ",
-                15,
-            ),
-            ApplicationMode::Form => (
-                " <A-Enter>:Submit \n Esc:Cancel \n ▲/▼:Next \n ◄/►:Priority ",
-                4,
-            ),
-            ApplicationMode::Search => (
-                " Esc:Quit \n Enter:Search \n Backspace:Remove char \n ◄/►:Cursor ",
-                4,
-            ),
-        }
     }
 }
 
@@ -299,41 +276,5 @@ mod tests {
 
         let list: List = sidebar.construct_list("");
         assert_eq!(list.len(), Filter::all_variants().len());
-    }
-
-    #[test]
-    fn should_return_hotkeys_for_browsing_mode() {
-        let todos = vec![];
-        let ui = UIState::default();
-        let sidebar: SidebarWidget = SidebarWidget::new(
-            &ui,
-            &todos,
-            &ApplicationMode::Browsing,
-            Sort::default(),
-            &ThemeColors::GRUVBOX,
-        );
-
-        let (browsing_keys, browsing_key_len) = sidebar.hotkeys();
-
-        assert!(browsing_keys.contains("Quit"));
-        assert_eq!(browsing_key_len, 9);
-    }
-
-    #[test]
-    fn should_return_hotkeys_for_form_mode() {
-        let todos = vec![];
-        let ui = UIState::default();
-        let sidebar: SidebarWidget = SidebarWidget::new(
-            &ui,
-            &todos,
-            &ApplicationMode::Form,
-            Sort::default(),
-            &ThemeColors::GRUVBOX,
-        );
-
-        let (task_keys, task_key_len) = sidebar.hotkeys();
-
-        assert!(task_keys.contains("Cancel"));
-        assert_eq!(task_key_len, 4);
     }
 }

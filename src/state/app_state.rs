@@ -1,7 +1,6 @@
 use crate::{
     core::{ApplicationError, Storage},
     models::{Filter, Priority, Sort, Todo},
-    state::AdaptiveScroll,
     ui::Notification,
 };
 use chrono::Local;
@@ -17,7 +16,6 @@ use uuid::Uuid;
 pub struct ApplicationState {
     pub todos: Vec<Todo>,
     pub select_state: TableState,
-    pub scroll: AdaptiveScroll,
     pub sort: Sort,
 
     pub notification: Option<Notification>,
@@ -45,7 +43,6 @@ impl ApplicationState {
             notification: None,
             sort: Sort::default(),
             saved_todos_hash: 0,
-            scroll: AdaptiveScroll::default(),
         }
     }
 
@@ -76,7 +73,6 @@ impl ApplicationState {
         };
 
         self.select_state.select(Some(next));
-        self.scroll.reset();
     }
 
     /// Save todos to a file

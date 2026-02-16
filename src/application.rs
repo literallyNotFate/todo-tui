@@ -1,5 +1,6 @@
 use crate::{
-    enums::{ApplicationMode, FocusArea},
+    core::ApplicationMode,
+    enums::FocusArea,
     events::EventHandler,
     state::{ApplicationState, UIState},
     ui::Renderer,

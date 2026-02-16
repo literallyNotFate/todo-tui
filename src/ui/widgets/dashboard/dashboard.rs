@@ -1,5 +1,5 @@
 use crate::{
-    enums::ApplicationMode,
+    core::ApplicationMode,
     state::{ApplicationState, UIState},
     theme::ThemeColors,
 };
@@ -28,7 +28,7 @@ impl<'a> Dashboard<'a> {
         }
     }
 
-    // Dashboard rendering
+    /// Dashboard rendering
     pub fn render(self, frame: &mut Frame, area: Rect) {
         use crate::ui::{
             main_layout,

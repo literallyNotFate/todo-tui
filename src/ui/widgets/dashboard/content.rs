@@ -1,5 +1,5 @@
 use crate::{
-    enums::ApplicationMode,
+    core::ApplicationMode,
     models::Todo,
     state::{ApplicationState, UIState},
     theme::ThemeColors,
@@ -54,7 +54,7 @@ impl<'a> ContentWidget<'a> {
                     frame,
                     area,
                     &mut self.state.select_state,
-                    &mut self.state.scroll,
+                    &self.ui.desc_scroll,
                 );
             }
         }

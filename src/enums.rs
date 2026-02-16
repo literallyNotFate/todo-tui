@@ -6,15 +6,6 @@ pub enum FocusArea {
     MainContent, // Task list/form
 }
 
-/// Which mode user selects (for input handling)
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ApplicationMode {
-    Browsing,
-    List,
-    Form,
-    Search,
-}
-
 /// What is being returned from handle_key() widget function
 #[derive(Debug, PartialEq)]
 pub enum WidgetResponse {
