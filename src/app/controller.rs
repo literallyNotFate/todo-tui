@@ -31,7 +31,7 @@ impl<'a> ApplicationController<'a> {
         match TodoService::append_task(&mut self.state.todos, task, &self.state.sort) {
             Ok(added) => {
                 self.stabilize_ui_focus(Some(id));
-                self.state.hash_state();
+                self.state.mark_as_dirty();
 
                 self.ui.push_notification(
                     self.state,
@@ -47,7 +47,7 @@ impl<'a> ApplicationController<'a> {
         match TodoService::update_task(&mut self.state.todos, &id, task, &self.state.sort) {
             Ok(index) => {
                 self.stabilize_ui_focus(Some(id));
-                self.state.hash_state();
+                self.state.mark_as_dirty();
 
                 let msg = format!(
                     "Task {} / {} was updated",
@@ -67,7 +67,7 @@ impl<'a> ApplicationController<'a> {
             match TodoService::remove_task(&mut self.state.todos, &id) {
                 Ok(removed) => {
                     self.stabilize_ui_focus(None);
-                    self.state.hash_state();
+                    self.state.mark_as_dirty();
 
                     self.ui.push_notification(
                         self.state,
@@ -87,7 +87,7 @@ impl<'a> ApplicationController<'a> {
         if let Some(id) = self.ui.selected_id(self.state) {
             if TodoService::toggle_task(&mut self.state.todos, &id).is_ok() {
                 self.stabilize_ui_focus(Some(id));
-                self.state.hash_state();
+                self.state.mark_as_dirty();
             }
         }
     }
@@ -108,7 +108,7 @@ impl<'a> ApplicationController<'a> {
                     };
 
                     self.state.select_state.select(Some(new_index));
-                    self.state.hash_state();
+                    self.state.mark_as_dirty();
                 }
                 Err(e) => self.ui.push_notification(self.state, Err(e)),
             }
@@ -120,7 +120,7 @@ impl<'a> ApplicationController<'a> {
         let removed: usize = TodoService::clear(&mut self.state.todos, &self.ui.current_filter);
 
         if removed > 0 {
-            self.state.hash_state();
+            self.state.mark_as_dirty();
             self.stabilize_ui_focus(None);
 
             let msg: String = format!(
@@ -155,6 +155,7 @@ impl<'a> ApplicationController<'a> {
             .map(|t| t.id);
 
         TodoService::sorting(&mut self.state.todos, &self.state.sort);
+        self.state.mark_as_dirty();
 
         if let Some(id) = selected_id {
             let filtered = self

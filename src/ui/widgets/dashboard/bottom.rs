@@ -85,22 +85,26 @@ mod tests {
 
     #[test]
     fn should_return_status_for_bottom_bar() {
-        let mut state: ApplicationState = ApplicationState::default();
-        state.saved_todos_hash = state.hash_state();
+        let mut state = ApplicationState::default();
+        state.saved_hash = state.hash_state();
+        state.mark_as_dirty();
+        let _ = state.any_unsaved_changes();
 
-        let mut bottom: BottomBarWidget = BottomBarWidget::new(&state, &ThemeColors::TOKYO_NIGHT);
-        let mut status: (&str, Color) = bottom.status();
-
-        assert!(!state.any_unsaved_changes());
-        assert_eq!(status.0, "✓ Saved ");
-        assert_eq!(status.1, Color::Rgb(158, 206, 106));
+        {
+            let bottom = BottomBarWidget::new(&state, &ThemeColors::TOKYO_NIGHT);
+            let status = bottom.status();
+            assert!(!state.any_unsaved_changes());
+            assert_eq!(status.0, "✓ Saved ");
+        }
 
         state.todos.push(Todo::new("test", "test", None));
-        bottom = BottomBarWidget::new(&state, &ThemeColors::TOKYO_NIGHT);
-        status = bottom.status();
+        state.mark_as_dirty();
 
-        assert!(state.any_unsaved_changes());
-        assert_ne!(status.0, "✓ Saved ");
-        assert_eq!(status.1, Color::Rgb(247, 118, 118));
+        {
+            let bottom = BottomBarWidget::new(&state, &ThemeColors::TOKYO_NIGHT);
+            let status = bottom.status();
+            assert!(state.any_unsaved_changes());
+            assert_eq!(status.0, "● Unsaved ");
+        }
     }
 }

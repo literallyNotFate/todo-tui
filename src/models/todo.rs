@@ -1,11 +1,11 @@
 use super::{Filter, Priority};
 use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use uuid::Uuid;
 
 /// Main todo entity with unique id
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Todo {
     pub id: Uuid,
     pub title: String,
@@ -110,6 +110,17 @@ impl Todo {
             Filter::HighPriority => self.priority == Priority::High,
             Filter::Today => self.created_at.with_timezone(&Local).date_naive() == *today,
         }
+    }
+}
+
+/// Implementing hash for todo excluding time fields (created_at/updated_at) for performance
+impl Hash for Todo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.title.hash(state);
+        self.description.hash(state);
+        self.completed.hash(state);
+        self.priority.hash(state);
     }
 }
 

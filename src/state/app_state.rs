@@ -6,6 +6,7 @@ use crate::{
 use chrono::Local;
 use ratatui::widgets::TableState;
 use std::{
+    cell::Cell,
     hash::{DefaultHasher, Hash, Hasher},
     path::Path,
 };
@@ -19,7 +20,11 @@ pub struct ApplicationState {
     pub sort: Sort,
 
     pub notification: Option<Notification>,
-    pub saved_todos_hash: u64,
+
+    pub saved_hash: u64,
+    current_hash: Cell<u64>,
+    needs_rehash: Cell<bool>,
+    is_unsaved_cache: Cell<bool>,
 }
 
 /// Service response (data or TodoError/StorageError)
@@ -42,20 +47,38 @@ impl ApplicationState {
             select_state: TableState::default(),
             notification: None,
             sort: Sort::default(),
-            saved_todos_hash: 0,
+            saved_hash: 0,
+            current_hash: Cell::new(0),
+            needs_rehash: Cell::new(true),
+            is_unsaved_cache: Cell::new(false),
         }
     }
 
-    /// Get todos hash to compare to current (to track unsaved changes)
+    /// Method that calculates current hash only if its needed so
     pub(crate) fn hash_state(&self) -> u64 {
-        let mut hasher: DefaultHasher = DefaultHasher::new();
-        self.todos.hash(&mut hasher);
-        hasher.finish()
+        if self.needs_rehash.get() {
+            let mut hasher: DefaultHasher = DefaultHasher::new();
+            self.todos.hash(&mut hasher);
+
+            let new_hash: u64 = hasher.finish();
+            self.current_hash.set(new_hash);
+
+            self.is_unsaved_cache.set(new_hash != self.saved_hash);
+            self.needs_rehash.set(false);
+        }
+
+        self.current_hash.get()
     }
 
     /// Check if there any unsaved changes by comparing hash
     pub fn any_unsaved_changes(&self) -> bool {
-        self.hash_state() != self.saved_todos_hash
+        self.hash_state();
+        self.is_unsaved_cache.get()
+    }
+
+    /// Marks state as dirty (to be called in dispatch operations)
+    pub fn mark_as_dirty(&self) {
+        self.needs_rehash.set(true);
     }
 
     /// Navigate through tasks
@@ -78,7 +101,9 @@ impl ApplicationState {
     /// Save todos to a file
     pub fn save(&mut self, path: Option<&Path>) -> ApplicationResult<String> {
         Storage::save(&self.todos, path)?;
-        self.saved_todos_hash = self.hash_state();
+        self.saved_hash = self.hash_state();
+        self.is_unsaved_cache.set(false);
+
         Ok("Tasks were saved!".to_string())
     }
 
@@ -90,7 +115,10 @@ impl ApplicationState {
             ..Self::default()
         };
 
-        state.saved_todos_hash = state.hash_state();
+        let current: u64 = state.hash_state();
+        state.saved_hash = current;
+        state.is_unsaved_cache.set(false);
+
         if state.todos.is_empty() {
             state.select_state.select(None);
         } else {
@@ -161,22 +189,36 @@ mod tests {
     #[test]
     fn should_determine_unsaved_changes() {
         let mut state = ApplicationState::default();
-        state.saved_todos_hash = state.hash_state();
+
+        state.saved_hash = state.hash_state();
+        state.is_unsaved_cache.set(false);
         assert!(!state.any_unsaved_changes());
 
         state.todos.push(Todo::new("Task", "", None));
+        state.mark_as_dirty();
+
         assert!(
             state.any_unsaved_changes(),
             "Hash should be changed after append"
         );
 
-        state.saved_todos_hash = state.hash_state();
+        state.saved_hash = state.hash_state();
+        state.is_unsaved_cache.set(false);
         assert!(!state.any_unsaved_changes());
 
         state.todos[0].title = "Changed".to_string();
+        state.mark_as_dirty();
+
         assert!(
             state.any_unsaved_changes(),
             "Hash should be changed after field edit"
+        );
+
+        state.todos[0].title = "Task".to_string();
+        state.mark_as_dirty();
+        assert!(
+            !state.any_unsaved_changes(),
+            "Should be saved when reverted back"
         );
     }
 
