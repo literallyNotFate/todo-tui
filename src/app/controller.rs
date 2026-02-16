@@ -138,7 +138,7 @@ impl<'a> ApplicationController<'a> {
     /// Handle saving on Ctrl+S
     pub fn dispatch_save(&mut self) {
         match self.state.save(None) {
-            Ok(_) => self.ui.show_result_popup(Ok("Tasks were saved!".into())),
+            Ok(string) => self.ui.show_result_popup(Ok(string)),
             Err(e) => self.ui.show_result_popup(Err(e)),
         }
     }

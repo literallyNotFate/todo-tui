@@ -20,6 +20,7 @@ pub struct SidebarWidget<'a> {
     todos: &'a [Todo],
     mode: &'a ApplicationMode,
     sort: Sort,
+    autosave_enabled: bool,
     theme: &'a ThemeColors,
 }
 
@@ -29,6 +30,7 @@ impl<'a> SidebarWidget<'a> {
         todos: &'a [Todo],
         mode: &'a ApplicationMode,
         sort: Sort,
+        autosave_enabled: bool,
         theme: &'a ThemeColors,
     ) -> Self {
         Self {
@@ -37,6 +39,7 @@ impl<'a> SidebarWidget<'a> {
             mode,
             sort,
             theme,
+            autosave_enabled,
         }
     }
 
@@ -109,7 +112,7 @@ impl<'a> SidebarWidget<'a> {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Fill(1),   // Filters
-                Constraint::Length(8), // Summary
+                Constraint::Length(9), // Summary
                 Constraint::Max(12),   // Hotkeys
             ])
             .split(area)
@@ -200,6 +203,13 @@ impl<'a> SidebarWidget<'a> {
                     Style::default().fg(self.theme.accent).bold(),
                 ),
             ]),
+            Line::from(vec![
+                Span::styled(" Autosave: ", Style::default().fg(self.theme.text_dim)),
+                Span::styled(
+                    if self.autosave_enabled { "On" } else { "Off" },
+                    Style::default().fg(self.theme.accent).bold(),
+                ),
+            ]),
         ]
     }
 }
@@ -228,6 +238,7 @@ mod tests {
             &todos,
             &ApplicationMode::Browsing,
             Sort::default(),
+            false,
             &ThemeColors::GRUVBOX,
         );
 
@@ -240,6 +251,9 @@ mod tests {
 
         let sort_text: String = summary[3].to_string();
         assert_eq!(sort_text, " Sort: Priority ▼");
+
+        let autosave_text: String = summary[4].to_string();
+        assert_eq!(autosave_text, " Autosave: Off");
     }
 
     #[test]
@@ -252,6 +266,7 @@ mod tests {
             &todos,
             &ApplicationMode::Browsing,
             Sort::default(),
+            false,
             &ThemeColors::GRUVBOX,
         );
 
@@ -271,6 +286,7 @@ mod tests {
             &todos,
             &ApplicationMode::Browsing,
             Sort::default(),
+            false,
             &ThemeColors::GRUVBOX,
         );
 

@@ -14,6 +14,7 @@ impl Renderer {
         state: &mut ApplicationState,
         ui: &UIState,
         mode: ApplicationMode,
+        autosave_enabled: bool,
     ) {
         use crate::{
             theme::ThemeColors,
@@ -34,7 +35,7 @@ impl Renderer {
             return;
         }
 
-        Dashboard::new(state, ui, &mode, &colors).render(frame, area);
+        Dashboard::new(state, ui, &mode, autosave_enabled, &colors).render(frame, area);
 
         let blackout: Block = Block::default().style(Style::default().bg(colors.modal_bg).dim());
 

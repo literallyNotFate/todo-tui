@@ -10,6 +10,7 @@ pub struct Dashboard<'a> {
     pub state: &'a mut ApplicationState,
     pub ui: &'a UIState,
     pub mode: &'a ApplicationMode,
+    pub autosave_enabled: bool,
     pub theme: &'a ThemeColors,
 }
 
@@ -18,12 +19,14 @@ impl<'a> Dashboard<'a> {
         state: &'a mut ApplicationState,
         ui: &'a UIState,
         mode: &'a ApplicationMode,
+        autosave_enabled: bool,
         theme: &'a ThemeColors,
     ) -> Self {
         Self {
             state,
             ui,
             mode,
+            autosave_enabled,
             theme,
         }
     }
@@ -44,6 +47,7 @@ impl<'a> Dashboard<'a> {
             &self.state.todos,
             self.mode,
             self.state.sort.clone(),
+            self.autosave_enabled,
             self.theme,
         )
         .render(frame, left_area);

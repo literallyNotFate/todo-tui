@@ -1,5 +1,5 @@
 use crate::{
-    core::ApplicationMode,
+    core::{ApplicationMode, Autosave},
     enums::FocusArea,
     events::EventHandler,
     state::{ApplicationState, UIState},
@@ -15,11 +15,13 @@ use ratatui::{
 };
 
 pub struct Application {
-    pub mode: ApplicationMode,
     pub data: ApplicationState,
-    pub running: bool,
     pub ui: UIState,
+    pub running: bool,
     pub renderer: Renderer,
+    pub mode: ApplicationMode,
+    pub autosave: Autosave,
+
     pub size: (u16, u16),
 }
 
@@ -32,6 +34,7 @@ impl Application {
             running: true,
             ui: UIState::default(),
             renderer: Renderer,
+            autosave: Autosave::new(false),
             size,
         }
     }
@@ -51,6 +54,7 @@ impl Application {
                 match event::read()? {
                     Event::Resize(w, h) => self.size = (w, h),
                     Event::Key(key_event) => {
+                        self.autosave.register_activity();
                         EventHandler::handle_key(self, key_event);
                     }
                     _ => {}
@@ -68,13 +72,26 @@ impl Application {
 
     /// Rendering application using Renderer
     pub fn render(&mut self, frame: &mut Frame) {
-        self.renderer
-            .render(frame, &mut self.data, &self.ui, self.mode);
+        self.renderer.render(
+            frame,
+            &mut self.data,
+            &self.ui,
+            self.mode,
+            self.autosave.enabled,
+        );
     }
 
-    /// Tick function (for notification)
+    /// Tick function (for notification and autosave)
     pub fn tick(&mut self) {
         self.ui.expire_notification(&mut self.data.notification);
+
+        if self.autosave.should_save(self.data.any_unsaved_changes()) {
+            if let Err(e) = self.data.save(None) {
+                self.ui.push_notification(&mut self.data, Err(e));
+            }
+
+            self.autosave.reset_timer();
+        }
     }
 
     /// Synchronizing selection after tab switching
@@ -114,6 +131,7 @@ impl Application {
             mode: ApplicationMode::Browsing,
             running: true,
             renderer: Renderer,
+            autosave: Autosave::new(false),
             size: (80, 24),
         }
     }
@@ -122,12 +140,29 @@ impl Application {
 /// Unit-tests for application structure
 #[cfg(test)]
 mod tests {
+    use tempdir::TempDir;
+
     use super::*;
     use crate::{
         models::{Filter, Todo},
         ui::Notification,
     };
-    use std::time::{Duration, Instant};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        thread::sleep,
+        time::{Duration, Instant},
+    };
+
+    fn mock_tick(app: &mut Application, path: Option<&Path>) {
+        if app.autosave.should_save(app.data.any_unsaved_changes()) {
+            if let Err(e) = app.data.save(path) {
+                app.ui.push_notification(&mut app.data, Err(e));
+            }
+
+            app.autosave.reset_timer();
+        }
+    }
 
     #[test]
     fn should_create_application() {
@@ -224,5 +259,65 @@ mod tests {
         app.sync_ui();
 
         assert_eq!(app.data.select_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn should_go_autosave_full_cycle() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        let mut app = Application::test();
+        app.autosave.enabled = true;
+        app.autosave.interval = Duration::from_millis(10);
+        app.autosave.debounce = Duration::from_millis(10);
+
+        app.data.todos.push(Todo::new("Test Task", "Desc", None));
+        app.data.mark_as_dirty();
+        assert!(app.data.any_unsaved_changes());
+
+        mock_tick(&mut app, Some(&path));
+        assert!(
+            app.data.any_unsaved_changes(),
+            "Should NOT save because debounce is active"
+        );
+
+        sleep(Duration::from_millis(15));
+        app.autosave.register_activity();
+        mock_tick(&mut app, Some(&path));
+        assert!(
+            app.data.any_unsaved_changes(),
+            "Should NOT save because user is active"
+        );
+
+        sleep(Duration::from_millis(15));
+        mock_tick(&mut app, Some(&path));
+
+        assert!(!app.data.any_unsaved_changes(), "Data should be saved");
+        assert!(path.exists(), "File was not created");
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("Test Task"), "Saved content is incorrect");
+    }
+
+    #[test]
+    fn should_do_nothing_if_autosave_disabled() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        let mut app = Application::test();
+        app.autosave.enabled = false;
+        app.autosave.interval = Duration::from_millis(0);
+
+        app.data.todos.push(Todo::new("Hidden Task", "", None));
+        app.data.mark_as_dirty();
+
+        sleep(Duration::from_millis(5));
+        mock_tick(&mut app, Some(&path));
+
+        assert!(app.data.any_unsaved_changes());
+        assert!(
+            !path.exists(),
+            "File should NOT be created when autosave is disabled"
+        );
     }
 }

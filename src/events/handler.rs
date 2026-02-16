@@ -73,6 +73,7 @@ impl EventHandler {
             (KeyCode::Char('x'), KeyModifiers::NONE) => ctrl.ui.clear_confirm(),
             (KeyCode::Char('j'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_down(),
             (KeyCode::Char('k'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_up(),
+            (KeyCode::Char('a'), KeyModifiers::ALT) => app.autosave.toggle_enabled(),
             (KeyCode::Char('s'), KeyModifiers::NONE) => {
                 ctrl.state.sort.parameter = ctrl.state.sort.parameter.next();
                 ctrl.dispatch_sorting();
@@ -107,8 +108,6 @@ impl EventHandler {
                     }
                     _ => {}
                 }
-            } else if action == ModalAction::UnsavedExit {
-                *running = false;
             }
         }
     }
@@ -382,6 +381,20 @@ mod tests {
     }
 
     #[test]
+    fn should_toggle_autosave() {
+        let mut app = setup_app();
+        assert!(!app.autosave.enabled);
+
+        let mut event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::ALT);
+        EventHandler::handle_key(&mut app, event);
+        assert!(app.autosave.enabled);
+
+        event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::ALT);
+        EventHandler::handle_key(&mut app, event);
+        assert!(!app.autosave.enabled);
+    }
+
+    #[test]
     fn should_toggle_focus_right_with_l() {
         let (mut state, mut ui, _, mut running) = setup_ctx();
         ui.focus_area = FocusArea::LeftPanel;
@@ -481,22 +494,22 @@ mod tests {
         ui.unsaved_confirm();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui);
 
-        let event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let event = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
         EventHandler::handle_modal(event, &mut ctrl, &mut running);
 
         assert!(!running, "App should be closed");
     }
 
     #[test]
-    fn should_exit_without_saving_on_unsaved_exit_cancel() {
+    fn should_not_exit_on_unsaved_exit_cancel() {
         let (mut state, mut ui, _, mut running) = setup_ctx();
         ui.unsaved_confirm();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui);
 
-        let event = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        let event = KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE);
         EventHandler::handle_modal(event, &mut ctrl, &mut running);
 
-        assert!(!running, "App should be closed anyway on UnsavedExit");
+        assert!(running, "App should not be closed if cancelled");
         assert!(ctrl.ui.modal.is_none());
     }
 

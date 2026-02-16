@@ -53,6 +53,7 @@ impl ApplicationMode {
                 self.add_command(&mut lines, "<r>", "Reverse Sort", theme);
                 self.add_command(&mut lines, "<t>", "Theme", theme);
                 self.add_command(&mut lines, "<C-s>", "Save", theme);
+                self.add_command(&mut lines, "<A-a>", "Autosave", theme);
                 self.add_command(&mut lines, "Esc/q", "Quit", theme);
             }
 
