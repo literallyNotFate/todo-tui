@@ -1,5 +1,5 @@
 /// Which area of menu is being selected
-#[derive(Default, PartialEq, Debug)]
+#[derive(Default, PartialEq, Debug, Clone, Copy)]
 pub enum FocusArea {
     #[default]
     LeftPanel, // Sidebar

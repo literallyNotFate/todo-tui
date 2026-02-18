@@ -1,24 +1,24 @@
-use crate::state::AdaptiveScroll;
-use ratatui::{Frame, layout::Rect, style::Style, text::Line, widgets::Block};
+use crate::{state::AdaptiveScroll, ui::RenderContext};
+use ratatui::{layout::Rect, style::Style, text::Line, widgets::Block};
 
 pub fn scrollable<F>(
-    frame: &mut Frame,
+    ctx: &mut RenderContext,
     area: Rect,
     block: Block,
     scroll: &AdaptiveScroll,
     content_lines: &[Line],
     is_table: bool,
-    focused: Style,
+    scrollbar_fg: Style,
     render_content: F,
 ) where
-    F: FnOnce(&mut Frame, Rect),
+    F: FnOnce(&mut RenderContext, Rect),
 {
     use ratatui::{
         layout::{Constraint, Direction, Layout, Rect},
         widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState},
     };
 
-    frame.render_widget(block.clone(), area);
+    ctx.render_widget(block.clone(), area);
     let inner: Rect = block.inner(area);
     let viewport: u16 = inner.height;
 
@@ -65,7 +65,7 @@ pub fn scrollable<F>(
         })
         .areas(inner);
 
-    render_content(frame, content_area);
+    render_content(ctx, content_area);
 
     if show_scrollbar {
         let (scrollabr_pos, scrollbar_total, scrollbar_viewport) = if is_table {
@@ -83,11 +83,11 @@ pub fn scrollable<F>(
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"))
             .thumb_symbol("▉")
-            .thumb_style(focused)
-            .track_style(focused)
-            .begin_style(focused)
-            .end_style(focused);
+            .thumb_style(scrollbar_fg)
+            .track_style(scrollbar_fg)
+            .begin_style(scrollbar_fg)
+            .end_style(scrollbar_fg);
 
-        frame.render_stateful_widget(scrollbar, scroll_area, &mut state);
+        ctx.render_stateful_widget(scrollbar, scroll_area, &mut state);
     }
 }

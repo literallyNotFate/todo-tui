@@ -1,6 +1,5 @@
-use crate::{core::Autosave, state::ApplicationState, theme::ThemeColors};
+use crate::{core::Autosave, state::ApplicationState, theme::ThemeColors, ui::RenderContext};
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
@@ -10,39 +9,31 @@ use ratatui::{
 pub struct BottomBarWidget<'a> {
     state: &'a ApplicationState,
     autosave: &'a Autosave,
-    theme: &'a ThemeColors,
 }
 
 impl<'a> BottomBarWidget<'a> {
-    pub fn new(
-        state: &'a ApplicationState,
-        autosave: &'a Autosave,
-        theme: &'a ThemeColors,
-    ) -> Self {
-        Self {
-            state,
-            autosave,
-            theme,
-        }
+    pub fn new(state: &'a ApplicationState, autosave: &'a Autosave) -> Self {
+        Self { state, autosave }
     }
 
     /// Bottom bar rendering
-    pub fn render(&self, frame: &mut Frame, area: Rect) {
+    pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
         use ratatui::widgets::Paragraph;
 
+        let theme = ctx.theme;
         let chunks: std::rc::Rc<[Rect]> = self.layout(area);
         let status_layout: std::rc::Rc<[Rect]> = self.status_layout(chunks[1]);
 
-        frame.render_widget(self.left_info(), status_layout[0]);
+        ctx.render_widget(self.left_info(&theme), status_layout[0]);
 
         if let Some(n) = &self.state.notification {
             if !n.is_expired() {
-                n.render(frame, status_layout[1], self.theme);
+                n.render(ctx, status_layout[1]);
             }
         }
 
-        frame.render_widget(
-            Paragraph::new(self.right_status()).right_aligned(),
+        ctx.render_widget(
+            Paragraph::new(self.right_status(&theme)).right_aligned(),
             status_layout[2],
         );
     }
@@ -71,41 +62,41 @@ impl<'a> BottomBarWidget<'a> {
     }
 
     /// Left part: [Theme] | Autosave: [ON]/[OFF]
-    fn left_info(&self) -> Line<'_> {
+    fn left_info(&self, theme: &ThemeColors) -> Line<'_> {
         let as_status = if self.autosave.enabled {
-            Span::styled(" Autosave: [ON]", Style::default().fg(self.theme.success))
+            Span::styled(" Autosave: [ON]", Style::default().fg(theme.success))
         } else {
-            Span::styled(" Autosave: [OFF]", Style::default().fg(self.theme.text_dim))
+            Span::styled(" Autosave: [OFF]", Style::default().fg(theme.text_dim))
         };
 
         Line::from(vec![
             Span::styled(
-                format!("[{}] ", self.theme.name),
-                Style::default().fg(self.theme.warning),
+                format!("[{}] ", theme.name),
+                Style::default().fg(theme.warning),
             ),
-            Span::styled("|", Style::default().fg(self.theme.text_primary)),
+            Span::styled("|", Style::default().fg(theme.text_primary)),
             as_status,
         ])
     }
 
     /// Right part: (15s) ● Unsaved
-    fn right_status(&self) -> Line<'_> {
+    fn right_status(&self, theme: &ThemeColors) -> Line<'_> {
         let mut spans = Vec::new();
         let has_changes = self.state.any_unsaved_changes();
 
         if self.autosave.enabled && has_changes {
             if self.autosave.is_debouncing(has_changes) {
-                spans.push(Span::styled("(waiting...) ", self.theme.warning));
+                spans.push(Span::styled("(waiting...) ", theme.warning));
             } else {
                 let s = self.autosave.time_until_next_save();
-                spans.push(Span::styled(format!("({}s) ", s), self.theme.text_dim));
+                spans.push(Span::styled(format!("({}s) ", s), theme.text_dim));
             }
         }
 
         let (msg, color) = if has_changes {
-            ("● Unsaved ", self.theme.error)
+            ("● Unsaved ", theme.error)
         } else {
-            ("✓ Saved ", self.theme.success)
+            ("✓ Saved ", theme.success)
         };
 
         spans.push(Span::styled(msg, Style::default().fg(color)));
@@ -131,29 +122,28 @@ mod tests {
         let theme = ThemeColors::default();
 
         let mut autosave = Autosave::new(true);
-        let widget = BottomBarWidget::new(&state, &autosave, &theme);
-        let text = line_to_string(widget.left_info());
+        let widget = BottomBarWidget::new(&state, &autosave);
+        let text = line_to_string(widget.left_info(&theme));
         assert!(text.contains("Autosave: [ON]"));
         assert!(text.contains(theme.name));
 
         autosave.enabled = false;
-        let widget_off = BottomBarWidget::new(&state, &autosave, &theme);
-        let text_off = line_to_string(widget_off.left_info());
+        let widget_off = BottomBarWidget::new(&state, &autosave);
+        let text_off = line_to_string(widget_off.left_info(&theme));
         assert!(text_off.contains("Autosave: [OFF]"));
     }
 
     #[test]
     fn should_render_right_status_with_timer_and_unsaved() {
         let mut state = ApplicationState::default();
-        let theme = ThemeColors::default();
         let mut autosave = Autosave::new(true);
 
         state.todos.push(Todo::new("Test", "", None));
         state.mark_as_dirty();
         autosave.reset_timer();
 
-        let widget = BottomBarWidget::new(&state, &autosave, &theme);
-        let text = line_to_string(widget.right_status());
+        let widget = BottomBarWidget::new(&state, &autosave);
+        let text = line_to_string(widget.right_status(&ThemeColors::GRUVBOX));
 
         assert!(text.contains("30s"));
         assert!(text.contains("● Unsaved"));
@@ -162,7 +152,6 @@ mod tests {
     #[test]
     fn should_render_waiting_status_during_debounce() {
         let mut state = ApplicationState::default();
-        let theme = ThemeColors::default();
         let mut autosave = Autosave::new(true);
 
         state.todos.push(Todo::new("Test", "", None));
@@ -171,8 +160,8 @@ mod tests {
         autosave.interval = Duration::from_millis(0);
         autosave.register_activity();
 
-        let widget = BottomBarWidget::new(&state, &autosave, &theme);
-        let text = line_to_string(widget.right_status());
+        let widget = BottomBarWidget::new(&state, &autosave);
+        let text = line_to_string(widget.right_status(&ThemeColors::GRUVBOX));
 
         assert!(text.contains("(waiting...)"));
         assert!(text.contains("● Unsaved"));
@@ -184,7 +173,6 @@ mod tests {
         let path: PathBuf = temp_dir.path().join("todos.json");
 
         let mut state = ApplicationState::default();
-        let theme = ThemeColors::default();
         let autosave = Autosave::new(true);
 
         state.todos.clear();
@@ -195,8 +183,8 @@ mod tests {
             "State must be clean for this test"
         );
 
-        let widget = BottomBarWidget::new(&state, &autosave, &theme);
-        let text = line_to_string(widget.right_status());
+        let widget = BottomBarWidget::new(&state, &autosave);
+        let text = line_to_string(widget.right_status(&ThemeColors::GRUVBOX));
 
         assert!(text.contains("✓ Saved"));
         assert!(!text.contains("s)"), "Should not contain timer when saved");

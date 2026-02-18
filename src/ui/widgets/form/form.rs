@@ -1,12 +1,10 @@
 use crate::{
     enums::WidgetResponse,
     models::{Priority, Todo},
-    theme::ThemeColors,
     traits::Input,
-    ui::{Field, FieldType},
+    ui::{Field, FieldType, RenderContext},
 };
 use ratatui::{
-    Frame,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -214,9 +212,10 @@ impl Form {
     }
 
     /// Form rendering
-    pub fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
+    pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
         let chunks: std::rc::Rc<[Rect]> = self.layout(area);
         let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
+        let theme = ctx.theme;
 
         for (i, field) in self.fields.iter().enumerate() {
             let is_focused = self.focused == i;
@@ -241,13 +240,13 @@ impl Form {
                     input.set_block(block);
                     input.set_style(Style::default().fg(theme.text_primary));
 
-                    frame.render_widget(&input, chunks[i]);
+                    ctx.render_widget(&input, chunks[i]);
                 }
                 FieldType::Text { input } => {
-                    input.render(frame, chunks[i], is_focused, theme);
+                    input.render(ctx, chunks[i], is_focused);
                 }
                 FieldType::Enum { input } => {
-                    input.render(frame, chunks[i], is_focused, theme);
+                    input.render(ctx, chunks[i], is_focused);
                 }
                 FieldType::Button => {
                     let (border_style, text_style) = if is_focused {
@@ -270,7 +269,7 @@ impl Form {
                         )
                         .centered();
 
-                    frame.render_widget(button, button_layout[2]);
+                    ctx.render_widget(button, button_layout[2]);
                 }
             }
         }

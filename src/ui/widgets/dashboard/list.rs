@@ -5,14 +5,13 @@ use crate::{
     state::{AdaptiveScroll, UIState},
     theme::ThemeColors,
     traits::{Input, InteractableEnum},
-    ui::{FeedbackKind, FeedbackWidget, scrollable},
+    ui::{FeedbackKind, FeedbackWidget, RenderContext, scrollable, utils},
 };
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{Block, Cell, Paragraph, Row, TableState, Widget, Wrap},
+    widgets::{Block, Cell, Paragraph, Row, TableState, Wrap},
 };
 
 /// List widget for tasks
@@ -21,25 +20,14 @@ pub struct ListTasks<'a> {
     todos: Vec<&'a Todo>,
     query: &'a str,
     sort: &'a Sort,
-    mode: &'a ApplicationMode,
-    theme: &'a ThemeColors,
 }
 
 impl<'a> ListTasks<'a> {
-    pub fn new(
-        ui: &'a UIState,
-        todos: Vec<&'a Todo>,
-        query: &'a str,
-        sort: &'a Sort,
-        mode: &'a ApplicationMode,
-        theme: &'a ThemeColors,
-    ) -> Self {
+    pub fn new(ui: &'a UIState, todos: Vec<&'a Todo>, query: &'a str, sort: &'a Sort) -> Self {
         Self {
             ui,
-            theme,
             todos,
             sort,
-            mode,
             query,
         }
     }
@@ -47,53 +35,44 @@ impl<'a> ListTasks<'a> {
     /// List rendering
     pub fn render(
         &self,
-        frame: &mut Frame,
+        ctx: &mut RenderContext,
         area: Rect,
         select_state: &mut TableState,
         scroll: &AdaptiveScroll,
     ) {
         use ratatui::text::Span;
 
-        let focused_style: Style = self.ui.focused_on(&FocusArea::MainContent);
-        let is_search_visible: bool =
-            *self.mode == ApplicationMode::Search || !self.query.is_empty();
+        let theme = ctx.theme;
+        let mode = ctx.mode();
+
+        let focused_style: Style = ctx.focused_style(FocusArea::MainContent);
+        let is_search_visible: bool = mode == ApplicationMode::Search || !self.query.is_empty();
 
         let [search_area, tasks_area, desc_area] =
             self.calculate_main_layout(area, is_search_visible, !self.todos.is_empty());
 
         if is_search_visible {
             if let Some(input) = self.ui.search_input.as_ref() {
-                input.render(
-                    frame,
-                    search_area,
-                    *self.mode == ApplicationMode::Search,
-                    self.theme,
-                );
+                input.render(ctx, search_area, mode == ApplicationMode::Search);
             }
         }
 
         let main_block: Block = Block::bordered()
             .title(" Tasks ".bold())
             .title_top(
-                Line::styled(
-                    " todo-tui ",
-                    Style::default().fg(self.theme.text_primary).bold(),
-                )
-                .right_aligned(),
+                Line::styled(" todo-tui ", Style::default().fg(theme.text_primary).bold())
+                    .right_aligned(),
             )
             .title_bottom(
                 Line::from(vec![
-                    Span::styled(
-                        " Sort: ",
-                        Style::default().fg(self.theme.text_primary).bold(),
-                    ),
+                    Span::styled(" Sort: ", Style::default().fg(theme.text_primary).bold()),
                     Span::styled(
                         self.sort.parameter.label(),
-                        Style::default().fg(self.theme.accent).bold(),
+                        Style::default().fg(theme.accent).bold(),
                     ),
                     Span::styled(
                         format!(" {} ", self.sort.order.icon()),
-                        Style::default().fg(self.theme.warning).bold(),
+                        Style::default().fg(theme.warning).bold(),
                     ),
                 ])
                 .right_aligned(),
@@ -101,46 +80,50 @@ impl<'a> ListTasks<'a> {
             .border_style(focused_style);
 
         let inner_tasks_area: Rect = main_block.inner(tasks_area);
-        frame.render_widget(main_block, tasks_area);
+        ctx.render_widget(main_block, tasks_area);
 
         if !self.todos.is_empty() {
-            self.build_table(frame, inner_tasks_area, select_state, focused_style);
-            self.render_description(frame, desc_area, select_state, scroll);
+            self.build_table(ctx, inner_tasks_area, select_state, focused_style);
+            self.render_description(ctx, desc_area, select_state, scroll);
         } else {
-            FeedbackWidget::new(FeedbackKind::NoResults(self.query.to_string()), self.theme)
-                .render(tasks_area, frame.buffer_mut());
+            FeedbackWidget::new(FeedbackKind::NoResults(self.query.to_string()))
+                .render(ctx, tasks_area);
         }
     }
 
     /// Render description for selected task with scroll
     fn render_description(
         &self,
-        frame: &mut Frame,
+        ctx: &mut RenderContext,
         area: Rect,
         select_state: &mut TableState,
         scroll: &AdaptiveScroll,
     ) {
         if let Some(selected_index) = select_state.selected() {
             if let Some(todo) = self.todos.get(selected_index) {
+                let theme = ctx.theme;
                 let content = todo.description.lines().map(Line::from).collect::<Vec<_>>();
 
                 let desc_block: Block = Block::bordered()
-                    .title(format!(" Description: {} ", todo.title))
-                    .border_style(Style::default().fg(self.theme.border));
+                    .title(format!(
+                        " Description: {} ",
+                        utils::truncate(&todo.title, area.width.saturating_sub(20) as usize)
+                    ))
+                    .border_style(Style::default().fg(theme.border));
 
                 scrollable(
-                    frame,
+                    ctx,
                     area,
                     desc_block,
                     scroll,
                     &content,
                     false,
-                    Style::default().fg(self.theme.border),
+                    Style::default().fg(theme.border),
                     |f, rect| {
                         let p = Paragraph::new(content.clone())
                             .wrap(Wrap { trim: false })
                             .scroll((scroll.current.get(), 0))
-                            .style(Style::default().fg(self.theme.text_primary));
+                            .style(Style::default().fg(theme.text_primary));
                         f.render_widget(p, rect);
                     },
                 );
@@ -151,7 +134,7 @@ impl<'a> ListTasks<'a> {
     /// Helper method to build table
     fn build_table(
         &self,
-        frame: &mut Frame,
+        ctx: &mut RenderContext,
         area: Rect,
         select_state: &mut TableState,
         focused: Style,
@@ -162,43 +145,45 @@ impl<'a> ListTasks<'a> {
             widgets::{Cell, Row, Table},
         };
 
+        let theme = ctx.theme;
+        let title_column_width = (area.width as usize).saturating_sub(40);
+
         let [_, table_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(2), Constraint::Min(0)])
             .areas(area);
 
         let rows = self.todos.iter().map(|todo| {
-            let priority_color: Color = todo.priority.color(self.theme);
+            let priority_color: Color = todo.priority.color(&theme);
             let (icon, icon_color): (&str, Color) = if todo.completed {
-                ("✓", self.theme.success)
+                ("✓", theme.success)
             } else {
                 ("☐", priority_color)
             };
 
+            let truncated_title = utils::truncate(&todo.title, title_column_width);
+
             let title_content = if !self.query.is_empty() {
-                self.highlight_search(&todo.title, self.query)
+                self.highlight_search(&truncated_title, self.query, &theme)
             } else {
-                Line::from(todo.title.as_str())
+                Line::from(truncated_title)
             };
 
             Row::new(vec![
                 Cell::from(icon).style(Style::default().fg(icon_color)),
-                Cell::from(title_content).style(Style::default().fg(self.theme.text_primary)),
+                Cell::from(title_content).style(Style::default().fg(theme.text_primary)),
                 Cell::from(Line::from(todo.priority.to_string()).centered())
                     .style(Style::default().fg(priority_color)),
                 Cell::from(Line::from(todo.time_ago()).centered())
-                    .style(Style::default().fg(self.theme.text_dim)),
+                    .style(Style::default().fg(theme.text_dim)),
             ])
             .height(1)
         });
 
         let tasks_table: Table = Table::new(rows, self.table_measurements())
-            .header(self.table_header())
-            .row_highlight_style(Style::default().bg(self.theme.surface))
-            .highlight_symbol(Text::styled(
-                ">>   ",
-                Style::default().fg(self.theme.accent),
-            ));
+            .header(self.table_header(&theme))
+            .row_highlight_style(Style::default().bg(theme.surface))
+            .highlight_symbol(Text::styled(">>   ", Style::default().fg(theme.accent)));
 
         let total_rows = self.todos.len();
         let current_selected = select_state.selected().unwrap_or(0);
@@ -208,7 +193,7 @@ impl<'a> ListTasks<'a> {
         let dummy_content = vec![Line::from(""); total_rows];
 
         scrollable(
-            frame,
+            ctx,
             table_area,
             Block::default(),
             &temp_scroll,
@@ -255,19 +240,19 @@ impl<'a> ListTasks<'a> {
         ]
     }
 
-    fn table_header(&self) -> Row<'static> {
+    fn table_header(&self, theme: &ThemeColors) -> Row<'static> {
         Row::new(vec![
             Cell::from(""),
             Cell::from(Line::from(" Title ").centered()),
             Cell::from(Line::from(" Priority ").centered()),
             Cell::from(Line::from(" Created ").centered()),
         ])
-        .style(Style::default().fg(self.theme.accent).bold())
+        .style(Style::default().fg(theme.accent).bold())
         .bottom_margin(1)
     }
 
     /// Highlight title if satisfies query string
-    fn highlight_search(&self, title: &'a str, query: &str) -> Line<'a> {
+    fn highlight_search(&self, title: &str, query: &str, theme: &ThemeColors) -> Line<'static> {
         use ratatui::text::Span;
 
         let query_lower: String = query.to_lowercase();
@@ -276,15 +261,15 @@ impl<'a> ListTasks<'a> {
         if let Some(start) = title_lower.find(&query_lower) {
             let end = start + query.len();
             Line::from(vec![
-                Span::raw(&title[..start]),
+                Span::raw(title[..start].to_string()),
                 Span::styled(
-                    &title[start..end],
-                    Style::default().fg(self.theme.accent).bold(),
+                    title[start..end].to_string(),
+                    Style::default().fg(theme.accent).bold(),
                 ),
-                Span::raw(&title[end..]),
+                Span::raw(title[end..].to_string()),
             ])
         } else {
-            Line::from(title)
+            Line::from(title.to_string())
         }
     }
 }

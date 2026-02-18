@@ -1,9 +1,5 @@
-use crate::theme::ThemeColors;
-use ratatui::{
-    Frame,
-    layout::{Alignment, Rect},
-    style::Color,
-};
+use crate::{theme::ThemeColors, ui::RenderContext};
+use ratatui::{layout::Rect, style::Color};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, PartialEq)]
@@ -42,18 +38,26 @@ impl Notification {
     }
 
     /// Notification rendering
-    pub fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
-        use ratatui::style::Style;
-        use ratatui::widgets::Paragraph;
+    pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
+        use crate::ui::utils;
+        use ratatui::{style::Style, widgets::Paragraph};
 
-        let (icon, color) = self.icon_with_color(theme);
-        let text = format!("{} {} ({}s)", icon, self.message, self.remaining_secs() + 1);
+        let available_width = (area.width as usize).saturating_sub(5);
+        let truncated_message = utils::truncate(&self.message, available_width);
+
+        let (icon, color) = self.icon_with_color(&ctx.theme);
+        let text = format!(
+            "{} {} ({}s)",
+            icon,
+            truncated_message,
+            self.remaining_secs() + 1
+        );
 
         let text_block = Paragraph::new(text)
             .style(Style::default().fg(color))
-            .alignment(Alignment::Center);
+            .centered();
 
-        frame.render_widget(text_block, area);
+        ctx.render_widget(text_block, area);
     }
 
     /// To count remaining seconds for title bottom and check if that time has been expired

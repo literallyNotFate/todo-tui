@@ -1,10 +1,9 @@
 use crate::{
     theme::ThemeColors,
     traits::{Modal, ModalResult},
-    ui::center,
+    ui::{RenderContext, center},
 };
 use ratatui::{
-    Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
@@ -109,22 +108,22 @@ impl Modal for Confirm {
     }
 
     /// Confirm rendering
-    fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
+    fn render(&self, ctx: &mut RenderContext, area: Rect) {
         use ratatui::{
-            layout::Alignment,
             style::Stylize,
             widgets::{Block, BorderType, Paragraph, Wrap},
         };
 
+        let theme = ctx.theme;
         let confirm_block: Block = Block::bordered()
             .fg(theme.text_primary)
             .border_style(Style::default().fg(theme.accent))
             .title_top(Line::from(" Action ").centered())
-            .title_bottom(self.bottom_keys(theme).centered())
+            .title_bottom(self.bottom_keys(&theme).centered())
             .border_type(BorderType::Rounded);
 
         let inner_area: Rect = confirm_block.inner(area);
-        frame.render_widget(confirm_block.clone(), area);
+        ctx.render_widget(confirm_block.clone(), area);
 
         let vertical_chunks: std::rc::Rc<[Rect]> = self.vertical_layout(inner_area);
 
@@ -132,16 +131,16 @@ impl Modal for Confirm {
         let buttons_area: Rect = self.horizontal_layout(vertical_chunks[3])[1];
 
         let message: Paragraph = Paragraph::new(self.message.clone())
-            .alignment(Alignment::Center)
+            .centered()
             .wrap(Wrap { trim: true });
 
-        frame.render_widget(message, message_area);
+        ctx.render_widget(message, message_area);
 
-        let button_styles: (Style, Style) = self.button_styles(theme);
-        let buttons: Line = self.button_line(button_styles, theme);
+        let button_styles: (Style, Style) = self.button_styles(&theme);
+        let buttons: Line = self.button_line(button_styles, &theme);
 
-        let buttons_widget = Paragraph::new(buttons).alignment(Alignment::Center);
-        frame.render_widget(buttons_widget, buttons_area);
+        let buttons_widget = Paragraph::new(buttons).centered();
+        ctx.render_widget(buttons_widget, buttons_area);
     }
 
     /// Key event handling

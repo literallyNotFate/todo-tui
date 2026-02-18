@@ -1,12 +1,11 @@
 use crate::{
     theme::ThemeColors,
     traits::{Modal, ModalResult},
-    ui::center,
+    ui::{RenderContext, center},
 };
 use ratatui::{
-    Frame,
     crossterm::event::KeyCode,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
 };
@@ -142,31 +141,29 @@ impl Modal for Popup {
     }
 
     /// Popup rendering
-    fn render(&self, frame: &mut Frame, area: Rect, theme: &ThemeColors) {
-        use ratatui::{
-            layout::Alignment,
-            widgets::{Block, BorderType, Paragraph, Wrap},
-        };
+    fn render(&self, ctx: &mut RenderContext, area: Rect) {
+        use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
 
+        let theme = ctx.theme;
         let popup_block: Block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
-            .title_bottom(self.bottom_title(theme))
-            .border_style(self.color_on_kind(theme))
+            .title_bottom(self.bottom_title(&theme))
+            .border_style(self.color_on_kind(&theme))
             .fg(theme.text_primary);
 
         let inner_area: Rect = popup_block.inner(area);
-        frame.render_widget(popup_block, area);
+        ctx.render_widget(popup_block, area);
 
         let vertical_chunks: std::rc::Rc<[Rect]> = self.vertical_layout(inner_area);
         let message_area: Rect = self.horizontal_layout(vertical_chunks[1])[1];
 
         let message: Paragraph = Paragraph::new(self.message.as_str())
-            .alignment(Alignment::Center)
+            .centered()
             .wrap(Wrap { trim: true });
 
-        frame.render_widget(message, message_area);
+        ctx.render_widget(message, message_area);
     }
 
     /// Key event handling

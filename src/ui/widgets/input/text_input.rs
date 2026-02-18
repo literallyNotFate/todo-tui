@@ -1,5 +1,5 @@
-use crate::{enums::WidgetResponse, theme::ThemeColors, traits::Input};
-use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
+use crate::{enums::WidgetResponse, theme::ThemeColors, traits::Input, ui::RenderContext};
+use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Style};
 
 pub const TEXT_INPUT_MAX_CHARS: usize = 256;
 
@@ -103,28 +103,31 @@ impl Input for TextInput {
     }
 
     /// Text input rendering
-    fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
+    fn render(&self, ctx: &mut RenderContext, area: Rect, focused: bool) {
         use ratatui::{
             layout::Position,
             widgets::{Block, Paragraph},
         };
 
-        let width: usize = area.width.saturating_sub(2) as usize;
-        let scroll: usize = self.scroll(width);
-        let text: String = self.displayed_content(width, scroll);
+        let theme = &ctx.theme;
 
-        let (border_style, text_style): (Style, Style) = self.on_focused(focused, theme);
+        let width = area.width.saturating_sub(2) as usize;
+        let scroll = self.scroll(width);
+        let text = self.displayed_content(width, scroll);
 
-        let input_block: Block = Block::bordered()
+        let (border_style, text_style) = self.on_focused(focused, theme);
+
+        let input_block = Block::bordered()
             .border_style(border_style)
             .style(text_style)
             .title(self.title.as_str());
 
         let paragraph = Paragraph::new(text).block(input_block);
-        frame.render_widget(paragraph, area);
+
+        ctx.render_widget(paragraph, area);
 
         if focused {
-            frame.set_cursor_position(Position::new(
+            ctx.set_cursor_position(Position::new(
                 area.x + (self.cursor - scroll) as u16 + 1,
                 area.y + 1,
             ));

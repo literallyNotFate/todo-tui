@@ -2,11 +2,10 @@ use crate::{
     enums::FocusArea,
     models::Filter,
     state::{AdaptiveScroll, ApplicationResult, ApplicationState},
-    theme::{Theme, ThemeColors},
+    theme::Theme,
     traits::{Input, InteractableEnum, Modal, ModalAction},
     ui::{Confirm, Form, Notification, Popup, TextInput},
 };
-use ratatui::style::Style;
 use uuid::Uuid;
 
 /// Active modal widget with modal itself and its action like save etc.
@@ -123,16 +122,6 @@ impl UIState {
         self.sidebar_scroll.reset();
     }
 
-    /// Returns styles if focused
-    pub fn focused_on(&self, focus_area: &FocusArea) -> Style {
-        let colors: ThemeColors = self.theme.colors();
-        if self.focus_area == *focus_area {
-            Style::default().fg(colors.accent)
-        } else {
-            Style::default().fg(colors.border)
-        }
-    }
-
     /// Closes existing modal widget
     pub fn close_modal(&mut self) {
         self.modal = None;
@@ -180,7 +169,6 @@ mod tests {
         models::{Priority, Todo},
         ui::Popup,
     };
-    use ratatui::style::{Color, Style};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -211,22 +199,6 @@ mod tests {
 
         ui.toggle_focus();
         assert_eq!(ui.focus_area, FocusArea::LeftPanel);
-    }
-
-    #[test]
-    fn should_return_proper_styles_for_active_focus() {
-        let mut ui = UIState::default();
-        ui.focus_area = FocusArea::LeftPanel;
-        ui.theme = Theme::Everforest;
-
-        let mut style: Style = ui.focused_on(&ui.focus_area);
-        assert_eq!(style, Style::default().fg(Color::Rgb(167, 192, 128)));
-
-        ui.theme = Theme::Gruvbox;
-        ui.focus_area = FocusArea::MainContent;
-        style = ui.focused_on(&ui.focus_area);
-
-        assert_ne!(style, Style::default().fg(Color::Rgb(102, 92, 84)));
     }
 
     #[test]

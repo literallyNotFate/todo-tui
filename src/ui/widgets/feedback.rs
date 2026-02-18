@@ -1,13 +1,12 @@
 use crate::{
     theme::ThemeColors,
-    ui::{MIN_HEIGHT, MIN_WIDTH, center},
+    ui::{MIN_HEIGHT, MIN_WIDTH, RenderContext, center},
 };
 use ratatui::{
-    buffer::Buffer,
-    layout::{Alignment, Rect},
+    layout::Rect,
     style::{Color, Style, Stylize},
     text::{Line, Text},
-    widgets::{Block, Clear, Paragraph, Widget, Wrap},
+    widgets::{Block, Clear, Paragraph, Wrap},
 };
 
 /// Type of feedback message
@@ -18,94 +17,94 @@ pub enum FeedbackKind {
     SmallTerminal,
 }
 
-pub struct FeedbackWidget<'a> {
+pub struct FeedbackWidget {
     kind: FeedbackKind,
-    theme: &'a ThemeColors,
 }
 
-impl<'a> FeedbackWidget<'a> {
-    pub fn new(kind: FeedbackKind, theme: &'a ThemeColors) -> Self {
-        Self { kind, theme }
+impl FeedbackWidget {
+    pub fn new(kind: FeedbackKind) -> Self {
+        Self { kind }
     }
 }
 
-impl Widget for FeedbackWidget<'_> {
+impl FeedbackWidget {
     /// Feedback rendering
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    pub fn render(self, ctx: &mut RenderContext, area: Rect) {
         let result_area: Rect = center(area, 50, 50);
-        let colors: (Color, Color) = self.dimension_colors(&area);
+        let colors: (Color, Color) = self.dimension_colors(&area, &ctx.theme);
         let message: Vec<Line>;
 
         if self.kind == FeedbackKind::SmallTerminal {
-            message = self.message(&area.width, &area.height, colors);
+            message = self.message(&area.width, &area.height, colors, &ctx.theme);
+            ctx.render_widget(Clear, area);
 
-            Clear.render(area, buf);
-            Paragraph::new(Text::from(message))
-                .style(Style::default().fg(self.theme.text_primary))
+            let p: Paragraph = Paragraph::new(Text::from(message))
+                .style(Style::default().fg(ctx.theme.text_primary))
                 .wrap(Wrap { trim: false })
-                .block(Block::default())
-                .render(result_area, buf);
+                .block(Block::default());
 
+            ctx.render_widget(p, result_area);
             return;
         }
 
-        message = self.message(&area.width, &area.height, colors);
+        message = self.message(&area.width, &area.height, colors, &ctx.theme);
 
-        Block::bordered()
+        let block = Block::bordered()
             .title(" Tasks ")
             .title_top(
-                Line::styled(" todo-tui ", Style::default().fg(self.theme.text_primary))
+                Line::styled(" todo-tui ", Style::default().fg(ctx.theme.text_primary))
                     .right_aligned(),
             )
-            .border_style(self.theme.warning)
-            .render(area, buf);
+            .border_style(ctx.theme.warning);
 
-        Paragraph::new(message)
-            .alignment(Alignment::Center)
-            .wrap(Wrap { trim: true })
-            .render(result_area, buf);
+        ctx.render_widget(block, area);
+
+        ctx.render_widget(
+            Paragraph::new(message).wrap(Wrap { trim: true }).centered(),
+            result_area,
+        );
     }
-}
 
-impl<'a> FeedbackWidget<'a> {
     /// Return message based on feedback kind
-    fn message(&self, width: &u16, height: &u16, colors: (Color, Color)) -> Vec<Line<'static>> {
+    fn message(
+        &self,
+        width: &u16,
+        height: &u16,
+        colors: (Color, Color),
+        theme: &ThemeColors,
+    ) -> Vec<Line<'static>> {
         use ratatui::text::Span;
 
         let message: Vec<Line> = match &self.kind {
             FeedbackKind::EmptyList => vec![
-                Line::from("All clear!").fg(self.theme.warning).bold(),
+                Line::from("All clear!").fg(theme.warning).bold(),
                 Line::from(""),
-                Line::from("Press 'a' to add a new task").fg(self.theme.text_dim),
+                Line::from("Press 'a' to add a new task").fg(theme.text_dim),
             ],
             FeedbackKind::NoResults(q) => vec![
-                Line::from("No matches").fg(self.theme.error).bold(),
-                Line::from(format!("Nothing found for '{}'", q)).fg(self.theme.text_dim),
-                Line::from("Try another query").fg(self.theme.text_dim),
+                Line::from("No matches").fg(theme.error).bold(),
+                Line::from(format!("Nothing found for '{}'", q)).fg(theme.text_dim),
+                Line::from("Try another query").fg(theme.text_dim),
             ],
             FeedbackKind::SmallTerminal => vec![
-                Line::styled(
-                    "Terminal is too small!",
-                    Style::default().fg(self.theme.error),
-                )
-                .centered(),
+                Line::styled("Terminal is too small!", Style::default().fg(theme.error)).centered(),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("Required: ", Style::default().fg(self.theme.text_dim)),
+                    Span::styled("Required: ", Style::default().fg(theme.text_dim)),
                     Span::styled(
                         format!("{}", MIN_WIDTH),
-                        Style::default().fg(self.theme.error).bold(),
+                        Style::default().fg(theme.error).bold(),
                     ),
                     Span::raw(" x "),
                     Span::styled(
                         format!("{}", MIN_HEIGHT),
-                        Style::default().fg(self.theme.error).bold(),
+                        Style::default().fg(theme.error).bold(),
                     ),
                 ])
                 .centered(),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("Current:  ", Style::default().fg(self.theme.text_dim)),
+                    Span::styled("Current:  ", Style::default().fg(theme.text_dim)),
                     Span::styled(format!("{}", width), Style::default().fg(colors.0).bold()),
                     Span::raw(" x "),
                     Span::styled(format!("{}", height), Style::default().fg(colors.1).bold()),
@@ -118,17 +117,17 @@ impl<'a> FeedbackWidget<'a> {
     }
 
     /// Get colors for width/height while resized
-    fn dimension_colors(&self, area: &Rect) -> (Color, Color) {
+    fn dimension_colors(&self, area: &Rect, theme: &ThemeColors) -> (Color, Color) {
         let width_color = if area.width >= MIN_WIDTH {
-            self.theme.success
+            theme.success
         } else {
-            self.theme.error
+            theme.error
         };
 
         let height_color = if area.height >= MIN_HEIGHT {
-            self.theme.success
+            theme.success
         } else {
-            self.theme.error
+            theme.error
         };
 
         (width_color, height_color)
@@ -139,25 +138,20 @@ impl<'a> FeedbackWidget<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::Theme;
     use ratatui::{layout::Alignment, text::Span};
 
     #[test]
     fn should_render_message_for_empty_list() {
-        let feedback: FeedbackWidget =
-            FeedbackWidget::new(FeedbackKind::EmptyList, &ThemeColors::GRUVBOX);
+        let feedback: FeedbackWidget = FeedbackWidget::new(FeedbackKind::EmptyList);
+        let theme: ThemeColors = ThemeColors::GRUVBOX;
 
         assert_eq!(feedback.kind, FeedbackKind::EmptyList);
-        assert_eq!(feedback.theme, &ThemeColors::GRUVBOX);
 
         let width: u16 = 100;
         let height: u16 = 50;
 
-        let result: Vec<Line> = feedback.message(
-            &width,
-            &height,
-            (feedback.theme.error, feedback.theme.success),
-        );
+        let result: Vec<Line> =
+            feedback.message(&width, &height, (theme.error, theme.success), &theme);
 
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].spans[0], Span::from("All clear!"));
@@ -170,22 +164,16 @@ mod tests {
     #[test]
     fn should_render_message_for_invalid_query() {
         let query: String = String::from("Test");
-        let feedback: FeedbackWidget = FeedbackWidget::new(
-            FeedbackKind::NoResults(query.clone()),
-            &ThemeColors::GRUVBOX,
-        );
+        let theme: ThemeColors = ThemeColors::GRUVBOX;
+        let feedback: FeedbackWidget = FeedbackWidget::new(FeedbackKind::NoResults(query.clone()));
 
         assert_eq!(feedback.kind, FeedbackKind::NoResults(query.clone()));
-        assert_eq!(feedback.theme, &ThemeColors::GRUVBOX);
 
         let width: u16 = 100;
         let height: u16 = 50;
 
-        let result: Vec<Line> = feedback.message(
-            &width,
-            &height,
-            (feedback.theme.error, feedback.theme.success),
-        );
+        let result: Vec<Line> =
+            feedback.message(&width, &height, (theme.error, theme.success), &theme);
 
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].spans[0], Span::from("No matches"));
@@ -194,18 +182,16 @@ mod tests {
 
     #[test]
     fn should_render_message_for_small_terminal() {
-        let feedback: FeedbackWidget =
-            FeedbackWidget::new(FeedbackKind::SmallTerminal, &ThemeColors::GRUVBOX);
+        let feedback: FeedbackWidget = FeedbackWidget::new(FeedbackKind::SmallTerminal);
 
         assert_eq!(feedback.kind, FeedbackKind::SmallTerminal);
-        assert_eq!(feedback.theme, &ThemeColors::GRUVBOX);
 
         let width: u16 = 80;
         let height: u16 = 24;
 
-        let theme: ThemeColors = Theme::Gruvbox.colors();
+        let theme: ThemeColors = ThemeColors::GRUVBOX;
         let colors: (Color, Color) = (theme.error, theme.success);
-        let result: Vec<Line> = feedback.message(&width, &height, colors);
+        let result: Vec<Line> = feedback.message(&width, &height, colors, &theme);
 
         assert_eq!(result.len(), 5);
         assert_eq!(result[0].spans[0], Span::from("Terminal is too small!"));

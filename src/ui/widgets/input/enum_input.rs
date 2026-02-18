@@ -2,8 +2,9 @@ use crate::{
     enums::WidgetResponse,
     theme::ThemeColors,
     traits::{Input, InteractableEnum},
+    ui::RenderContext,
 };
-use ratatui::{Frame, crossterm::event::KeyCode, layout::Rect, style::Style};
+use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Style};
 
 /// Input widget made for enum types
 #[derive(Debug, Default, Clone)]
@@ -49,9 +50,10 @@ where
     }
 
     /// Enum input rendering
-    fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &ThemeColors) {
+    fn render(&self, ctx: &mut RenderContext, area: Rect, focused: bool) {
         use ratatui::widgets::{Block, Paragraph};
 
+        let theme = &ctx.theme;
         let (border_style, text_style): (Style, Style) = self.on_focused(focused, theme);
 
         let input_block: Block = Block::bordered()
@@ -61,7 +63,7 @@ where
 
         let input = Paragraph::new(self.selected.to_string()).block(input_block);
 
-        frame.render_widget(input, area);
+        ctx.render_widget(input, area);
     }
 
     /// Returns styles if input is being focused
