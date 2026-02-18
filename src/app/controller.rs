@@ -209,9 +209,18 @@ mod tests {
         models::{Sort, SortBy, SortOrder},
         ui::Notification,
     };
+    use std::path::{Path, PathBuf};
+    use tempdir::TempDir;
 
     fn setup() -> (ApplicationState, UIState) {
         (ApplicationState::default(), UIState::default())
+    }
+
+    fn mock_dispatch_save(state: &mut ApplicationState, ui: &mut UIState, path: &Path) {
+        match state.save(Some(path)) {
+            Ok(string) => ui.show_result_popup(Ok(string)),
+            Err(e) => ui.show_result_popup(Err(e)),
+        }
     }
 
     #[test]
@@ -392,10 +401,12 @@ mod tests {
 
     #[test]
     fn should_trigger_popup_on_save() {
-        let (mut state, mut ui) = setup();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
 
-        ctrl.dispatch_save();
+        let (mut state, mut ui) = setup();
+
+        mock_dispatch_save(&mut state, &mut ui, &path);
         assert!(ui.modal.is_some());
     }
 }

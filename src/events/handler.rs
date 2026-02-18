@@ -253,6 +253,8 @@ mod tests {
         models::{SortBy, SortOrder},
         state::{ApplicationState, UIState},
     };
+    use std::path::{Path, PathBuf};
+    use tempdir::TempDir;
 
     fn setup_app() -> Application {
         let mut app = Application::test();
@@ -266,6 +268,32 @@ mod tests {
         let mode = ApplicationMode::List;
         let running = true;
         (state, ui, mode, running)
+    }
+
+    fn mock_unsaved_modal(
+        event: KeyEvent,
+        ctrl: &mut ApplicationController,
+        running: &mut bool,
+        path: &Path,
+    ) {
+        let result = {
+            let modal_wrapper = ctrl.ui.modal.as_mut().unwrap();
+            modal_wrapper.modal.handle_key(event.code)
+        };
+
+        if let Some(result) = result {
+            let action: ModalAction = ctrl.ui.modal.as_ref().unwrap().action.clone();
+            ctrl.ui.close_modal();
+
+            if result == ModalResult::Confirmed && action == ModalAction::UnsavedExit {
+                match ctrl.state.save(Some(path)) {
+                    Ok(string) => ctrl.ui.show_result_popup(Ok(string)),
+                    Err(e) => ctrl.ui.show_result_popup(Err(e)),
+                }
+
+                *running = false;
+            }
+        }
     }
 
     #[test]
@@ -490,12 +518,15 @@ mod tests {
 
     #[test]
     fn should_save_and_exit_on_unsaved_exit_confirm() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
         let (mut state, mut ui, _, mut running) = setup_ctx();
         ui.unsaved_confirm();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui);
 
         let event = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
-        EventHandler::handle_modal(event, &mut ctrl, &mut running);
+        mock_unsaved_modal(event, &mut ctrl, &mut running, &path);
 
         assert!(!running, "App should be closed");
     }

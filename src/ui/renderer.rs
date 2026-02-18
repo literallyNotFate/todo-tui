@@ -1,5 +1,5 @@
 use crate::{
-    core::ApplicationMode,
+    core::{ApplicationMode, Autosave},
     state::{ApplicationState, UIState},
 };
 use ratatui::{Frame, widgets::Widget};
@@ -14,7 +14,7 @@ impl Renderer {
         state: &mut ApplicationState,
         ui: &UIState,
         mode: ApplicationMode,
-        autosave_enabled: bool,
+        autosave: &Autosave,
     ) {
         use crate::{
             theme::ThemeColors,
@@ -35,7 +35,7 @@ impl Renderer {
             return;
         }
 
-        Dashboard::new(state, ui, &mode, autosave_enabled, &colors).render(frame, area);
+        Dashboard::new(state, ui, &mode, autosave, &colors).render(frame, area);
 
         let blackout: Block = Block::default().style(Style::default().bg(colors.modal_bg).dim());
 

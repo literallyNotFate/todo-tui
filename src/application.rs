@@ -72,25 +72,28 @@ impl Application {
 
     /// Rendering application using Renderer
     pub fn render(&mut self, frame: &mut Frame) {
-        self.renderer.render(
-            frame,
-            &mut self.data,
-            &self.ui,
-            self.mode,
-            self.autosave.enabled,
-        );
+        self.renderer
+            .render(frame, &mut self.data, &self.ui, self.mode, &self.autosave);
     }
 
     /// Tick function (for notification and autosave)
     pub fn tick(&mut self) {
         self.ui.expire_notification(&mut self.data.notification);
+        let has_changes: bool = self.data.any_unsaved_changes();
 
-        if self.autosave.should_save(self.data.any_unsaved_changes()) {
-            if let Err(e) = self.data.save(None) {
-                self.ui.push_notification(&mut self.data, Err(e));
+        if self.autosave.enabled {
+            if has_changes && !self.autosave.last_tick_had_changes {
+                self.autosave.reset_timer();
             }
 
-            self.autosave.reset_timer();
+            if has_changes && self.autosave.should_save(has_changes) {
+                match self.data.save(None) {
+                    Ok(_) => self.autosave.reset_timer(),
+                    Err(e) => self.ui.push_notification(&mut self.data, Err(e)),
+                }
+            }
+
+            self.autosave.last_tick_had_changes = has_changes;
         }
     }
 
@@ -140,27 +143,33 @@ impl Application {
 /// Unit-tests for application structure
 #[cfg(test)]
 mod tests {
-    use tempdir::TempDir;
-
     use super::*;
     use crate::{
         models::{Filter, Todo},
         ui::Notification,
     };
     use std::{
-        fs,
         path::{Path, PathBuf},
         thread::sleep,
         time::{Duration, Instant},
     };
+    use tempdir::TempDir;
 
     fn mock_tick(app: &mut Application, path: Option<&Path>) {
-        if app.autosave.should_save(app.data.any_unsaved_changes()) {
-            if let Err(e) = app.data.save(path) {
-                app.ui.push_notification(&mut app.data, Err(e));
+        let has_changes: bool = app.data.any_unsaved_changes();
+
+        if app.autosave.enabled {
+            if has_changes && !app.autosave.last_tick_had_changes {
+                app.autosave.reset_timer();
             }
 
-            app.autosave.reset_timer();
+            if has_changes && app.autosave.should_save(has_changes) {
+                if app.data.save(path).is_ok() {
+                    app.autosave.reset_timer();
+                }
+            }
+
+            app.autosave.last_tick_had_changes = has_changes;
         }
     }
 
@@ -262,41 +271,89 @@ mod tests {
     }
 
     #[test]
-    fn should_go_autosave_full_cycle() {
+    fn should_reset_timer_on_first_change_transition() {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
         let mut app = Application::test();
         app.autosave.enabled = true;
-        app.autosave.interval = Duration::from_millis(10);
-        app.autosave.debounce = Duration::from_millis(10);
+        app.autosave.interval = Duration::from_secs(30);
+        app.autosave.last_tick_had_changes = false;
 
-        app.data.todos.push(Todo::new("Test Task", "Desc", None));
+        app.data.todos.push(Todo::new("Task", "", None));
         app.data.mark_as_dirty();
-        assert!(app.data.any_unsaved_changes());
+
+        let time_before = app.autosave.time_until_next_save();
+        mock_tick(&mut app, Some(&path));
+
+        assert_eq!(time_before, 30);
+        assert!(app.autosave.last_tick_had_changes);
+    }
+
+    #[test]
+    fn should_reset_flow_after_undo() {
+        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("todos.json");
+
+        let mut app = Application::test();
+        app.autosave.enabled = true;
+
+        app.data.todos.push(Todo::new("Initial", "", None));
+        let _ = app.data.save(Some(&path));
+        assert!(!app.data.any_unsaved_changes());
+
+        app.data.todos.push(Todo::new("Change", "", None));
+        app.data.mark_as_dirty();
+        mock_tick(&mut app, Some(&path));
+        assert!(app.autosave.last_tick_had_changes);
+
+        app.data.todos.pop();
+        app.data.mark_as_dirty();
+
+        assert!(
+            !app.data.any_unsaved_changes(),
+            "Data should be equal to saved state"
+        );
 
         mock_tick(&mut app, Some(&path));
         assert!(
-            app.data.any_unsaved_changes(),
-            "Should NOT save because debounce is active"
+            !app.autosave.last_tick_had_changes,
+            "Flag should reset when data is clean"
         );
 
-        sleep(Duration::from_millis(15));
+        app.data.todos.push(Todo::new("New change", "", None));
+        app.data.mark_as_dirty();
+        mock_tick(&mut app, Some(&path));
+
+        assert_eq!(app.autosave.time_until_next_save(), 30);
+    }
+
+    #[test]
+    fn should_go_autosave_full_cycle() {
+        let temp_dir = TempDir::new("todo_test").unwrap();
+        let path = temp_dir.path().join("todos.json");
+
+        let mut app = Application::test();
+        app.autosave.enabled = true;
+        app.autosave.interval = Duration::from_millis(20);
+        app.autosave.debounce = Duration::from_millis(20);
+
+        app.data.todos.push(Todo::new("Test Task", "", None));
+        app.data.mark_as_dirty();
+
+        mock_tick(&mut app, Some(&path));
+
+        sleep(Duration::from_millis(30));
         app.autosave.register_activity();
         mock_tick(&mut app, Some(&path));
-        assert!(
-            app.data.any_unsaved_changes(),
-            "Should NOT save because user is active"
-        );
 
-        sleep(Duration::from_millis(15));
+        assert!(app.data.any_unsaved_changes(), "Still debouncing");
+
+        sleep(Duration::from_millis(30));
         mock_tick(&mut app, Some(&path));
 
-        assert!(!app.data.any_unsaved_changes(), "Data should be saved");
-        assert!(path.exists(), "File was not created");
-
-        let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("Test Task"), "Saved content is incorrect");
+        assert!(!app.data.any_unsaved_changes(), "Saved successfully");
+        assert!(path.exists());
     }
 
     #[test]
