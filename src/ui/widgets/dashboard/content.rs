@@ -50,7 +50,15 @@ impl<'a> ContentWidget<'a> {
                     return;
                 }
 
-                ListTasks::new(self.ui, filtered, query, self.mode, self.theme).render(
+                ListTasks::new(
+                    self.ui,
+                    filtered,
+                    query,
+                    &self.state.sort,
+                    self.mode,
+                    self.theme,
+                )
+                .render(
                     frame,
                     area,
                     &mut self.state.select_state,

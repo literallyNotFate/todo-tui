@@ -43,8 +43,8 @@ impl Popup {
     pub fn info(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Info,
+            title: String::from(" Info "),
             message: message.into(),
-            title: String::default(),
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
         }
     }
@@ -53,6 +53,7 @@ impl Popup {
     pub fn success(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Success,
+            title: String::from(" Success "),
             ..Self::info(message)
         }
     }
@@ -61,6 +62,7 @@ impl Popup {
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             kind: PopupKind::Error,
+            title: String::from(" Error "),
             ..Self::info(message)
         }
     }
@@ -192,7 +194,7 @@ mod tests {
 
         assert_eq!(popup.kind, PopupKind::Success);
         assert_eq!(popup.message, "Success");
-        assert_eq!(popup.title, "");
+        assert_eq!(popup.title, " Success ");
         assert_eq!(
             popup.close_behavior,
             PopupCloseBehavior::Specific(KeyCode::Esc)

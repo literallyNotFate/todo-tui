@@ -21,77 +21,57 @@ impl ApplicationMode {
         match self {
             ApplicationMode::Browsing | ApplicationMode::List => {
                 self.add_section(&mut lines, "Navigation", theme);
-                self.add_command(&mut lines, "h/l", "Switch Panel", theme);
-                self.add_command(&mut lines, "A-j/k", "Scroll Hotkeys", theme);
+                self.add_command(&mut lines, "h/l", "Panels", theme);
+                self.add_command(&mut lines, "A-j/k", "Scroll", theme);
 
                 match focus {
                     FocusArea::LeftPanel => {
-                        self.add_command(&mut lines, "j/k", "Next/Prev Filter", theme);
-                        self.add_command(&mut lines, "1-5", "Quick Filter", theme);
+                        self.add_command(&mut lines, "j/k", "Filter", theme);
+                        self.add_command(&mut lines, "1-5", "Quick", theme);
                     }
                     FocusArea::MainContent => {
-                        self.add_command(&mut lines, "j/k", "Select Task", theme);
-                        self.add_command(&mut lines, "J/K", "Move Task", theme);
-                        self.add_command(&mut lines, "[/]", "Scroll Description", theme);
+                        self.add_command(&mut lines, "j/k", "Select", theme);
+                        self.add_command(&mut lines, "J/K", "Move", theme);
+                        self.add_command(&mut lines, "[/]", "Desc", theme);
                     }
                 }
 
                 self.add_section(&mut lines, "Actions", theme);
-                self.add_command(&mut lines, "<a>", "New Task", theme);
+                self.add_command(&mut lines, "a", "New", theme);
 
                 if *focus == FocusArea::MainContent {
-                    self.add_command(&mut lines, "<Enter>", "Toggle Completed", theme);
-                    self.add_command(&mut lines, "<e>", "Update Task", theme);
-                    self.add_command(&mut lines, "<d>", "Remove Task", theme);
-                    self.add_command(&mut lines, "</>", "Search", theme);
+                    self.add_command(&mut lines, "Enter", "Check", theme);
+                    self.add_command(&mut lines, "e", "Edit", theme);
+                    self.add_command(&mut lines, "d", "Delete", theme);
+                    self.add_command(&mut lines, "/", "Find", theme);
                 }
 
-                self.add_command(&mut lines, "<x>", "Clear All", theme);
+                self.add_command(&mut lines, "x", "Clear", theme);
 
                 self.add_section(&mut lines, "System", theme);
-                self.add_command(&mut lines, "<s>", "Sort Type", theme);
-                self.add_command(&mut lines, "<r>", "Reverse Sort", theme);
-                self.add_command(&mut lines, "<t>", "Theme", theme);
-                self.add_command(&mut lines, "<C-s>", "Save", theme);
-                self.add_command(&mut lines, "<A-a>", "Autosave", theme);
-                self.add_command(&mut lines, "Esc/q", "Quit", theme);
+                self.add_command(&mut lines, "s", "Sort", theme);
+                self.add_command(&mut lines, "r", "Reverse", theme);
+                self.add_command(&mut lines, "t", "Theme", theme);
+                self.add_command(&mut lines, "C-s", "Save", theme);
+                self.add_command(&mut lines, "A-a", "Autosave", theme);
+                self.add_command(&mut lines, "q", "Quit", theme);
             }
 
             ApplicationMode::Form => {
-                self.add_section(&mut lines, "Form Controls", theme);
-                self.add_command(&mut lines, "<A-Enter>", "Submit", theme);
-                self.add_command(&mut lines, "◄ / ►", "Change Priority", theme);
-                self.add_command(&mut lines, "<Esc>", "Cancel", theme);
+                self.add_section(&mut lines, "Form", theme);
+                self.add_command(&mut lines, "A-Enter", "Submit", theme);
+                self.add_command(&mut lines, "◄/►", "Priority", theme);
+                self.add_command(&mut lines, "Esc", "Cancel", theme);
             }
 
             ApplicationMode::Search => {
                 self.add_section(&mut lines, "Search", theme);
-                self.add_command(&mut lines, "<Enter>", "Confirm", theme);
-                self.add_command(&mut lines, "<Esc>", "Cancel", theme);
+                self.add_command(&mut lines, "Enter", "Confirm", theme);
+                self.add_command(&mut lines, "Esc", "Cancel", theme);
             }
         }
 
         lines
-    }
-
-    /// Adds hotkeys section
-    fn add_section(
-        &self,
-        lines: &mut Vec<Line<'static>>,
-        title: &'static str,
-        theme: &ThemeColors,
-    ) {
-        if !lines.is_empty() {
-            lines.push(Line::from(""));
-        }
-
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {} ", title),
-                Style::default().fg(theme.accent).bold(),
-            ),
-            Span::styled("─".repeat(20), Style::default().fg(theme.bg_dim)),
-        ]));
     }
 
     /// Adds hotkey command
@@ -102,14 +82,35 @@ impl ApplicationMode {
         desc: &'static str,
         theme: &ThemeColors,
     ) {
-        let key_col_width = 12;
-        let padded_key = format!("{:>width$} ", key, width = key_col_width);
+        let key_col_width = 11;
+        let key_str = format!("{:>width$}", key, width = key_col_width);
 
         lines.push(Line::from(vec![
-            Span::styled(padded_key, Style::default().fg(theme.accent).bold()),
-            Span::styled("│ ", Style::default().fg(theme.border)),
-            Span::styled(desc, Style::default().fg(theme.text_primary)),
+            Span::styled(key_str, Style::default().fg(theme.accent).bold()),
+            Span::styled(" │ ", Style::default().fg(theme.border)),
+            Span::styled(format!("{}", desc), Style::default().fg(theme.text_primary)),
         ]));
+    }
+
+    /// Add hotkeys section
+    fn add_section(
+        &self,
+        lines: &mut Vec<Line<'static>>,
+        title: &'static str,
+        theme: &ThemeColors,
+    ) {
+        if !lines.is_empty() {
+            lines.push(Line::from(""));
+        }
+
+        lines.push(
+            Line::from(vec![
+                Span::styled("──── ", Style::default().fg(theme.accent)),
+                Span::styled(title, Style::default().fg(theme.accent).bold()),
+                Span::styled(" ────", Style::default().fg(theme.accent)),
+            ])
+            .centered(),
+        );
     }
 }
 
@@ -126,7 +127,7 @@ mod tests {
         for line in lines {
             let spans: Vec<_> = line.spans.iter().collect();
             if spans.len() >= 3 && spans[1].content.contains('│') {
-                assert_eq!(spans[0].content.len(), 13, "Key column width must be 13");
+                assert_eq!(spans[0].content.len(), 11, "Key column width must be 11");
             }
         }
     }
@@ -141,8 +142,8 @@ mod tests {
             .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
             .collect();
 
-        assert!(left_content.contains("Next/Prev Filter"),);
-        assert!(!left_content.contains("Select Task"),);
+        assert!(left_content.contains("Filter"));
+        assert!(!left_content.contains("Select"));
 
         let main_lines = mode.hotkeys(&ThemeColors::GRUVBOX, &FocusArea::MainContent);
         let main_content: String = main_lines
@@ -150,8 +151,8 @@ mod tests {
             .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
             .collect();
 
-        assert!(main_content.contains("Select Task"),);
-        assert!(main_content.contains("Toggle Completed"),);
+        assert!(main_content.contains("Select"));
+        assert!(main_content.contains("Check"),);
     }
 
     #[test]

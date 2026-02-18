@@ -88,6 +88,18 @@ impl Confirm {
             Span::styled(" ]", Style::default().fg(theme.text_primary)),
         ])
     }
+
+    /// Bottom hotkeys
+    pub fn bottom_keys(&self, theme: &ThemeColors) -> Line<'static> {
+        Line::from(vec![
+            Span::styled(" y", Style::default().fg(theme.success).bold()),
+            Span::styled(":yes ", Style::default().fg(theme.text_dim)),
+            Span::styled("n", Style::default().fg(theme.error).bold()),
+            Span::styled(":no ", Style::default().fg(theme.text_dim)),
+            Span::styled(" <h/l>", Style::default().fg(theme.accent)),
+            Span::styled(":move ", Style::default().fg(theme.text_dim)),
+        ])
+    }
 }
 
 impl Modal for Confirm {
@@ -107,7 +119,8 @@ impl Modal for Confirm {
         let confirm_block: Block = Block::bordered()
             .fg(theme.text_primary)
             .border_style(Style::default().fg(theme.accent))
-            .title_top(Line::from(" Confirm Action ").centered())
+            .title_top(Line::from(" Action ").centered())
+            .title_bottom(self.bottom_keys(theme).centered())
             .border_type(BorderType::Rounded);
 
         let inner_area: Rect = confirm_block.inner(area);

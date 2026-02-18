@@ -53,6 +53,10 @@ impl Widget for FeedbackWidget<'_> {
 
         Block::bordered()
             .title(" Tasks ")
+            .title_top(
+                Line::styled(" todo-tui ", Style::default().fg(self.theme.text_primary))
+                    .right_aligned(),
+            )
             .border_style(self.theme.warning)
             .render(area, buf);
 

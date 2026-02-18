@@ -1,6 +1,6 @@
 use crate::{
     core::ApplicationMode,
-    models::{Filter, Sort, Todo},
+    models::{Filter, Todo},
     state::UIState,
     theme::ThemeColors,
     traits::InteractableEnum,
@@ -19,8 +19,6 @@ pub struct SidebarWidget<'a> {
     ui: &'a UIState,
     todos: &'a [Todo],
     mode: &'a ApplicationMode,
-    sort: Sort,
-    autosave_enabled: bool,
     theme: &'a ThemeColors,
 }
 
@@ -29,17 +27,13 @@ impl<'a> SidebarWidget<'a> {
         ui: &'a UIState,
         todos: &'a [Todo],
         mode: &'a ApplicationMode,
-        sort: Sort,
-        autosave_enabled: bool,
         theme: &'a ThemeColors,
     ) -> Self {
         Self {
             ui,
             todos,
             mode,
-            sort,
             theme,
-            autosave_enabled,
         }
     }
 
@@ -112,8 +106,8 @@ impl<'a> SidebarWidget<'a> {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Fill(1),   // Filters
-                Constraint::Length(9), // Summary
-                Constraint::Max(12),   // Hotkeys
+                Constraint::Length(7), // Summary
+                Constraint::Max(16),   // Hotkeys
             ])
             .split(area)
     }
@@ -196,20 +190,6 @@ impl<'a> SidebarWidget<'a> {
                 ),
             ]),
             Line::from(Span::styled(gauge, Style::default().fg(self.theme.success))),
-            Line::from(vec![
-                Span::styled(" Sort: ", Style::default().fg(self.theme.text_dim)),
-                Span::styled(
-                    self.sort.label(),
-                    Style::default().fg(self.theme.accent).bold(),
-                ),
-            ]),
-            Line::from(vec![
-                Span::styled(" Autosave: ", Style::default().fg(self.theme.text_dim)),
-                Span::styled(
-                    if self.autosave_enabled { "On" } else { "Off" },
-                    Style::default().fg(self.theme.accent).bold(),
-                ),
-            ]),
         ]
     }
 }
@@ -237,8 +217,6 @@ mod tests {
             &ui,
             &todos,
             &ApplicationMode::Browsing,
-            Sort::default(),
-            false,
             &ThemeColors::GRUVBOX,
         );
 
@@ -248,12 +226,6 @@ mod tests {
 
         let gauge_text: String = summary[2].to_string();
         assert!(gauge_text.contains("■■■■■□□□□□"));
-
-        let sort_text: String = summary[3].to_string();
-        assert_eq!(sort_text, " Sort: Priority ▼");
-
-        let autosave_text: String = summary[4].to_string();
-        assert_eq!(autosave_text, " Autosave: Off");
     }
 
     #[test]
@@ -265,8 +237,6 @@ mod tests {
             &ui,
             &todos,
             &ApplicationMode::Browsing,
-            Sort::default(),
-            false,
             &ThemeColors::GRUVBOX,
         );
 
@@ -285,8 +255,6 @@ mod tests {
             &ui,
             &todos,
             &ApplicationMode::Browsing,
-            Sort::default(),
-            false,
             &ThemeColors::GRUVBOX,
         );
 

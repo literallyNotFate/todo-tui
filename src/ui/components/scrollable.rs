@@ -59,8 +59,7 @@ pub fn scrollable<F>(
     let [content_area, scroll_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(if show_scrollbar {
-            let size: u16 = if is_table { 3 } else { 1 };
-            [Constraint::Min(0), Constraint::Length(size)]
+            [Constraint::Min(0), Constraint::Length(3)]
         } else {
             [Constraint::Min(0), Constraint::Length(0)]
         })

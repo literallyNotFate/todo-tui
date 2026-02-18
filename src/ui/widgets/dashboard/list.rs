@@ -1,7 +1,7 @@
 use crate::{
     core::ApplicationMode,
     enums::FocusArea,
-    models::Todo,
+    models::{Sort, Todo},
     state::{AdaptiveScroll, UIState},
     theme::ThemeColors,
     traits::{Input, InteractableEnum},
@@ -20,6 +20,7 @@ pub struct ListTasks<'a> {
     ui: &'a UIState,
     todos: Vec<&'a Todo>,
     query: &'a str,
+    sort: &'a Sort,
     mode: &'a ApplicationMode,
     theme: &'a ThemeColors,
 }
@@ -29,6 +30,7 @@ impl<'a> ListTasks<'a> {
         ui: &'a UIState,
         todos: Vec<&'a Todo>,
         query: &'a str,
+        sort: &'a Sort,
         mode: &'a ApplicationMode,
         theme: &'a ThemeColors,
     ) -> Self {
@@ -36,6 +38,7 @@ impl<'a> ListTasks<'a> {
             ui,
             theme,
             todos,
+            sort,
             mode,
             query,
         }
@@ -49,6 +52,8 @@ impl<'a> ListTasks<'a> {
         select_state: &mut TableState,
         scroll: &AdaptiveScroll,
     ) {
+        use ratatui::text::Span;
+
         let focused_style: Style = self.ui.focused_on(&FocusArea::MainContent);
         let is_search_visible: bool =
             *self.mode == ApplicationMode::Search || !self.query.is_empty();
@@ -68,7 +73,31 @@ impl<'a> ListTasks<'a> {
         }
 
         let main_block: Block = Block::bordered()
-            .title(" Tasks ")
+            .title(" Tasks ".bold())
+            .title_top(
+                Line::styled(
+                    " todo-tui ",
+                    Style::default().fg(self.theme.text_primary).bold(),
+                )
+                .right_aligned(),
+            )
+            .title_bottom(
+                Line::from(vec![
+                    Span::styled(
+                        " Sort: ",
+                        Style::default().fg(self.theme.text_primary).bold(),
+                    ),
+                    Span::styled(
+                        self.sort.parameter.label(),
+                        Style::default().fg(self.theme.accent).bold(),
+                    ),
+                    Span::styled(
+                        format!(" {} ", self.sort.order.icon()),
+                        Style::default().fg(self.theme.warning).bold(),
+                    ),
+                ])
+                .right_aligned(),
+            )
             .border_style(focused_style);
 
         let inner_tasks_area: Rect = main_block.inner(tasks_area);
