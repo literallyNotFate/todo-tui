@@ -1,5 +1,5 @@
 use crate::{
-    theme::ThemeColors,
+    theme::ThemePalette,
     ui::{MIN_HEIGHT, MIN_WIDTH, RenderContext, center},
 };
 use ratatui::{
@@ -31,15 +31,16 @@ impl FeedbackWidget {
     /// Feedback rendering
     pub fn render(self, ctx: &mut RenderContext, area: Rect) {
         let result_area: Rect = center(area, 50, 50);
-        let colors: (Color, Color) = self.dimension_colors(&area, &ctx.theme);
+        let palette: ThemePalette = ctx.palette();
+        let colors: (Color, Color) = self.dimension_colors(&area, &palette);
         let message: Vec<Line>;
 
         if self.kind == FeedbackKind::SmallTerminal {
-            message = self.message(&area.width, &area.height, colors, &ctx.theme);
+            message = self.message(&area.width, &area.height, colors, &palette);
             ctx.render_widget(Clear, area);
 
             let p: Paragraph = Paragraph::new(Text::from(message))
-                .style(Style::default().fg(ctx.theme.text_primary))
+                .style(Style::default().fg(palette.fg))
                 .wrap(Wrap { trim: false })
                 .block(Block::default());
 
@@ -47,15 +48,12 @@ impl FeedbackWidget {
             return;
         }
 
-        message = self.message(&area.width, &area.height, colors, &ctx.theme);
+        message = self.message(&area.width, &area.height, colors, &palette);
 
         let block = Block::bordered()
             .title(" Tasks ")
-            .title_top(
-                Line::styled(" todo-tui ", Style::default().fg(ctx.theme.text_primary))
-                    .right_aligned(),
-            )
-            .border_style(ctx.theme.warning);
+            .title_top(Line::styled(" todo-tui ", Style::default().fg(palette.fg)).right_aligned())
+            .border_style(palette.warning);
 
         ctx.render_widget(block, area);
 
@@ -71,40 +69,41 @@ impl FeedbackWidget {
         width: &u16,
         height: &u16,
         colors: (Color, Color),
-        theme: &ThemeColors,
+        palette: &ThemePalette,
     ) -> Vec<Line<'static>> {
         use ratatui::text::Span;
 
         let message: Vec<Line> = match &self.kind {
             FeedbackKind::EmptyList => vec![
-                Line::from("All clear!").fg(theme.warning).bold(),
+                Line::from("All clear!").fg(palette.warning).bold(),
                 Line::from(""),
-                Line::from("Press 'a' to add a new task").fg(theme.text_dim),
+                Line::from("Press 'a' to add a new task").fg(palette.muted),
             ],
             FeedbackKind::NoResults(q) => vec![
-                Line::from("No matches").fg(theme.error).bold(),
-                Line::from(format!("Nothing found for '{}'", q)).fg(theme.text_dim),
-                Line::from("Try another query").fg(theme.text_dim),
+                Line::from("No matches").fg(palette.error).bold(),
+                Line::from(format!("Nothing found for '{}'", q)).fg(palette.muted),
+                Line::from("Try another query").fg(palette.muted),
             ],
             FeedbackKind::SmallTerminal => vec![
-                Line::styled("Terminal is too small!", Style::default().fg(theme.error)).centered(),
+                Line::styled("Terminal is too small!", Style::default().fg(palette.error))
+                    .centered(),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("Required: ", Style::default().fg(theme.text_dim)),
+                    Span::styled("Required: ", Style::default().fg(palette.muted)),
                     Span::styled(
                         format!("{}", MIN_WIDTH),
-                        Style::default().fg(theme.error).bold(),
+                        Style::default().fg(palette.error).bold(),
                     ),
                     Span::raw(" x "),
                     Span::styled(
                         format!("{}", MIN_HEIGHT),
-                        Style::default().fg(theme.error).bold(),
+                        Style::default().fg(palette.error).bold(),
                     ),
                 ])
                 .centered(),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("Current:  ", Style::default().fg(theme.text_dim)),
+                    Span::styled("Current:  ", Style::default().fg(palette.muted)),
                     Span::styled(format!("{}", width), Style::default().fg(colors.0).bold()),
                     Span::raw(" x "),
                     Span::styled(format!("{}", height), Style::default().fg(colors.1).bold()),
@@ -117,17 +116,17 @@ impl FeedbackWidget {
     }
 
     /// Get colors for width/height while resized
-    fn dimension_colors(&self, area: &Rect, theme: &ThemeColors) -> (Color, Color) {
+    fn dimension_colors(&self, area: &Rect, palette: &ThemePalette) -> (Color, Color) {
         let width_color = if area.width >= MIN_WIDTH {
-            theme.success
+            palette.success
         } else {
-            theme.error
+            palette.error
         };
 
         let height_color = if area.height >= MIN_HEIGHT {
-            theme.success
+            palette.success
         } else {
-            theme.error
+            palette.error
         };
 
         (width_color, height_color)
@@ -138,12 +137,13 @@ impl FeedbackWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::ThemeName;
     use ratatui::{layout::Alignment, text::Span};
 
     #[test]
     fn should_render_message_for_empty_list() {
         let feedback: FeedbackWidget = FeedbackWidget::new(FeedbackKind::EmptyList);
-        let theme: ThemeColors = ThemeColors::GRUVBOX;
+        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
 
         assert_eq!(feedback.kind, FeedbackKind::EmptyList);
 
@@ -151,7 +151,7 @@ mod tests {
         let height: u16 = 50;
 
         let result: Vec<Line> =
-            feedback.message(&width, &height, (theme.error, theme.success), &theme);
+            feedback.message(&width, &height, (palette.error, palette.success), &palette);
 
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].spans[0], Span::from("All clear!"));
@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn should_render_message_for_invalid_query() {
         let query: String = String::from("Test");
-        let theme: ThemeColors = ThemeColors::GRUVBOX;
+        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
         let feedback: FeedbackWidget = FeedbackWidget::new(FeedbackKind::NoResults(query.clone()));
 
         assert_eq!(feedback.kind, FeedbackKind::NoResults(query.clone()));
@@ -173,7 +173,7 @@ mod tests {
         let height: u16 = 50;
 
         let result: Vec<Line> =
-            feedback.message(&width, &height, (theme.error, theme.success), &theme);
+            feedback.message(&width, &height, (palette.error, palette.success), &palette);
 
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].spans[0], Span::from("No matches"));
@@ -189,9 +189,9 @@ mod tests {
         let width: u16 = 80;
         let height: u16 = 24;
 
-        let theme: ThemeColors = ThemeColors::GRUVBOX;
-        let colors: (Color, Color) = (theme.error, theme.success);
-        let result: Vec<Line> = feedback.message(&width, &height, colors, &theme);
+        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let colors: (Color, Color) = (palette.error, palette.success);
+        let result: Vec<Line> = feedback.message(&width, &height, colors, &palette);
 
         assert_eq!(result.len(), 5);
         assert_eq!(result[0].spans[0], Span::from("Terminal is too small!"));
@@ -199,15 +199,15 @@ mod tests {
         assert_eq!(
             result[2].spans,
             vec![
-                Span::styled("Required: ", Style::default().fg(theme.text_dim)),
+                Span::styled("Required: ", Style::default().fg(palette.muted)),
                 Span::styled(
                     format!("{}", MIN_WIDTH),
-                    Style::default().fg(theme.error).bold()
+                    Style::default().fg(palette.error).bold()
                 ),
                 Span::raw(" x "),
                 Span::styled(
                     format!("{}", MIN_HEIGHT),
-                    Style::default().fg(theme.error).bold()
+                    Style::default().fg(palette.error).bold()
                 ),
             ],
         );
@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(
             result[4].spans,
             vec![
-                Span::styled("Current:  ", Style::default().fg(theme.text_dim)),
+                Span::styled("Current:  ", Style::default().fg(palette.muted)),
                 Span::styled(format!("{}", width), Style::default().fg(colors.0).bold()),
                 Span::raw(" x "),
                 Span::styled(format!("{}", height), Style::default().fg(colors.1).bold()),

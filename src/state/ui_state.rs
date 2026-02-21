@@ -95,7 +95,7 @@ impl UIState {
 
     /// Switch application theme
     pub fn switch_theme(&mut self) {
-        self.theme = self.theme.next()
+        self.theme.next()
     }
 
     /// Next filter tab (sidebar)

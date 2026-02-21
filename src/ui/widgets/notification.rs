@@ -1,4 +1,4 @@
-use crate::{theme::ThemeColors, ui::RenderContext};
+use crate::{theme::ThemePalette, ui::RenderContext};
 use ratatui::{layout::Rect, style::Color};
 use std::time::{Duration, Instant};
 
@@ -44,8 +44,9 @@ impl Notification {
 
         let available_width = (area.width as usize).saturating_sub(5);
         let truncated_message = utils::truncate(&self.message, available_width);
+        let palette: ThemePalette = ctx.palette();
 
-        let (icon, color) = self.icon_with_color(&ctx.theme);
+        let (icon, color) = self.icon_with_color(&palette);
         let text = format!(
             "{} {} ({}s)",
             icon,
@@ -73,10 +74,10 @@ impl Notification {
     }
 
     /// Get icon with corresponding color
-    fn icon_with_color(&self, theme: &ThemeColors) -> (&'static str, Color) {
+    fn icon_with_color(&self, palette: &ThemePalette) -> (&'static str, Color) {
         match self.kind {
-            NotificationKind::Success => ("✔", theme.success),
-            NotificationKind::Error => ("✘", theme.error),
+            NotificationKind::Success => ("✔", palette.success),
+            NotificationKind::Error => ("✘", palette.error),
         }
     }
 }
@@ -85,6 +86,7 @@ impl Notification {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::ThemeName;
     use std::thread::sleep;
 
     /// Mock application for tick() and automatic notifcation closing
@@ -129,20 +131,20 @@ mod tests {
     #[test]
     fn should_return_notification_icon_and_color_based_on_kind_and_theme() {
         let mut notification: Notification = Notification::success("Success");
-        let mut icon_and_color = notification.icon_with_color(&ThemeColors::CATPPUCCIN);
+        let mut res = notification.icon_with_color(&ThemeName::CatppuccinMocha.palette());
 
         assert_eq!(notification.message, "Success");
         assert_eq!(notification.kind, NotificationKind::Success);
-        assert_eq!(icon_and_color.0, "✔");
-        assert_eq!(icon_and_color.1, Color::Rgb(166, 227, 161));
+        assert_eq!(res.0, "✔");
+        assert_eq!(res.1, Color::Rgb(166, 227, 161));
 
         notification = Notification::error("Error");
-        icon_and_color = notification.icon_with_color(&ThemeColors::CATPPUCCIN);
+        res = notification.icon_with_color(&ThemeName::CatppuccinMocha.palette());
 
         assert_eq!(notification.message, "Error");
         assert_eq!(notification.kind, NotificationKind::Error);
-        assert_eq!(icon_and_color.0, "✘");
-        assert_eq!(icon_and_color.1, Color::Rgb(243, 139, 168));
+        assert_eq!(res.0, "✘");
+        assert_eq!(res.1, Color::Rgb(243, 139, 168));
     }
 
     #[test]

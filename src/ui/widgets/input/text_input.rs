@@ -1,4 +1,4 @@
-use crate::{enums::WidgetResponse, theme::ThemeColors, traits::Input, ui::RenderContext};
+use crate::{enums::WidgetResponse, theme::ThemePalette, traits::Input, ui::RenderContext};
 use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Style};
 
 pub const TEXT_INPUT_MAX_CHARS: usize = 256;
@@ -109,13 +109,13 @@ impl Input for TextInput {
             widgets::{Block, Paragraph},
         };
 
-        let theme = &ctx.theme;
+        let palette: ThemePalette = ctx.palette();
 
-        let width = area.width.saturating_sub(2) as usize;
-        let scroll = self.scroll(width);
-        let text = self.displayed_content(width, scroll);
+        let width: usize = area.width.saturating_sub(2) as usize;
+        let scroll: usize = self.scroll(width);
+        let text: String = self.displayed_content(width, scroll);
 
-        let (border_style, text_style) = self.on_focused(focused, theme);
+        let (border_style, text_style) = self.on_focused(focused, &palette);
 
         let input_block = Block::bordered()
             .border_style(border_style)
@@ -135,16 +135,16 @@ impl Input for TextInput {
     }
 
     /// Return styles if input is being focused
-    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> (Style, Style) {
+    fn on_focused(&self, focused: bool, palette: &ThemePalette) -> (Style, Style) {
         if focused {
             (
-                Style::default().fg(theme.accent),
-                Style::default().fg(theme.text_primary),
+                Style::default().fg(palette.accent),
+                Style::default().fg(palette.fg),
             )
         } else {
             (
-                Style::default().fg(theme.border),
-                Style::default().fg(theme.text_dim),
+                Style::default().fg(palette.muted),
+                Style::default().fg(palette.muted),
             )
         }
     }
@@ -154,6 +154,7 @@ impl Input for TextInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::ThemeName;
     use ratatui::{crossterm::event::KeyCode, style::Color};
 
     #[test]
@@ -245,16 +246,17 @@ mod tests {
     #[test]
     fn should_return_styles_if_focused() {
         let input = TextInput::new();
-        let mut styles: (Style, Style) = input.on_focused(false, &ThemeColors::GRUVBOX);
+        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let mut styles: (Style, Style) = input.on_focused(false, &palette);
         assert_eq!(
             styles,
             (
-                Style::default().fg(Color::Rgb(102, 92, 84)),
-                Style::default().fg(Color::Rgb(168, 153, 132))
+                Style::default().fg(Color::Rgb(146, 131, 116)),
+                Style::default().fg(Color::Rgb(146, 131, 116))
             )
         );
 
-        styles = input.on_focused(true, &ThemeColors::GRUVBOX);
+        styles = input.on_focused(true, &palette);
         assert_eq!(
             styles,
             (

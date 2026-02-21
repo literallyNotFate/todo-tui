@@ -1,4 +1,7 @@
-use crate::{enums::FocusArea, theme::ThemeColors};
+use crate::{
+    enums::FocusArea,
+    theme::{Theme, ThemePalette},
+};
 use ratatui::{
     style::{Style, Stylize},
     text::{Line, Span},
@@ -15,59 +18,60 @@ pub enum ApplicationMode {
 
 impl ApplicationMode {
     /// Returns lines of hotkeys (w/commands and sections)
-    pub fn hotkeys(&self, theme: &ThemeColors, focus: &FocusArea) -> Vec<Line<'static>> {
+    pub fn hotkeys(&self, theme: &Theme, focus: &FocusArea) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
+        let palette: &ThemePalette = &theme.palette();
 
         match self {
             ApplicationMode::Browsing | ApplicationMode::List => {
-                self.add_section(&mut lines, "Navigation", theme);
-                self.add_command(&mut lines, "h/l", "Panels", theme);
-                self.add_command(&mut lines, "A-j/k", "Scroll", theme);
+                self.add_section(&mut lines, "Navigation", palette);
+                self.add_command(&mut lines, "h/l", "Panels", palette);
+                self.add_command(&mut lines, "A-j/k", "Scroll", palette);
 
                 match focus {
                     FocusArea::LeftPanel => {
-                        self.add_command(&mut lines, "j/k", "Filter", theme);
-                        self.add_command(&mut lines, "1-5", "Quick", theme);
+                        self.add_command(&mut lines, "j/k", "Filter", palette);
+                        self.add_command(&mut lines, "1-5", "Quick", palette);
                     }
                     FocusArea::MainContent => {
-                        self.add_command(&mut lines, "j/k", "Select", theme);
-                        self.add_command(&mut lines, "J/K", "Move", theme);
-                        self.add_command(&mut lines, "[/]", "Desc", theme);
+                        self.add_command(&mut lines, "j/k", "Select", palette);
+                        self.add_command(&mut lines, "J/K", "Move", palette);
+                        self.add_command(&mut lines, "[/]", "Desc", palette);
                     }
                 }
 
-                self.add_section(&mut lines, "Actions", theme);
-                self.add_command(&mut lines, "a", "New", theme);
+                self.add_section(&mut lines, "Actions", palette);
+                self.add_command(&mut lines, "a", "New", palette);
 
                 if *focus == FocusArea::MainContent {
-                    self.add_command(&mut lines, "Enter", "Check", theme);
-                    self.add_command(&mut lines, "e", "Edit", theme);
-                    self.add_command(&mut lines, "d", "Delete", theme);
-                    self.add_command(&mut lines, "/", "Find", theme);
+                    self.add_command(&mut lines, "Enter", "Check", palette);
+                    self.add_command(&mut lines, "e", "Edit", palette);
+                    self.add_command(&mut lines, "d", "Delete", palette);
+                    self.add_command(&mut lines, "/", "Find", palette);
                 }
 
-                self.add_command(&mut lines, "x", "Clear", theme);
+                self.add_command(&mut lines, "x", "Clear", palette);
 
-                self.add_section(&mut lines, "System", theme);
-                self.add_command(&mut lines, "s", "Sort", theme);
-                self.add_command(&mut lines, "r", "Reverse", theme);
-                self.add_command(&mut lines, "t", "Theme", theme);
-                self.add_command(&mut lines, "C-s", "Save", theme);
-                self.add_command(&mut lines, "A-a", "Autosave", theme);
-                self.add_command(&mut lines, "q", "Quit", theme);
+                self.add_section(&mut lines, "System", palette);
+                self.add_command(&mut lines, "s", "Sort", palette);
+                self.add_command(&mut lines, "r", "Reverse", palette);
+                self.add_command(&mut lines, "t", "Theme", palette);
+                self.add_command(&mut lines, "C-s", "Save", palette);
+                self.add_command(&mut lines, "A-a", "Autosave", palette);
+                self.add_command(&mut lines, "q", "Quit", palette);
             }
 
             ApplicationMode::Form => {
-                self.add_section(&mut lines, "Form", theme);
-                self.add_command(&mut lines, "A-Enter", "Submit", theme);
-                self.add_command(&mut lines, "◄/►", "Priority", theme);
-                self.add_command(&mut lines, "Esc", "Cancel", theme);
+                self.add_section(&mut lines, "Form", palette);
+                self.add_command(&mut lines, "A-Enter", "Submit", palette);
+                self.add_command(&mut lines, "◄/►", "Priority", palette);
+                self.add_command(&mut lines, "Esc", "Cancel", palette);
             }
 
             ApplicationMode::Search => {
-                self.add_section(&mut lines, "Search", theme);
-                self.add_command(&mut lines, "Enter", "Confirm", theme);
-                self.add_command(&mut lines, "Esc", "Cancel", theme);
+                self.add_section(&mut lines, "Search", palette);
+                self.add_command(&mut lines, "Enter", "Confirm", palette);
+                self.add_command(&mut lines, "Esc", "Cancel", palette);
             }
         }
 
@@ -80,15 +84,15 @@ impl ApplicationMode {
         lines: &mut Vec<Line<'static>>,
         key: &'static str,
         desc: &'static str,
-        theme: &ThemeColors,
+        palette: &ThemePalette,
     ) {
         let key_col_width = 11;
         let key_str = format!("{:>width$}", key, width = key_col_width);
 
         lines.push(Line::from(vec![
-            Span::styled(key_str, Style::default().fg(theme.accent).bold()),
-            Span::styled(" │ ", Style::default().fg(theme.border)),
-            Span::styled(format!("{}", desc), Style::default().fg(theme.text_primary)),
+            Span::styled(key_str, Style::default().fg(palette.info).bold()),
+            Span::styled(" │ ", Style::default().fg(palette.muted)),
+            Span::styled(format!("{}", desc), Style::default().fg(palette.fg)),
         ]));
     }
 
@@ -97,7 +101,7 @@ impl ApplicationMode {
         &self,
         lines: &mut Vec<Line<'static>>,
         title: &'static str,
-        theme: &ThemeColors,
+        palette: &ThemePalette,
     ) {
         if !lines.is_empty() {
             lines.push(Line::from(""));
@@ -105,9 +109,9 @@ impl ApplicationMode {
 
         lines.push(
             Line::from(vec![
-                Span::styled("──── ", Style::default().fg(theme.accent)),
-                Span::styled(title, Style::default().fg(theme.accent).bold()),
-                Span::styled(" ────", Style::default().fg(theme.accent)),
+                Span::styled("──── ", Style::default().fg(palette.accent)),
+                Span::styled(title, Style::default().fg(palette.accent).bold()),
+                Span::styled(" ────", Style::default().fg(palette.accent)),
             ])
             .centered(),
         );
@@ -118,11 +122,12 @@ impl ApplicationMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::ThemeName;
 
     #[test]
     fn should_test_hotkeys_alignment_consistency() {
         let mode = ApplicationMode::Browsing;
-        let lines = mode.hotkeys(&ThemeColors::GRUVBOX, &FocusArea::MainContent);
+        let lines = mode.hotkeys(&ThemeName::GruvboxDark.into(), &FocusArea::MainContent);
 
         for line in lines {
             let spans: Vec<_> = line.spans.iter().collect();
@@ -136,7 +141,7 @@ mod tests {
     fn should_handle_hotkeys_focus_logic() {
         let mode = ApplicationMode::Browsing;
 
-        let left_lines = mode.hotkeys(&ThemeColors::GRUVBOX, &FocusArea::LeftPanel);
+        let left_lines = mode.hotkeys(&ThemeName::GruvboxDark.into(), &FocusArea::LeftPanel);
         let left_content: String = left_lines
             .iter()
             .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
@@ -145,7 +150,7 @@ mod tests {
         assert!(left_content.contains("Filter"));
         assert!(!left_content.contains("Select"));
 
-        let main_lines = mode.hotkeys(&ThemeColors::GRUVBOX, &FocusArea::MainContent);
+        let main_lines = mode.hotkeys(&ThemeName::GruvboxDark.into(), &FocusArea::MainContent);
         let main_content: String = main_lines
             .iter()
             .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
@@ -158,7 +163,7 @@ mod tests {
     #[test]
     fn should_add_section_spacing() {
         let mode = ApplicationMode::Browsing;
-        let lines = mode.hotkeys(&ThemeColors::GRUVBOX, &FocusArea::LeftPanel);
+        let lines = mode.hotkeys(&ThemeName::GruvboxDark.into(), &FocusArea::LeftPanel);
 
         let empty_lines = lines
             .iter()

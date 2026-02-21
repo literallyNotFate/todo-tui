@@ -1,5 +1,5 @@
 use crate::{
-    theme::ThemeColors,
+    theme::ThemePalette,
     traits::{Modal, ModalResult},
     ui::{RenderContext, center},
 };
@@ -62,41 +62,41 @@ impl Confirm {
     }
 
     /// Style for buttons based on selection
-    fn button_styles(&self, theme: &ThemeColors) -> (Style, Style) {
+    fn button_styles(&self, palette: &ThemePalette) -> (Style, Style) {
         match self.select {
             ConfirmOption::Yes => (
-                Style::default().fg(theme.success).bold(),
-                Style::default().fg(theme.text_dim),
+                Style::default().fg(palette.success).bold(),
+                Style::default().fg(palette.muted),
             ),
             ConfirmOption::Cancel => (
-                Style::default().fg(theme.text_dim),
-                Style::default().fg(theme.error).bold(),
+                Style::default().fg(palette.muted),
+                Style::default().fg(palette.error).bold(),
             ),
         }
     }
 
     /// Render buttons
-    fn button_line(&self, styles: (Style, Style), theme: &ThemeColors) -> Line<'static> {
+    fn button_line(&self, styles: (Style, Style), palette: &ThemePalette) -> Line<'static> {
         Line::from(vec![
-            Span::styled("[ ", Style::default().fg(theme.text_primary)),
+            Span::styled("[ ", Style::default().fg(palette.fg)),
             Span::styled("Yes", styles.0),
-            Span::styled(" ]", Style::default().fg(theme.text_primary)),
+            Span::styled(" ]", Style::default().fg(palette.fg)),
             Span::raw("    "),
-            Span::styled("[ ", Style::default().fg(theme.text_primary)),
+            Span::styled("[ ", Style::default().fg(palette.fg)),
             Span::styled("Cancel", styles.1),
-            Span::styled(" ]", Style::default().fg(theme.text_primary)),
+            Span::styled(" ]", Style::default().fg(palette.fg)),
         ])
     }
 
     /// Bottom hotkeys
-    pub fn bottom_keys(&self, theme: &ThemeColors) -> Line<'static> {
+    pub fn bottom_keys(&self, palette: &ThemePalette) -> Line<'static> {
         Line::from(vec![
-            Span::styled(" y", Style::default().fg(theme.success).bold()),
-            Span::styled(":yes ", Style::default().fg(theme.text_dim)),
-            Span::styled("n", Style::default().fg(theme.error).bold()),
-            Span::styled(":no ", Style::default().fg(theme.text_dim)),
-            Span::styled(" <h/l>", Style::default().fg(theme.accent)),
-            Span::styled(":move ", Style::default().fg(theme.text_dim)),
+            Span::styled(" y", Style::default().fg(palette.success).bold()),
+            Span::styled(":yes ", Style::default().fg(palette.muted)),
+            Span::styled("n", Style::default().fg(palette.error).bold()),
+            Span::styled(":no ", Style::default().fg(palette.muted)),
+            Span::styled(" <h/l>", Style::default().fg(palette.accent)),
+            Span::styled(":move ", Style::default().fg(palette.muted)),
         ])
     }
 }
@@ -114,12 +114,12 @@ impl Modal for Confirm {
             widgets::{Block, BorderType, Paragraph, Wrap},
         };
 
-        let theme = ctx.theme;
+        let palette: ThemePalette = ctx.palette();
         let confirm_block: Block = Block::bordered()
-            .fg(theme.text_primary)
-            .border_style(Style::default().fg(theme.accent))
+            .fg(palette.fg)
+            .border_style(Style::default().fg(palette.info))
             .title_top(Line::from(" Action ").centered())
-            .title_bottom(self.bottom_keys(&theme).centered())
+            .title_bottom(self.bottom_keys(&palette).centered())
             .border_type(BorderType::Rounded);
 
         let inner_area: Rect = confirm_block.inner(area);
@@ -136,8 +136,8 @@ impl Modal for Confirm {
 
         ctx.render_widget(message, message_area);
 
-        let button_styles: (Style, Style) = self.button_styles(&theme);
-        let buttons: Line = self.button_line(button_styles, &theme);
+        let button_styles: (Style, Style) = self.button_styles(&palette);
+        let buttons: Line = self.button_line(button_styles, &palette);
 
         let buttons_widget = Paragraph::new(buttons).centered();
         ctx.render_widget(buttons_widget, buttons_area);
@@ -167,7 +167,7 @@ impl Modal for Confirm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::style::Color;
+    use crate::theme::ThemeName;
 
     fn create_helper_frame() -> Rect {
         Rect::new(0, 0, 100, 100)
@@ -261,60 +261,54 @@ mod tests {
 
     #[test]
     fn should_return_proper_styles_for_buttons_with_theme() {
-        let mut confirm: Confirm = Confirm::new("Test");
-        let mut styles: (Style, Style) = confirm.button_styles(&ThemeColors::GRUVBOX);
+        let mut confirm = Confirm::new("Test");
+        let palette = ThemeName::GruvboxDark.palette();
+        let mut styles = confirm.button_styles(&palette);
 
-        assert_eq!(styles.0, Style::default().fg(Color::Rgb(168, 153, 132)));
-        assert_eq!(
-            styles.1,
-            Style::default().fg(Color::Rgb(251, 73, 52)).bold()
-        );
+        assert_eq!(styles.0, Style::default().fg(palette.muted));
+        assert_eq!(styles.1, Style::default().fg(palette.error).bold());
 
         confirm.select = ConfirmOption::Yes;
-        styles = confirm.button_styles(&ThemeColors::GRUVBOX);
+        styles = confirm.button_styles(&palette);
 
-        assert_eq!(
-            styles.0,
-            Style::default().fg(Color::Rgb(184, 187, 38)).bold()
-        );
-        assert_eq!(styles.1, Style::default().fg(Color::Rgb(168, 153, 132)));
+        assert_eq!(styles.0, Style::default().fg(palette.success).bold());
+        assert_eq!(styles.1, Style::default().fg(palette.muted));
     }
 
     #[test]
     fn should_generate_buttons_with_theme() {
-        let mut confirm: Confirm = Confirm::new("Test");
-        let mut styles: (Style, Style) = confirm.button_styles(&ThemeColors::GRUVBOX);
-        let mut buttons: Line = confirm.button_line(styles, &ThemeColors::GRUVBOX);
+        let mut confirm = Confirm::new("Test");
+        let palette = ThemeName::GruvboxDark.palette();
 
-        let mut expected_line: Line = Line::from(vec![
-            Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
-            Span::styled("Yes", Style::default().fg(Color::Rgb(168, 153, 132))),
-            Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
+        let styles = confirm.button_styles(&palette);
+        let buttons = confirm.button_line(styles, &palette);
+
+        let expected_line = Line::from(vec![
+            Span::styled("[ ", Style::default().fg(palette.fg)),
+            Span::styled("Yes", Style::default().fg(palette.muted)),
+            Span::styled(" ]", Style::default().fg(palette.fg)),
             Span::raw("    "),
-            Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
-            Span::styled(
-                "Cancel",
-                Style::default().fg(Color::Rgb(251, 73, 52)).bold(),
-            ),
-            Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::styled("[ ", Style::default().fg(palette.fg)),
+            Span::styled("Cancel", Style::default().fg(palette.error).bold()),
+            Span::styled(" ]", Style::default().fg(palette.fg)),
         ]);
 
         assert_eq!(buttons, expected_line);
 
         confirm.select = ConfirmOption::Yes;
-        styles = confirm.button_styles(&ThemeColors::GRUVBOX);
-        buttons = confirm.button_line(styles, &ThemeColors::GRUVBOX);
+        let styles = confirm.button_styles(&palette);
+        let buttons = confirm.button_line(styles, &palette);
 
-        expected_line = Line::from(vec![
-            Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
-            Span::styled("Yes", Style::default().fg(Color::Rgb(184, 187, 38)).bold()),
-            Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
+        let expected_line_yes = Line::from(vec![
+            Span::styled("[ ", Style::default().fg(palette.fg)),
+            Span::styled("Yes", Style::default().fg(palette.success).bold()),
+            Span::styled(" ]", Style::default().fg(palette.fg)),
             Span::raw("    "),
-            Span::styled("[ ", Style::default().fg(Color::Rgb(235, 219, 178))),
-            Span::styled("Cancel", Style::default().fg(Color::Rgb(168, 153, 132))),
-            Span::styled(" ]", Style::default().fg(Color::Rgb(235, 219, 178))),
+            Span::styled("[ ", Style::default().fg(palette.fg)),
+            Span::styled("Cancel", Style::default().fg(palette.muted)),
+            Span::styled(" ]", Style::default().fg(palette.fg)),
         ]);
 
-        assert_eq!(buttons, expected_line);
+        assert_eq!(buttons, expected_line_yes);
     }
 }

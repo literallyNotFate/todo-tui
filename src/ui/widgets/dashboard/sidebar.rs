@@ -1,13 +1,14 @@
 use crate::{
+    enums::FocusArea,
     models::{Filter, Priority, Todo},
     state::UIState,
-    theme::ThemeColors,
+    theme::ThemePalette,
     traits::InteractableEnum,
     ui::{RenderContext, scrollable, utils},
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span},
     widgets::{List, Wrap},
 };
@@ -25,18 +26,19 @@ impl<'a> SidebarWidget<'a> {
 
     /// Sidebar rendering
     pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        use crate::enums::FocusArea;
         use ratatui::widgets::{Block, ListState, Paragraph};
 
-        let theme = ctx.theme.clone();
+        let palette: ThemePalette = ctx.palette();
+        let focus_area: FocusArea = FocusArea::LeftPanel;
+
         let sidebar_layout: std::rc::Rc<[Rect]> = self.layout(area);
 
-        let filters_block: Block = ctx.block("Filters", FocusArea::LeftPanel).bg(theme.bg_dim);
+        let filters_block: Block = ctx.block("Filters", focus_area).bg(palette.bg);
         let filters_inner_area: Rect = filters_block.inner(sidebar_layout[0]);
         let filter_tab_layout: std::rc::Rc<[Rect]> = self.filters_tab_layout(filters_inner_area);
 
         let query: String = self.ui.search_query();
-        let list: List = self.construct_list(&query, &ctx.theme);
+        let list: List = self.construct_list(&query, ctx.is_focused(focus_area), &palette);
 
         let mut state: ListState = ListState::default();
         state.select(Some(self.ui.current_filter.index()));
@@ -44,18 +46,18 @@ impl<'a> SidebarWidget<'a> {
         ctx.render_widget(filters_block, sidebar_layout[0]);
         ctx.render_stateful_widget(list, filter_tab_layout[1], &mut state);
 
-        let summary_block: Block = ctx.static_block("Summary").bg(theme.bg_dim);
+        let summary_block: Block = ctx.static_block("Summary").bg(palette.bg);
         let summary_inner_area: Rect = summary_block.inner(sidebar_layout[1]);
         let summary_inner_layout: std::rc::Rc<[Rect]> = self.summary_layout(summary_inner_area);
-        let summary_text: Vec<Line> = self.summary_text(summary_inner_area.width, &ctx.theme);
+        let summary_text: Vec<Line> = self.summary_text(summary_inner_area.width, &palette);
 
         ctx.render_widget(summary_block, sidebar_layout[1]);
         ctx.render_widget(Paragraph::new(summary_text), summary_inner_layout[1]);
 
         let hotkeys_block = Block::bordered()
             .title(" Hotkeys ")
-            .border_style(Style::default().fg(theme.border))
-            .bg(theme.bg_dim);
+            .border_style(Style::default().fg(palette.muted))
+            .bg(palette.bg);
 
         let mut hotkeys_lines = ctx.hotkeys();
         hotkeys_lines.insert(0, Line::from(""));
@@ -67,19 +69,19 @@ impl<'a> SidebarWidget<'a> {
             &self.ui.sidebar_scroll,
             &hotkeys_lines,
             false,
-            Style::default().fg(theme.border),
+            Style::default().fg(palette.muted),
             |f, rect| {
                 let p = Paragraph::new(hotkeys_lines.clone())
                     .wrap(Wrap { trim: false })
                     .scroll((self.ui.sidebar_scroll.current.get(), 0))
-                    .style(Style::default().fg(theme.text_primary));
+                    .style(Style::default().fg(palette.fg));
                 f.render_widget(p, rect);
             },
         );
     }
 
     /// Construct a list based on filtered todo values
-    fn construct_list(&self, query: &str, theme: &ThemeColors) -> List<'static> {
+    fn construct_list(&self, query: &str, focused: bool, palette: &ThemePalette) -> List<'static> {
         use ratatui::widgets::ListItem;
 
         let items: Vec<ListItem> = Filter::all_variants()
@@ -88,9 +90,9 @@ impl<'a> SidebarWidget<'a> {
                 let count = tab.count(self.todos, query);
                 let text = format!(" {} ({})", tab.to_string(), count);
                 let style = if *tab == self.ui.current_filter {
-                    Style::default().fg(theme.accent).bold()
+                    Style::default().fg(Color::Rgb(0, 0, 0)).bold()
                 } else {
-                    Style::default().fg(theme.text_primary)
+                    Style::default().fg(if focused { palette.fg } else { palette.muted })
                 };
 
                 ListItem::new(Span::styled(text, style))
@@ -98,12 +100,16 @@ impl<'a> SidebarWidget<'a> {
             .collect();
 
         List::new(items)
-            .highlight_style(Style::default().bg(theme.surface))
+            .highlight_style(Style::default().bg(if focused {
+                palette.info
+            } else {
+                palette.muted
+            }))
             .highlight_symbol("→ ")
     }
 
     /// Get summary text
-    fn summary_text(&self, width: u16, theme: &ThemeColors) -> Vec<Line<'static>> {
+    fn summary_text(&self, width: u16, palette: &ThemePalette) -> Vec<Line<'static>> {
         let max_title_width = (width as usize).saturating_sub(12);
 
         let focus_line = if let Some(todo) = self
@@ -112,26 +118,26 @@ impl<'a> SidebarWidget<'a> {
             .find(|t| !t.completed && t.priority == Priority::High)
         {
             Line::from(vec![
-                Span::styled(" ⊙ Focus: ", Style::default().fg(theme.accent).bold()),
+                Span::styled(" ⊙ Focus: ", Style::default().fg(palette.accent).bold()),
                 Span::styled(
                     utils::truncate(&todo.title, max_title_width),
-                    Style::default().fg(theme.text_primary),
+                    Style::default().fg(palette.fg),
                 ),
             ])
         } else if let Some(todo) = self.todos.iter().find(|t| !t.completed) {
             Line::from(vec![
-                Span::styled(" ◆ Next: ", Style::default().fg(theme.text_dim)),
+                Span::styled(" ◆ Next: ", Style::default().fg(palette.secondary)),
                 Span::styled(
                     utils::truncate(&todo.title, max_title_width),
-                    Style::default().fg(theme.text_dim),
+                    Style::default().fg(palette.muted),
                 ),
             ])
         } else {
             Line::from(vec![
-                Span::styled(" ✓ ", Style::default().fg(theme.success).bold()),
+                Span::styled(" ✓ ", Style::default().fg(palette.success).bold()),
                 Span::styled(
                     "All tasks completed",
-                    Style::default().fg(theme.text_dim).italic(),
+                    Style::default().fg(palette.muted).italic(),
                 ),
             ])
         };
@@ -154,13 +160,13 @@ impl<'a> SidebarWidget<'a> {
             focus_line,
             Line::from(""),
             Line::from(vec![
-                Span::styled(" Progress: ", Style::default().fg(theme.text_dim)),
+                Span::styled(" Progress: ", Style::default().fg(palette.muted)),
                 Span::styled(
                     format!("{}%", percent),
-                    Style::default().fg(theme.success).bold(),
+                    Style::default().fg(palette.success).bold(),
                 ),
             ]),
-            Line::from(Span::styled(gauge, Style::default().fg(theme.success))),
+            Line::from(Span::styled(gauge, Style::default().fg(palette.success))),
         ]
     }
 
@@ -220,7 +226,7 @@ mod tests {
         let ui = UIState::default();
         let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
 
-        let summary: Vec<Line> = sidebar.summary_text(50, &ui.theme.colors());
+        let summary: Vec<Line> = sidebar.summary_text(50, &ui.theme.palette());
         let line_text: String = summary[2].to_string();
         assert!(line_text.contains("50%"));
 
@@ -235,7 +241,7 @@ mod tests {
         let ui = UIState::default();
         let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
 
-        let summary: Vec<Line> = sidebar.summary_text(50, &ui.theme.colors());
+        let summary: Vec<Line> = sidebar.summary_text(50, &ui.theme.palette());
         assert!(summary[0].to_string().contains("All tasks completed"));
         assert!(summary[2].to_string().contains("0%"));
         assert!(summary[3].to_string().contains("□□□□□□□□□□"));
@@ -249,7 +255,7 @@ mod tests {
         ui.current_filter = Filter::All;
         let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
 
-        let list: List = sidebar.construct_list("", &ui.theme.colors());
+        let list: List = sidebar.construct_list("", true, &ui.theme.palette());
         assert_eq!(list.len(), Filter::all_variants().len());
     }
 
@@ -272,7 +278,7 @@ mod tests {
 
         let ui = UIState::default();
         let sidebar = SidebarWidget::new(&ui, &todos);
-        let summary = sidebar.summary_text(50, &ui.theme.colors());
+        let summary = sidebar.summary_text(50, &ui.theme.palette());
 
         let focus_text = summary[0].to_string();
         assert!(focus_text.contains("⊙ Focus:"));
@@ -291,7 +297,7 @@ mod tests {
 
         let ui = UIState::default();
         let sidebar = SidebarWidget::new(&ui, &todos);
-        let summary = sidebar.summary_text(50, &ui.theme.colors());
+        let summary = sidebar.summary_text(50, &ui.theme.palette());
 
         let focus_text = summary[0].to_string();
         assert!(focus_text.contains("◆ Next:"));

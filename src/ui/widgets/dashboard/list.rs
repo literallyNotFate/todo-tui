@@ -3,7 +3,7 @@ use crate::{
     enums::FocusArea,
     models::{Sort, Todo},
     state::{AdaptiveScroll, UIState},
-    theme::ThemeColors,
+    theme::ThemePalette,
     traits::{Input, InteractableEnum},
     ui::{FeedbackKind, FeedbackWidget, RenderContext, scrollable, utils},
 };
@@ -42,10 +42,11 @@ impl<'a> ListTasks<'a> {
     ) {
         use ratatui::text::Span;
 
-        let theme = ctx.theme;
-        let mode = ctx.mode();
+        let palette: ThemePalette = ctx.palette();
+        let mode: ApplicationMode = ctx.mode();
+        let focus_area: FocusArea = FocusArea::MainContent;
+        let is_focused: bool = ctx.is_focused(focus_area);
 
-        let focused_style: Style = ctx.focused_style(FocusArea::MainContent);
         let is_search_visible: bool = mode == ApplicationMode::Search || !self.query.is_empty();
 
         let [search_area, tasks_area, desc_area] =
@@ -60,30 +61,44 @@ impl<'a> ListTasks<'a> {
         let main_block: Block = Block::bordered()
             .title(" Tasks ".bold())
             .title_top(
-                Line::styled(" todo-tui ", Style::default().fg(theme.text_primary).bold())
-                    .right_aligned(),
+                Line::styled(
+                    " todo-tui ",
+                    Style::default()
+                        .fg(ctx.focused_color(palette.fg, focus_area))
+                        .bold(),
+                )
+                .right_aligned(),
             )
             .title_bottom(
                 Line::from(vec![
-                    Span::styled(" Sort: ", Style::default().fg(theme.text_primary).bold()),
+                    Span::styled(
+                        " Sort: ",
+                        Style::default()
+                            .fg(ctx.focused_color(palette.fg, focus_area))
+                            .bold(),
+                    ),
                     Span::styled(
                         self.sort.parameter.label(),
-                        Style::default().fg(theme.accent).bold(),
+                        Style::default()
+                            .fg(ctx.focused_color(palette.accent, focus_area))
+                            .bold(),
                     ),
                     Span::styled(
                         format!(" {} ", self.sort.order.icon()),
-                        Style::default().fg(theme.warning).bold(),
+                        Style::default()
+                            .fg(ctx.focused_color(palette.warning, focus_area))
+                            .bold(),
                     ),
                 ])
                 .right_aligned(),
             )
-            .border_style(focused_style);
+            .border_style(ctx.focused_color(palette.accent, focus_area));
 
         let inner_tasks_area: Rect = main_block.inner(tasks_area);
         ctx.render_widget(main_block, tasks_area);
 
         if !self.todos.is_empty() {
-            self.build_table(ctx, inner_tasks_area, select_state, focused_style);
+            self.build_table(ctx, inner_tasks_area, select_state, is_focused);
             self.render_description(ctx, desc_area, select_state, scroll);
         } else {
             FeedbackWidget::new(FeedbackKind::NoResults(self.query.to_string()))
@@ -101,7 +116,7 @@ impl<'a> ListTasks<'a> {
     ) {
         if let Some(selected_index) = select_state.selected() {
             if let Some(todo) = self.todos.get(selected_index) {
-                let theme = ctx.theme;
+                let palette = ctx.palette();
                 let content = todo.description.lines().map(Line::from).collect::<Vec<_>>();
 
                 let desc_block: Block = Block::bordered()
@@ -109,7 +124,9 @@ impl<'a> ListTasks<'a> {
                         " Description: {} ",
                         utils::truncate(&todo.title, area.width.saturating_sub(20) as usize)
                     ))
-                    .border_style(Style::default().fg(theme.border));
+                    .border_style(Style::default().fg(palette.muted));
+
+                let desc_fg = ctx.focused_color(palette.fg, FocusArea::MainContent);
 
                 scrollable(
                     ctx,
@@ -118,12 +135,12 @@ impl<'a> ListTasks<'a> {
                     scroll,
                     &content,
                     false,
-                    Style::default().fg(theme.border),
+                    Style::default().fg(palette.muted),
                     |f, rect| {
                         let p = Paragraph::new(content.clone())
                             .wrap(Wrap { trim: false })
                             .scroll((scroll.current.get(), 0))
-                            .style(Style::default().fg(theme.text_primary));
+                            .style(Style::default().fg(desc_fg));
                         f.render_widget(p, rect);
                     },
                 );
@@ -137,7 +154,7 @@ impl<'a> ListTasks<'a> {
         ctx: &mut RenderContext,
         area: Rect,
         select_state: &mut TableState,
-        focused: Style,
+        focused: bool,
     ) {
         use ratatui::{
             style::Color,
@@ -145,8 +162,9 @@ impl<'a> ListTasks<'a> {
             widgets::{Cell, Row, Table},
         };
 
-        let theme = ctx.theme;
-        let title_column_width = (area.width as usize).saturating_sub(40);
+        let palette: ThemePalette = ctx.palette();
+        let title_column_width: usize = (area.width as usize).saturating_sub(40);
+        let focus_area: FocusArea = FocusArea::MainContent;
 
         let [_, table_area] = Layout::default()
             .direction(Direction::Vertical)
@@ -154,36 +172,40 @@ impl<'a> ListTasks<'a> {
             .areas(area);
 
         let rows = self.todos.iter().map(|todo| {
-            let priority_color: Color = todo.priority.color(&theme);
+            let priority_color: Color = todo.priority.palette(&palette);
             let (icon, icon_color): (&str, Color) = if todo.completed {
-                ("✓", theme.success)
+                ("✓", ctx.focused_color(palette.success, focus_area))
             } else {
-                ("☐", priority_color)
+                ("☐", ctx.focused_color(priority_color, focus_area))
             };
 
             let truncated_title = utils::truncate(&todo.title, title_column_width);
 
             let title_content = if !self.query.is_empty() {
-                self.highlight_search(&truncated_title, self.query, &theme)
+                self.highlight_search(&truncated_title, self.query, &palette)
             } else {
                 Line::from(truncated_title)
             };
 
             Row::new(vec![
                 Cell::from(icon).style(Style::default().fg(icon_color)),
-                Cell::from(title_content).style(Style::default().fg(theme.text_primary)),
+                Cell::from(title_content)
+                    .style(Style::default().fg(ctx.focused_color(palette.fg, focus_area))),
                 Cell::from(Line::from(todo.priority.to_string()).centered())
-                    .style(Style::default().fg(priority_color)),
+                    .style(Style::default().fg(ctx.focused_color(priority_color, focus_area))),
                 Cell::from(Line::from(todo.time_ago()).centered())
-                    .style(Style::default().fg(theme.text_dim)),
+                    .style(Style::default().fg(palette.muted)),
             ])
             .height(1)
         });
 
         let tasks_table: Table = Table::new(rows, self.table_measurements())
-            .header(self.table_header(&theme))
-            .row_highlight_style(Style::default().bg(theme.surface))
-            .highlight_symbol(Text::styled(">>   ", Style::default().fg(theme.accent)));
+            .header(self.table_header(focused, &palette))
+            .row_highlight_style(Style::default().bg(palette.selection))
+            .highlight_symbol(Text::styled(
+                ">>   ",
+                Style::default().fg(ctx.focused_color(palette.secondary, focus_area)),
+            ));
 
         let total_rows = self.todos.len();
         let current_selected = select_state.selected().unwrap_or(0);
@@ -199,7 +221,7 @@ impl<'a> ListTasks<'a> {
             &temp_scroll,
             &dummy_content,
             true,
-            focused,
+            Style::default().fg(ctx.focused_color(palette.accent, focus_area)),
             |f, rect| {
                 f.render_stateful_widget(tasks_table, rect, select_state);
             },
@@ -240,19 +262,23 @@ impl<'a> ListTasks<'a> {
         ]
     }
 
-    fn table_header(&self, theme: &ThemeColors) -> Row<'static> {
+    fn table_header(&self, focused: bool, palette: &ThemePalette) -> Row<'static> {
         Row::new(vec![
             Cell::from(""),
             Cell::from(Line::from(" Title ").centered()),
             Cell::from(Line::from(" Priority ").centered()),
             Cell::from(Line::from(" Created ").centered()),
         ])
-        .style(Style::default().fg(theme.accent).bold())
+        .style(
+            Style::default()
+                .fg(if focused { palette.info } else { palette.muted })
+                .bold(),
+        )
         .bottom_margin(1)
     }
 
     /// Highlight title if satisfies query string
-    fn highlight_search(&self, title: &str, query: &str, theme: &ThemeColors) -> Line<'static> {
+    fn highlight_search(&self, title: &str, query: &str, palette: &ThemePalette) -> Line<'static> {
         use ratatui::text::Span;
 
         let query_lower: String = query.to_lowercase();
@@ -264,7 +290,7 @@ impl<'a> ListTasks<'a> {
                 Span::raw(title[..start].to_string()),
                 Span::styled(
                     title[start..end].to_string(),
-                    Style::default().fg(theme.accent).bold(),
+                    Style::default().fg(palette.warning).bold(),
                 ),
                 Span::raw(title[end..].to_string()),
             ])

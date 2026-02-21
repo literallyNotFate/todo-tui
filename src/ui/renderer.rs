@@ -18,14 +18,10 @@ impl Renderer {
         autosave: &Autosave,
     ) {
         use crate::ui::{Dashboard, FeedbackKind, FeedbackWidget};
-        use ratatui::{
-            layout::Rect,
-            style::{Style, Stylize},
-            widgets::{Block, Clear},
-        };
+        use ratatui::{layout::Rect, widgets::Clear};
 
-        let mut ctx = RenderContext::new(frame, ui, mode);
-        let area = ctx.frame.area();
+        let mut ctx: RenderContext = RenderContext::new(frame, ui, mode);
+        let area: Rect = ctx.area();
 
         if ctx.is_small() {
             FeedbackWidget::new(FeedbackKind::SmallTerminal).render(&mut ctx, area);
@@ -34,12 +30,10 @@ impl Renderer {
 
         Dashboard::new(state, ui, autosave).render(&mut ctx, area);
 
-        let blackout: Block = Block::default().style(Style::default().bg(ctx.theme.modal_bg).dim());
-
         if let Some(dialog) = &ui.modal {
             let dialog_area: Rect = dialog.modal.area(area);
 
-            ctx.render_widget(&blackout, area);
+            ctx.render_modal_overlay();
             ctx.render_widget(Clear, dialog_area);
             dialog.modal.render(&mut ctx, dialog_area);
         }

@@ -215,7 +215,7 @@ impl Form {
     pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
         let chunks: std::rc::Rc<[Rect]> = self.layout(area);
         let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
-        let theme = ctx.theme;
+        let palette = ctx.palette();
 
         for (i, field) in self.fields.iter().enumerate() {
             let is_focused = self.focused == i;
@@ -226,11 +226,13 @@ impl Form {
                     let mut input = input.clone();
 
                     if is_focused {
-                        input.set_cursor_style(Style::default().bg(theme.accent).fg(theme.surface));
-                        focused_style = Style::default().fg(theme.accent);
+                        input.set_cursor_style(
+                            Style::default().bg(palette.accent).fg(palette.selection),
+                        );
+                        focused_style = Style::default().fg(palette.accent);
                     } else {
                         input.set_cursor_style(Style::default());
-                        focused_style = Style::default().fg(theme.border);
+                        focused_style = Style::default().fg(palette.muted);
                     }
 
                     let block = Block::bordered()
@@ -238,7 +240,7 @@ impl Form {
                         .border_style(focused_style);
 
                     input.set_block(block);
-                    input.set_style(Style::default().fg(theme.text_primary));
+                    input.set_style(Style::default().fg(palette.fg));
 
                     ctx.render_widget(&input, chunks[i]);
                 }
@@ -251,13 +253,13 @@ impl Form {
                 FieldType::Button => {
                     let (border_style, text_style) = if is_focused {
                         (
-                            Style::default().fg(theme.accent),
-                            Style::default().fg(theme.text_primary),
+                            Style::default().fg(palette.accent),
+                            Style::default().fg(palette.fg),
                         )
                     } else {
                         (
-                            Style::default().fg(theme.border),
-                            Style::default().fg(theme.text_dim),
+                            Style::default().fg(palette.muted),
+                            Style::default().fg(palette.muted),
                         )
                     };
 

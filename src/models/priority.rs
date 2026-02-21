@@ -1,4 +1,4 @@
-use crate::{theme::ThemeColors, traits::InteractableEnum};
+use crate::{theme::ThemePalette, traits::InteractableEnum};
 use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
@@ -28,11 +28,11 @@ impl InteractableEnum for Priority {
 }
 
 impl Priority {
-    pub fn color(&self, theme: &ThemeColors) -> Color {
+    pub fn palette(&self, palette: &ThemePalette) -> Color {
         match self {
-            Priority::High => theme.error,
-            Priority::Medium => theme.warning,
-            Priority::Low => theme.success,
+            Priority::High => palette.error,
+            Priority::Medium => palette.warning,
+            Priority::Low => palette.success,
         }
     }
 }
@@ -41,7 +41,7 @@ impl Priority {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::Theme;
+    use crate::theme::ThemeName;
 
     #[test]
     fn should_return_string_from_enum() {
@@ -91,16 +91,15 @@ mod tests {
 
     #[test]
     fn should_return_right_color_of_priority_with_theme() {
-        let theme: Theme = Theme::Gruvbox;
-        let colors: ThemeColors = theme.colors();
+        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
 
         let mut priority: Priority = Priority::Low;
-        assert_eq!(priority.color(&colors), colors.success);
+        assert_eq!(priority.palette(&palette), palette.success);
 
         priority = Priority::Medium;
-        assert_eq!(priority.color(&colors), colors.warning);
+        assert_eq!(priority.palette(&palette), palette.warning);
 
         priority = Priority::High;
-        assert_eq!(priority.color(&colors), colors.error);
+        assert_eq!(priority.palette(&palette), palette.error);
     }
 }

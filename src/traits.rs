@@ -1,4 +1,4 @@
-use crate::{enums::WidgetResponse, theme::ThemeColors, ui::RenderContext};
+use crate::{enums::WidgetResponse, theme::ThemePalette, ui::RenderContext};
 use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Style};
 
 /// Modal trait for interactable widgets such as popup and confirm
@@ -55,5 +55,5 @@ pub trait Input {
     fn handle_key(&mut self, key: &KeyCode) -> WidgetResponse;
     fn reset(&mut self);
     fn render(&self, ctx: &mut RenderContext, area: Rect, focused: bool);
-    fn on_focused(&self, focused: bool, theme: &ThemeColors) -> (Style, Style);
+    fn on_focused(&self, focused: bool, palette: &ThemePalette) -> (Style, Style);
 }

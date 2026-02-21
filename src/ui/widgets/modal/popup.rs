@@ -1,12 +1,12 @@
 use crate::{
-    theme::ThemeColors,
+    theme::ThemePalette,
     traits::{Modal, ModalResult},
     ui::{RenderContext, center},
 };
 use ratatui::{
     crossterm::event::KeyCode,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span},
 };
 
@@ -102,34 +102,26 @@ impl Popup {
     }
 
     /// Generate bottom title based on close behavior
-    fn bottom_title(&self, theme: &ThemeColors) -> Line<'static> {
+    fn bottom_title(&self, palette: &ThemePalette) -> Line<'static> {
         let key: String = match self.close_behavior {
             PopupCloseBehavior::AnyKey => "any key".to_string(),
             PopupCloseBehavior::Specific(c) => format!("<{}>", c),
         };
 
         Line::from(vec![
-            Span::styled(" Press ", Style::default().fg(theme.text_primary)),
-            Span::styled(
-                key,
-                Style::default()
-                    .fg(theme.success)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " to close this popup. ",
-                Style::default().fg(theme.text_primary),
-            ),
+            Span::styled(" Press ", Style::default().fg(palette.fg)),
+            Span::styled(key, Style::default().fg(palette.success).bold()),
+            Span::styled(" to close this popup. ", Style::default().fg(palette.fg)),
         ])
         .centered()
     }
 
     /// Return color based on kind
-    fn color_on_kind(&self, theme: &ThemeColors) -> Color {
+    fn color_on_kind(&self, palette: &ThemePalette) -> Color {
         match self.kind {
-            PopupKind::Info => theme.accent,
-            PopupKind::Success => theme.success,
-            PopupKind::Error => theme.error,
+            PopupKind::Info => palette.accent,
+            PopupKind::Success => palette.success,
+            PopupKind::Error => palette.error,
         }
     }
 }
@@ -144,14 +136,14 @@ impl Modal for Popup {
     fn render(&self, ctx: &mut RenderContext, area: Rect) {
         use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
 
-        let theme = ctx.theme;
+        let palette: ThemePalette = ctx.palette();
         let popup_block: Block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
-            .title_bottom(self.bottom_title(&theme))
-            .border_style(self.color_on_kind(&theme))
-            .fg(theme.text_primary);
+            .title_bottom(self.bottom_title(&palette))
+            .border_style(self.color_on_kind(&palette))
+            .fg(palette.fg);
 
         let inner_area: Rect = popup_block.inner(area);
         ctx.render_widget(popup_block, area);
@@ -180,6 +172,7 @@ impl Modal for Popup {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::ThemeName;
 
     fn create_helper_frame() -> Rect {
         Rect::new(0, 0, 100, 100)
@@ -261,15 +254,14 @@ mod tests {
     #[test]
     fn should_return_bottom_title_for_popup() {
         let mut popup = Popup::success("Test");
-        let mut bottom_title: Line = popup.bottom_title(&ThemeColors::GRUVBOX);
+        let mut palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let mut bottom_title: Line = popup.bottom_title(&palette);
 
         let expected: Line = Line::from(vec![
             Span::styled(" Press ", Style::default().fg(Color::Rgb(235, 219, 178))),
             Span::styled(
                 "<Esc>",
-                Style::default()
-                    .fg(Color::Rgb(184, 187, 38))
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::Rgb(184, 187, 38)).bold(),
             ),
             Span::styled(
                 " to close this popup. ",
@@ -281,44 +273,40 @@ mod tests {
         assert_eq!(bottom_title, expected);
 
         popup = Popup::error("Test").close_on_any_key();
-        bottom_title = popup.bottom_title(&ThemeColors::GRUVBOX);
+        bottom_title = popup.bottom_title(&palette);
 
         assert_eq!(
             bottom_title.spans[1],
             Span::styled(
                 "any key",
-                Style::default()
-                    .fg(Color::Rgb(184, 187, 38))
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::Rgb(184, 187, 38)).bold(),
             )
         );
 
         popup = Popup::info("Test").close_on(KeyCode::Char('q'));
-        bottom_title = popup.bottom_title(&ThemeColors::CATPPUCCIN);
+        palette = ThemeName::CatppuccinMocha.palette();
+        bottom_title = popup.bottom_title(&palette);
 
         assert_eq!(
             bottom_title.spans[1],
-            Span::styled(
-                "<q>",
-                Style::default()
-                    .fg(Color::Rgb(166, 227, 161))
-                    .add_modifier(Modifier::BOLD),
-            )
+            Span::styled("<q>", Style::default().fg(Color::Rgb(166, 227, 161)).bold())
         );
     }
 
     #[test]
     fn should_return_color_based_on_popup_kind_with_theme() {
         let mut popup = Popup::success("Test");
-        let mut color: Color = popup.color_on_kind(&ThemeColors::GRUVBOX);
+        let mut palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let mut color: Color = popup.color_on_kind(&palette);
         assert_eq!(color, Color::Rgb(184, 187, 38));
 
         popup = Popup::info("Test");
-        color = popup.color_on_kind(&ThemeColors::GRUVBOX);
+        color = popup.color_on_kind(&palette);
         assert_eq!(color, Color::Rgb(250, 189, 47));
 
         popup = Popup::error("Test");
-        color = popup.color_on_kind(&ThemeColors::CATPPUCCIN);
+        palette = ThemeName::CatppuccinMocha.palette();
+        color = popup.color_on_kind(&palette);
         assert_ne!(color, Color::Rgb(251, 73, 52));
     }
 }
