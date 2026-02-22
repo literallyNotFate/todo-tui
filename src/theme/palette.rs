@@ -13,6 +13,9 @@ pub struct ThemePalette {
     /// Main background color
     pub bg: Color,
 
+    /// Secondary background color
+    pub bg2: Color,
+
     /// Primary foreground/text color
     pub fg: Color,
 

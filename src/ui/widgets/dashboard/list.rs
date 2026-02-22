@@ -92,7 +92,8 @@ impl<'a> ListTasks<'a> {
                 ])
                 .right_aligned(),
             )
-            .border_style(ctx.focused_color(palette.accent, focus_area));
+            .border_style(ctx.focused_color(palette.accent, focus_area))
+            .bg(palette.bg);
 
         let inner_tasks_area: Rect = main_block.inner(tasks_area);
         ctx.render_widget(main_block, tasks_area);
@@ -124,6 +125,7 @@ impl<'a> ListTasks<'a> {
                         " Description: {} ",
                         utils::truncate(&todo.title, area.width.saturating_sub(20) as usize)
                     ))
+                    .bg(palette.bg)
                     .border_style(Style::default().fg(palette.muted));
 
                 let desc_fg = ctx.focused_color(palette.fg, FocusArea::MainContent);
@@ -201,6 +203,7 @@ impl<'a> ListTasks<'a> {
 
         let tasks_table: Table = Table::new(rows, self.table_measurements())
             .header(self.table_header(focused, &palette))
+            .bg(palette.bg)
             .row_highlight_style(Style::default().bg(palette.selection))
             .highlight_symbol(Text::styled(
                 ">>   ",

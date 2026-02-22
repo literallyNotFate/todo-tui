@@ -217,6 +217,11 @@ impl Form {
         let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
         let palette = ctx.palette();
 
+        ctx.render_widget(
+            Block::default().style(Style::default().bg(palette.bg)),
+            area,
+        );
+
         for (i, field) in self.fields.iter().enumerate() {
             let is_focused = self.focused == i;
             let focused_style: Style;

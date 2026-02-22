@@ -52,6 +52,7 @@ impl FeedbackWidget {
 
         let block = Block::bordered()
             .title(" Tasks ")
+            .bg(palette.bg)
             .title_top(Line::styled(" todo-tui ", Style::default().fg(palette.fg)).right_aligned())
             .border_style(palette.warning);
 

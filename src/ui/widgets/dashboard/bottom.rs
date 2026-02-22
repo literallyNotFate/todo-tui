@@ -23,10 +23,17 @@ impl<'a> BottomBarWidget<'a> {
 
     /// Bottom bar rendering
     pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        use ratatui::widgets::Paragraph;
+        use ratatui::widgets::{Block, Paragraph};
 
         let theme: Theme = ctx.theme;
+        let palette: ThemePalette = theme.palette();
         let chunks: std::rc::Rc<[Rect]> = self.layout(area);
+
+        ctx.render_widget(
+            Block::default().style(Style::default().bg(palette.bg)),
+            area,
+        );
+
         let status_layout: std::rc::Rc<[Rect]> = self.status_layout(chunks[1]);
 
         ctx.render_widget(

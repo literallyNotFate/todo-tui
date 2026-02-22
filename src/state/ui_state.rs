@@ -2,7 +2,7 @@ use crate::{
     enums::FocusArea,
     models::Filter,
     state::{AdaptiveScroll, ApplicationResult, ApplicationState},
-    theme::Theme,
+    theme::{Theme, ThemeName},
     traits::{Input, InteractableEnum, Modal, ModalAction},
     ui::{Confirm, Form, Notification, Popup, TextInput},
 };
@@ -15,7 +15,6 @@ pub struct ActiveModal {
 }
 
 /// Main application UI state (only for rendering purposes)
-#[derive(Default)]
 pub struct UIState {
     pub current_filter: Filter,
     pub focus_area: FocusArea,
@@ -28,9 +27,33 @@ pub struct UIState {
     pub sidebar_scroll: AdaptiveScroll,
 
     pub theme: Theme,
+    pub last_dark: Theme,
+    pub last_light: Theme,
 }
 
 impl UIState {
+    pub fn new() -> Self {
+        let is_system_dark = match dark_light::detect().unwrap() {
+            dark_light::Mode::Dark => true,
+            dark_light::Mode::Light => false,
+            _ => true,
+        };
+
+        let dark = Theme::new(ThemeName::KanagawaWave);
+        let light = Theme::new(ThemeName::KanagawaLotus);
+
+        Self {
+            theme: if is_system_dark {
+                dark.clone()
+            } else {
+                light.clone()
+            },
+            last_dark: dark,
+            last_light: light,
+            ..Self::default()
+        }
+    }
+
     /// Shows modal widget (confirm/popup)
     pub fn show_modal<M: Modal + 'static>(&mut self, modal: M, action: ModalAction) {
         self.modal = Some(ActiveModal {
@@ -93,9 +116,39 @@ impl UIState {
             .map(|(_, task)| task.id)
     }
 
-    /// Switch application theme
-    pub fn switch_theme(&mut self) {
-        self.theme.next()
+    /// Toggle dark/light theme mode
+    pub fn toggle_mode(&mut self) {
+        if self.theme.is_dark() {
+            self.last_dark = self.theme.clone();
+            self.theme = self.last_light.clone();
+        } else {
+            self.last_light = self.theme.clone();
+            self.theme = self.last_dark.clone();
+        }
+    }
+
+    /// Next theme wrapper
+    pub fn next_theme(&mut self) {
+        let next: ThemeName = self.theme.name.next();
+        self.theme = Theme::new(next);
+
+        if self.theme.is_dark() {
+            self.last_dark = self.theme.clone();
+        } else {
+            self.last_light = self.theme.clone();
+        }
+    }
+
+    /// Prev theme wrapper
+    pub fn prev_theme(&mut self) {
+        let prev: ThemeName = self.theme.name.prev();
+        self.theme = Theme::new(prev);
+
+        if self.theme.is_dark() {
+            self.last_dark = self.theme.clone();
+        } else {
+            self.last_light = self.theme.clone();
+        }
     }
 
     /// Next filter tab (sidebar)
@@ -160,7 +213,25 @@ impl UIState {
     }
 }
 
-// Unit-tests for UIState
+/// Defaults for UIState
+impl Default for UIState {
+    fn default() -> Self {
+        Self {
+            current_filter: Filter::default(),
+            focus_area: FocusArea::default(),
+            modal: None,
+            task_form: None,
+            search_input: None,
+            desc_scroll: AdaptiveScroll::default(),
+            sidebar_scroll: AdaptiveScroll::default(),
+            theme: Theme::new(ThemeName::GruvboxDark),
+            last_dark: Theme::new(ThemeName::GruvboxDark),
+            last_light: Theme::new(ThemeName::GruvboxLight),
+        }
+    }
+}
+
+/// Unit-tests for UIState
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,6 +360,28 @@ mod tests {
             fresh_notification.is_some(),
             "Fresh notification must remain active"
         );
+    }
+
+    #[test]
+    fn should_handle_theme_mode_switching_with_memory() {
+        let mut ui = UIState::new();
+
+        ui.theme = Theme::new(ThemeName::KanagawaWave);
+        ui.last_dark = Theme::new(ThemeName::KanagawaWave);
+        ui.last_light = Theme::new(ThemeName::KanagawaLotus);
+
+        ui.toggle_mode();
+        assert!(ui.theme.is_light());
+        assert_eq!(ui.theme.name, ThemeName::KanagawaLotus);
+
+        ui.next_theme();
+        let current_light = ui.theme.name;
+
+        ui.toggle_mode();
+        assert!(ui.theme.is_dark());
+
+        ui.toggle_mode();
+        assert_eq!(ui.theme.name, current_light);
     }
 
     #[test]

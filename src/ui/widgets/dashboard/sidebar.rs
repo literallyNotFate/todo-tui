@@ -33,7 +33,7 @@ impl<'a> SidebarWidget<'a> {
 
         let sidebar_layout: std::rc::Rc<[Rect]> = self.layout(area);
 
-        let filters_block: Block = ctx.block("Filters", focus_area).bg(palette.bg);
+        let filters_block: Block = ctx.block("Filters", focus_area).bg(palette.bg2);
         let filters_inner_area: Rect = filters_block.inner(sidebar_layout[0]);
         let filter_tab_layout: std::rc::Rc<[Rect]> = self.filters_tab_layout(filters_inner_area);
 
@@ -46,7 +46,7 @@ impl<'a> SidebarWidget<'a> {
         ctx.render_widget(filters_block, sidebar_layout[0]);
         ctx.render_stateful_widget(list, filter_tab_layout[1], &mut state);
 
-        let summary_block: Block = ctx.static_block("Summary").bg(palette.bg);
+        let summary_block: Block = ctx.static_block("Summary").bg(palette.bg2);
         let summary_inner_area: Rect = summary_block.inner(sidebar_layout[1]);
         let summary_inner_layout: std::rc::Rc<[Rect]> = self.summary_layout(summary_inner_area);
         let summary_text: Vec<Line> = self.summary_text(summary_inner_area.width, &palette);
@@ -57,7 +57,7 @@ impl<'a> SidebarWidget<'a> {
         let hotkeys_block = Block::bordered()
             .title(" Hotkeys ")
             .border_style(Style::default().fg(palette.muted))
-            .bg(palette.bg);
+            .bg(palette.bg2);
 
         let mut hotkeys_lines = ctx.hotkeys();
         hotkeys_lines.insert(0, Line::from(""));

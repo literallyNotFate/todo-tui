@@ -69,7 +69,9 @@ impl EventHandler {
                 app.mode = ApplicationMode::Form;
             }
             (KeyCode::Char('s'), KeyModifiers::CONTROL) => ctrl.ui.save_confirm(),
-            (KeyCode::Char('t'), KeyModifiers::NONE) => ctrl.ui.switch_theme(),
+            (KeyCode::Char('t'), KeyModifiers::NONE) => ctrl.ui.next_theme(),
+            (KeyCode::Char('t'), KeyModifiers::CONTROL) => ctrl.ui.prev_theme(),
+            (KeyCode::Char('m'), KeyModifiers::NONE) => ctrl.ui.toggle_mode(),
             (KeyCode::Char('x'), KeyModifiers::NONE) => ctrl.ui.clear_confirm(),
             (KeyCode::Char('j'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_down(),
             (KeyCode::Char('k'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_up(),
