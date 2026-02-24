@@ -30,9 +30,13 @@ impl<'a> Dashboard<'a> {
             },
         };
 
-        let (left_area, content_area, bottom_area): (Rect, Rect, Rect) = main_layout(area);
+        let show_sidebar: bool = ctx.config.show_sidebar;
+        let (left_area, content_area, bottom_area) = main_layout(area, show_sidebar);
 
-        SidebarWidget::new(self.ui, &self.state.todos).render(ctx, left_area);
+        if show_sidebar {
+            SidebarWidget::new(self.ui, &self.state.todos).render(ctx, left_area);
+        }
+
         ContentWidget::new(self.state, self.ui).render(ctx, content_area);
         BottomBarWidget::new(self.state, self.autosave).render(ctx, bottom_area);
     }

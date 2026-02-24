@@ -9,7 +9,7 @@ pub struct Storage;
 
 impl Storage {
     /// Get default data path to save/load from
-    pub fn get_default_data_path() -> ApplicationResult<PathBuf> {
+    pub fn get_data_path() -> ApplicationResult<PathBuf> {
         dirs::data_dir()
             .ok_or(StorageError::PathNotFound.into())
             .map(|dir| dir.join("todo-tui").join("todos.json"))
@@ -19,17 +19,18 @@ impl Storage {
     pub fn save(todos: &[Todo], path: Option<&Path>) -> ApplicationResult<()> {
         let p = match path {
             Some(p) => p.to_path_buf(),
-            None => Self::get_default_data_path()?,
+            None => Self::get_data_path()?,
         };
 
         if let Some(parent) = p.parent() {
-            fs::create_dir_all(parent).map_err(|_| StorageError::IOError)?;
+            fs::create_dir_all(parent).map_err(|err| StorageError::IOError(err.to_string()))?;
         }
 
-        let file: File = File::create(p).map_err(|_| StorageError::IOError)?;
+        let file: File = File::create(p).map_err(|err| StorageError::IOError(err.to_string()))?;
         let writer: BufWriter<File> = BufWriter::new(file);
 
-        serde_json::to_writer_pretty(writer, todos).map_err(|_| StorageError::JSONError)?;
+        serde_json::to_writer_pretty(writer, todos)
+            .map_err(|err| StorageError::JSONError(err.to_string()))?;
         Ok(())
     }
 
@@ -37,16 +38,16 @@ impl Storage {
     pub fn load(path: Option<&Path>) -> ApplicationResult<Vec<Todo>> {
         let p = match path {
             Some(p) => p.to_path_buf(),
-            None => Self::get_default_data_path()?,
+            None => Self::get_data_path()?,
         };
 
         if !p.exists() {
             return Ok(Vec::new());
         }
 
-        let file: File = File::open(p).map_err(|_| StorageError::IOError)?;
-        let todos: Vec<Todo> =
-            serde_json::from_reader(file).map_err(|_| StorageError::JSONError)?;
+        let file: File = File::open(p).map_err(|err| StorageError::IOError(err.to_string()))?;
+        let todos: Vec<Todo> = serde_json::from_reader(file)
+            .map_err(|err| StorageError::JSONError(err.to_string()))?;
         Ok(todos)
     }
 }
@@ -129,7 +130,7 @@ mod tests {
 
     #[test]
     fn should_return_default_data_path() {
-        let path_result: ApplicationResult<PathBuf> = Storage::get_default_data_path();
+        let path_result: ApplicationResult<PathBuf> = Storage::get_data_path();
         assert!(path_result.is_ok());
 
         let path: PathBuf = path_result.unwrap();
@@ -162,7 +163,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::JSONError))
+            Err(ApplicationError::Storage(StorageError::JSONError(..)))
         ));
     }
 
@@ -184,7 +185,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::IOError))
+            Err(ApplicationError::Storage(StorageError::IOError(..)))
         ));
     }
 }

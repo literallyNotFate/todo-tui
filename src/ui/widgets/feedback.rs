@@ -54,7 +54,8 @@ impl FeedbackWidget {
             .title(" Tasks ")
             .bg(palette.bg)
             .title_top(Line::styled(" todo-tui ", Style::default().fg(palette.fg)).right_aligned())
-            .border_style(palette.warning);
+            .border_style(palette.warning)
+            .border_type(ctx.config.border_type.into());
 
         ctx.render_widget(block, area);
 

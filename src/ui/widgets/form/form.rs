@@ -242,6 +242,7 @@ impl Form {
 
                     let block = Block::bordered()
                         .title(" Description ")
+                        .border_type(ctx.config.border_type.into())
                         .border_style(focused_style);
 
                     input.set_block(block);
@@ -271,6 +272,7 @@ impl Form {
                     let button = Paragraph::new(" Save task ")
                         .block(
                             Block::bordered()
+                                .border_type(ctx.config.border_type.into())
                                 .border_style(border_style)
                                 .style(text_style),
                         )

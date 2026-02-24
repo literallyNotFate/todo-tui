@@ -29,22 +29,32 @@ pub enum TodoError {
 pub enum StorageError {
     #[error("Requested path was not found!")]
     PathNotFound,
-    #[error("Cannot read/write tasks file!")]
-    IOError,
-    #[error("Cannot write to JSON!")]
-    JSONError,
+    #[error("Cannot read/write to file: {0}")]
+    IOError(String),
+    #[error("Cannot read/write to JSON: {0}")]
+    JSONError(String),
+    #[error("Cannot read/write to TOML: {0}")]
+    TOMLError(String),
+    #[error("Failed to determine home or config directory")]
+    EnvironmentError,
 }
 
 /// Casting
 impl From<std::io::Error> for StorageError {
-    fn from(_: std::io::Error) -> Self {
-        StorageError::IOError
+    fn from(err: std::io::Error) -> Self {
+        StorageError::IOError(err.to_string())
     }
 }
 
 impl From<serde_json::Error> for StorageError {
-    fn from(_: serde_json::Error) -> Self {
-        StorageError::JSONError
+    fn from(err: serde_json::Error) -> Self {
+        StorageError::JSONError(err.to_string())
+    }
+}
+
+impl From<toml::de::Error> for StorageError {
+    fn from(err: toml::de::Error) -> Self {
+        StorageError::TOMLError(err.to_string())
     }
 }
 
@@ -116,17 +126,33 @@ mod tests {
 
     #[test]
     fn should_return_text_for_io_error() {
-        let error = StorageError::IOError;
+        let error = StorageError::IOError("some error".to_string());
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Cannot read/write tasks file!");
+        assert_eq!(s, "Cannot read/write to file: some error");
     }
 
     #[test]
     fn should_return_text_for_json_error() {
-        let error = StorageError::JSONError;
+        let error = StorageError::JSONError("some error".to_string());
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Cannot write to JSON!");
+        assert_eq!(s, "Cannot read/write to JSON: some error");
+    }
+
+    #[test]
+    fn should_return_text_for_toml_error() {
+        let error = StorageError::TOMLError("some error".to_string());
+        let mut s = String::new();
+        write!(&mut s, "{}", error).unwrap();
+        assert_eq!(s, "Cannot read/write to TOML: some error");
+    }
+
+    #[test]
+    fn should_return_text_for_environment_error() {
+        let error = StorageError::EnvironmentError;
+        let mut s = String::new();
+        write!(&mut s, "{}", error).unwrap();
+        assert_eq!(s, "Failed to determine home or config directory");
     }
 }

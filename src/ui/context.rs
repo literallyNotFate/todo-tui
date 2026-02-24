@@ -1,8 +1,11 @@
 use crate::{
+    config::UIConfig,
     core::ApplicationMode,
     enums::FocusArea,
+    models::Filter,
     state::UIState,
     theme::{Theme, ThemePalette},
+    traits::InteractableEnum,
     ui::is_terminal_small,
 };
 use ratatui::{
@@ -17,23 +20,25 @@ use ratatui::{
 pub struct RenderContext<'a, 'b> {
     pub frame: &'a mut Frame<'b>,
     pub theme: Theme,
+    pub config: UIConfig,
 
     mode: ApplicationMode,
     focus: FocusArea,
+    filter: Filter,
     is_small: bool,
 }
 
 impl<'a, 'b> RenderContext<'a, 'b> {
     pub fn new(frame: &'a mut Frame<'b>, ui: &UIState, mode: ApplicationMode) -> Self {
         let area: Rect = frame.area();
-        let focus: FocusArea = ui.focus_area;
-        let theme: Theme = ui.theme;
 
         Self {
             frame,
-            theme,
+            theme: ui.theme,
             mode,
-            focus,
+            config: ui.config.clone(),
+            focus: ui.focus_area,
+            filter: ui.current_filter,
             is_small: is_terminal_small(area.width, area.height),
         }
     }
@@ -78,6 +83,11 @@ impl<'a, 'b> RenderContext<'a, 'b> {
         self.mode
     }
 
+    /// Returns current filter name for todos
+    pub fn filter(&self) -> &'static str {
+        self.filter.to_string()
+    }
+
     /// Mode hotkeys wrapper
     pub fn hotkeys(&self) -> Vec<Line<'static>> {
         self.mode.hotkeys(&self.theme, &self.focus)
@@ -108,6 +118,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
         let palette: ThemePalette = self.palette();
         Block::bordered()
             .title(format!(" {} ", title.into()))
+            .border_type(self.config.border_type.into())
             .border_style(Style::default().fg(self.focused_color(palette.accent, focus)))
     }
 
@@ -116,6 +127,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
         let palette: ThemePalette = self.palette();
         Block::bordered()
             .title(format!(" {} ", title.into()))
+            .border_type(self.config.border_type.into())
             .border_style(Style::default().fg(palette.muted))
     }
 }

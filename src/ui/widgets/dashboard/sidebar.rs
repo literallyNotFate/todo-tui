@@ -135,10 +135,7 @@ impl<'a> SidebarWidget<'a> {
         } else {
             Line::from(vec![
                 Span::styled(" ✓ ", Style::default().fg(palette.success).bold()),
-                Span::styled(
-                    "All tasks completed",
-                    Style::default().fg(palette.muted).italic(),
-                ),
+                Span::styled("All tasks completed", Style::default().fg(palette.muted)),
             ])
         };
 

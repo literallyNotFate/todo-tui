@@ -5,18 +5,21 @@ pub const MIN_WIDTH: u16 = 80;
 pub const MIN_HEIGHT: u16 = 24;
 
 /// Get layout for dashboard widget
-pub fn main_layout(area: Rect) -> (Rect, Rect, Rect) {
+pub fn main_layout(area: Rect, show_sidebar: bool) -> (Rect, Rect, Rect) {
     let [upper_area, bottom_area] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(2)])
         .areas(area);
 
-    let [sidebar, main] = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
-        .areas(upper_area);
-
-    (sidebar, main, bottom_area)
+    if show_sidebar {
+        let [sidebar, main] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
+            .areas(upper_area);
+        (sidebar, main, bottom_area)
+    } else {
+        (Rect::default(), upper_area, bottom_area)
+    }
 }
 
 /// Center a widget in a rect

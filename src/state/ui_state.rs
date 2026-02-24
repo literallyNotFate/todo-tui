@@ -1,4 +1,5 @@
 use crate::{
+    config::UIConfig,
     enums::FocusArea,
     models::Filter,
     state::{AdaptiveScroll, ApplicationResult, ApplicationState},
@@ -29,27 +30,38 @@ pub struct UIState {
     pub theme: Theme,
     pub last_dark: Theme,
     pub last_light: Theme,
+
+    pub config: UIConfig,
 }
 
 impl UIState {
-    pub fn new() -> Self {
-        let is_system_dark = match dark_light::detect().unwrap() {
-            dark_light::Mode::Dark => true,
-            dark_light::Mode::Light => false,
-            _ => true,
+    pub fn new(mut ui_config: UIConfig) -> Self {
+        let is_system_dark = dark_light::detect()
+            .map(|m| m == dark_light::Mode::Dark)
+            .unwrap_or(true);
+
+        let last_dark = ui_config.last_dark.unwrap_or(ThemeName::GruvboxDark);
+        let last_light = ui_config.last_light.unwrap_or(ThemeName::GruvboxLight);
+
+        let active: ThemeName = if ui_config.use_system_theme {
+            if is_system_dark {
+                last_dark
+            } else {
+                last_light
+            }
+        } else {
+            ui_config.theme
         };
 
-        let dark = Theme::new(ThemeName::KanagawaWave);
-        let light = Theme::new(ThemeName::KanagawaLotus);
+        ui_config.theme = active;
+        ui_config.last_dark = Some(last_dark);
+        ui_config.last_light = Some(last_light);
 
         Self {
-            theme: if is_system_dark {
-                dark.clone()
-            } else {
-                light.clone()
-            },
-            last_dark: dark,
-            last_light: light,
+            theme: Theme::new(active),
+            last_dark: Theme::new(last_dark),
+            last_light: Theme::new(last_light),
+            config: ui_config,
             ..Self::default()
         }
     }
@@ -175,6 +187,11 @@ impl UIState {
         self.sidebar_scroll.reset();
     }
 
+    /// Toggle sidebar
+    pub fn toggle_sidebar(&mut self) {
+        self.config.show_sidebar = !self.config.show_sidebar;
+    }
+
     /// Closes existing modal widget
     pub fn close_modal(&mut self) {
         self.modal = None;
@@ -224,9 +241,10 @@ impl Default for UIState {
             search_input: None,
             desc_scroll: AdaptiveScroll::default(),
             sidebar_scroll: AdaptiveScroll::default(),
-            theme: Theme::new(ThemeName::GruvboxDark),
-            last_dark: Theme::new(ThemeName::GruvboxDark),
+            theme: Theme::new(ThemeName::default()),
+            last_dark: Theme::new(ThemeName::default()),
             last_light: Theme::new(ThemeName::GruvboxLight),
+            config: UIConfig::default(),
         }
     }
 }
@@ -306,7 +324,7 @@ mod tests {
 
         ui.close_modal();
 
-        ui.show_result_popup(Err(StorageError::JSONError.into()));
+        ui.show_result_popup(Err(StorageError::JSONError("Some error".to_string()).into()));
         assert!(ui.modal.is_some());
     }
 
@@ -364,7 +382,7 @@ mod tests {
 
     #[test]
     fn should_handle_theme_mode_switching_with_memory() {
-        let mut ui = UIState::new();
+        let mut ui = UIState::default();
 
         ui.theme = Theme::new(ThemeName::KanagawaWave);
         ui.last_dark = Theme::new(ThemeName::KanagawaWave);
@@ -382,6 +400,18 @@ mod tests {
 
         ui.toggle_mode();
         assert_eq!(ui.theme.name, current_light);
+    }
+
+    #[test]
+    fn should_toggle_sidebar_showing() {
+        let mut ui = UIState::default();
+        assert!(ui.config.show_sidebar);
+
+        ui.toggle_sidebar();
+        assert!(!ui.config.show_sidebar);
+
+        ui.toggle_sidebar();
+        assert!(ui.config.show_sidebar);
     }
 
     #[test]

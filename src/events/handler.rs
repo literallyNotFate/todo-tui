@@ -30,7 +30,8 @@ impl EventHandler {
 
         match app.mode {
             ApplicationMode::Form | ApplicationMode::Search => {
-                let mut ctrl = ApplicationController::new(&mut app.data, &mut app.ui);
+                let mut ctrl =
+                    ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config);
 
                 if event.code == KeyCode::Esc {
                     ctrl.ui.task_form = None;
@@ -47,20 +48,24 @@ impl EventHandler {
                 return;
             }
             _ if app.ui.modal.is_some() => {
-                let mut ctrl = ApplicationController::new(&mut app.data, &mut app.ui);
+                let mut ctrl =
+                    ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config);
                 Self::handle_modal(event, &mut ctrl, &mut app.running);
                 return;
             }
             _ => {}
         }
 
-        let mut ctrl = ApplicationController::new(&mut app.data, &mut app.ui);
+        let mut ctrl = ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config);
         match (event.code, event.modifiers) {
             (KeyCode::Char('q') | KeyCode::Esc, KeyModifiers::NONE) => {
                 if ctrl.state.any_unsaved_changes() {
                     ctrl.ui.unsaved_confirm();
                 } else {
                     drop(ctrl);
+
+                    app.config.update_from_ui(&app.ui);
+                    let _ = app.config.save(None);
                     app.running = false;
                 }
             }
@@ -71,6 +76,7 @@ impl EventHandler {
             (KeyCode::Char('s'), KeyModifiers::CONTROL) => ctrl.ui.save_confirm(),
             (KeyCode::Char('t'), KeyModifiers::NONE) => ctrl.ui.next_theme(),
             (KeyCode::Char('t'), KeyModifiers::CONTROL) => ctrl.ui.prev_theme(),
+            (KeyCode::Char('b'), KeyModifiers::NONE) => ctrl.ui.toggle_sidebar(),
             (KeyCode::Char('m'), KeyModifiers::NONE) => ctrl.ui.toggle_mode(),
             (KeyCode::Char('x'), KeyModifiers::NONE) => ctrl.ui.clear_confirm(),
             (KeyCode::Char('j'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_down(),
@@ -103,10 +109,13 @@ impl EventHandler {
                 match action {
                     ModalAction::Remove => ctrl.dispatch_remove(),
                     ModalAction::Clear => ctrl.dispatch_clear(),
-                    ModalAction::Save => ctrl.dispatch_save(),
+                    ModalAction::Save => {
+                        let _ = ctrl.dispatch_save();
+                    }
                     ModalAction::UnsavedExit => {
-                        ctrl.dispatch_save();
-                        *running = false;
+                        if ctrl.dispatch_save() {
+                            *running = false;
+                        }
                     }
                     _ => {}
                 }
@@ -252,6 +261,7 @@ pub fn is_exit_key(key_event: &KeyEvent) -> bool {
 mod tests {
     use super::*;
     use crate::{
+        config::Config,
         models::{SortBy, SortOrder},
         state::{ApplicationState, UIState},
     };
@@ -264,12 +274,13 @@ mod tests {
         app
     }
 
-    fn setup_ctx() -> (ApplicationState, UIState, ApplicationMode, bool) {
+    fn setup_ctx() -> (ApplicationState, UIState, ApplicationMode, Config, bool) {
         let state = ApplicationState::default();
         let ui = UIState::default();
         let mode = ApplicationMode::List;
+        let config = Config::default();
         let running = true;
-        (state, ui, mode, running)
+        (state, ui, mode, config, running)
     }
 
     fn mock_unsaved_modal(
@@ -426,11 +437,11 @@ mod tests {
 
     #[test]
     fn should_toggle_focus_right_with_l() {
-        let (mut state, mut ui, _, mut running) = setup_ctx();
+        let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         ui.focus_area = FocusArea::LeftPanel;
         let mut mode = ApplicationMode::Browsing;
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE);
 
         EventHandler::handle_main_mode(event, &mut ctrl, &mut mode, &mut running);
@@ -441,11 +452,11 @@ mod tests {
 
     #[test]
     fn should_toggle_focus_left_with_h() {
-        let (mut state, mut ui, _, mut running) = setup_ctx();
+        let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         ui.focus_area = FocusArea::MainContent;
         let mut mode = ApplicationMode::List;
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE);
 
         EventHandler::handle_main_mode(event, &mut ctrl, &mut mode, &mut running);
@@ -456,11 +467,11 @@ mod tests {
 
     #[test]
     fn should_test_delegation_to_left_panel() {
-        let (mut state, mut ui, mut mode, mut running) = setup_ctx();
+        let (mut state, mut ui, mut mode, mut config, mut running) = setup_ctx();
         ui.focus_area = FocusArea::LeftPanel;
         ui.current_filter = Filter::All;
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         EventHandler::handle_main_mode(event, &mut ctrl, &mut mode, &mut running);
@@ -470,7 +481,7 @@ mod tests {
 
     #[test]
     fn should_test_delegation_to_main_content() {
-        let (mut state, mut ui, _, mut running) = setup_ctx();
+        let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         state.todos.push(Todo::new("T1", "", None));
         state.todos.push(Todo::new("T2", "", None));
         state.select_state.select(Some(0));
@@ -478,7 +489,7 @@ mod tests {
         ui.focus_area = FocusArea::MainContent;
         let mut mode = ApplicationMode::List;
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         EventHandler::handle_main_mode(event, &mut ctrl, &mut mode, &mut running);
@@ -488,12 +499,12 @@ mod tests {
 
     #[test]
     fn should_confirm_remove_task() {
-        let (mut state, mut ui, _, mut running) = setup_ctx();
+        let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         state.todos.push(Todo::new("To be deleted", "", None));
         state.select_state.select(Some(0));
 
         ui.remove_confirm();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
         EventHandler::handle_modal(event, &mut ctrl, &mut running);
@@ -505,11 +516,11 @@ mod tests {
 
     #[test]
     fn should_cancel_clear_all_tasks() {
-        let (mut state, mut ui, _, mut running) = setup_ctx();
+        let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         state.todos.push(Todo::new("Keep me", "", None));
 
         ui.clear_confirm();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         EventHandler::handle_modal(event, &mut ctrl, &mut running);
@@ -523,9 +534,9 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        let (mut state, mut ui, _, mut running) = setup_ctx();
+        let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         ui.unsaved_confirm();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
         mock_unsaved_modal(event, &mut ctrl, &mut running, &path);
@@ -535,9 +546,9 @@ mod tests {
 
     #[test]
     fn should_not_exit_on_unsaved_exit_cancel() {
-        let (mut state, mut ui, _, mut running) = setup_ctx();
+        let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         ui.unsaved_confirm();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE);
         EventHandler::handle_modal(event, &mut ctrl, &mut running);
@@ -549,9 +560,9 @@ mod tests {
     #[test]
     #[should_panic]
     fn should_panic_if_no_modal_exists() {
-        let (mut state, mut ui, _, mut running) = setup_ctx();
+        let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         ui.modal = None;
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         EventHandler::handle_modal(event, &mut ctrl, &mut running);
@@ -559,13 +570,13 @@ mod tests {
 
     #[test]
     fn should_test_navigation_down_up() {
-        let (mut state, mut ui, mut mode, _) = setup_ctx();
+        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
         state.todos.push(Todo::new("T1", "", None));
         state.todos.push(Todo::new("T2", "", None));
         state.todos.push(Todo::new("T3", "", None));
         state.select_state.select(Some(0));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         EventHandler::handle_main_content(KeyCode::Char('j'), &mut ctrl, &mut mode);
         assert_eq!(ctrl.state.select_state.selected(), Some(1));
@@ -576,11 +587,11 @@ mod tests {
 
     #[test]
     fn should_toggle_task_on_enter() {
-        let (mut state, mut ui, mut mode, _) = setup_ctx();
+        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
         state.todos.push(Todo::new("T1", "", None));
         state.select_state.select(Some(0));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let initial_status = ctrl.state.todos[0].completed;
 
         EventHandler::handle_main_content(KeyCode::Enter, &mut ctrl, &mut mode);
@@ -589,11 +600,11 @@ mod tests {
 
     #[test]
     fn should_handle_edit_mode_transition() {
-        let (mut state, mut ui, mut mode, _) = setup_ctx();
+        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
         state.todos.push(Todo::new("Edit Me", "Desc", None));
         state.select_state.select(Some(0));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         EventHandler::handle_main_content(KeyCode::Char('e'), &mut ctrl, &mut mode);
 
         assert_eq!(mode, ApplicationMode::Form);
@@ -605,11 +616,11 @@ mod tests {
 
     #[test]
     fn should_open_remove_confirm_dialog_on_key() {
-        let (mut state, mut ui, mut mode, _) = setup_ctx();
+        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
         state.todos.push(Todo::new("To Delete", "", None));
         state.select_state.select(Some(0));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         EventHandler::handle_main_content(KeyCode::Char('d'), &mut ctrl, &mut mode);
 
         assert!(ctrl.ui.modal.is_some());
@@ -618,12 +629,12 @@ mod tests {
 
     #[test]
     fn should_move_task_on_key() {
-        let (mut state, mut ui, mut mode, _) = setup_ctx();
+        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
         state.todos.push(Todo::new("Task 1", "", None));
         state.todos.push(Todo::new("Task 2", "", None));
         state.select_state.select(Some(0));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         EventHandler::handle_main_content(KeyCode::Char('J'), &mut ctrl, &mut mode);
 
         assert_eq!(ctrl.state.todos[1].title, "Task 1");
@@ -631,8 +642,8 @@ mod tests {
 
     #[test]
     fn should_activate_search_on_key() {
-        let (mut state, mut ui, mut mode, _) = setup_ctx();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         EventHandler::handle_main_content(KeyCode::Char('/'), &mut ctrl, &mut mode);
 
@@ -642,11 +653,11 @@ mod tests {
 
     #[test]
     fn should_scroll_through_description() {
-        let (mut state, mut ui, mut mode, _) = setup_ctx();
+        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
 
         ui.desc_scroll.current.set(10);
         ui.desc_scroll.max_scroll.set(20);
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         EventHandler::handle_main_content(KeyCode::Char('['), &mut ctrl, &mut mode);
         assert_eq!(ctrl.ui.desc_scroll.current.get(), 9);
@@ -660,10 +671,10 @@ mod tests {
 
     #[test]
     fn should_fail_on_open_edit_if_not_selected() {
-        let (mut state, mut ui, mut mode, _) = setup_ctx();
+        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
         state.select_state.select(None);
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         EventHandler::handle_main_content(KeyCode::Char('e'), &mut ctrl, &mut mode);
 
         assert_eq!(mode, ApplicationMode::List);
@@ -672,7 +683,7 @@ mod tests {
 
     #[test]
     fn should_create_new_task_on_submit() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         let mut mode = ApplicationMode::Form;
 
         let mut form = Form::new();
@@ -681,7 +692,7 @@ mod tests {
         form.focused = 3;
         ui.task_form = Some(form);
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         EventHandler::handle_form_mode(event, &mut ctrl, &mut mode);
@@ -694,7 +705,7 @@ mod tests {
 
     #[test]
     fn should_update_existing_task_on_submit() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         let mut mode = ApplicationMode::Form;
 
         let task = Todo::new("Old Title", "", None);
@@ -706,7 +717,7 @@ mod tests {
         form.focused = 3;
         ui.task_form = Some(form);
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
 
         EventHandler::handle_form_mode(event, &mut ctrl, &mut mode);
@@ -718,11 +729,11 @@ mod tests {
 
     #[test]
     fn should_close_form_on_cancel() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         let mut mode = ApplicationMode::Form;
         ui.task_form = Some(Form::new());
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
 
         EventHandler::handle_form_mode(event, &mut ctrl, &mut mode);
@@ -734,11 +745,11 @@ mod tests {
 
     #[test]
     fn should_do_nothing_on_continue() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         let mut mode = ApplicationMode::Form;
         ui.task_form = Some(Form::new());
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
 
         EventHandler::handle_form_mode(event, &mut ctrl, &mut mode);
@@ -749,11 +760,11 @@ mod tests {
 
     #[test]
     fn should_exit_search_to_list_on_submit() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         ui.show_search();
 
         let mut mode = ApplicationMode::Search;
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
 
         EventHandler::handle_search_mode(event, &mut ctrl, &mut mode);
@@ -765,11 +776,11 @@ mod tests {
 
     #[test]
     fn should_cancel_search_and_return_to_left_panel() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         ui.show_search();
 
         let mut mode = ApplicationMode::Search;
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
 
         EventHandler::handle_search_mode(event, &mut ctrl, &mut mode);
@@ -781,14 +792,14 @@ mod tests {
 
     #[test]
     fn should_reset_selection_to_first_item_on_typing() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         state.todos.push(Todo::new("Apple", "", None));
         state.todos.push(Todo::new("Banana", "", None));
         state.select_state.select(Some(1));
 
         ui.show_search();
         let mut mode = ApplicationMode::Search;
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
 
         EventHandler::handle_search_mode(event, &mut ctrl, &mut mode);
@@ -798,13 +809,13 @@ mod tests {
 
     #[test]
     fn should_handle_empty_input_gracefully() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         ui.show_search();
 
         let mut mode = ApplicationMode::Search;
         state.todos.clear();
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let event = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE);
 
         EventHandler::handle_search_mode(event, &mut ctrl, &mut mode);
@@ -814,8 +825,8 @@ mod tests {
 
     #[test]
     fn should_cycle_filter_down_up_on_key() {
-        let (mut state, mut ui, _, _) = setup_ctx();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         EventHandler::handle_left_panel(KeyCode::Char('j'), &mut ctrl);
         assert_eq!(ctrl.ui.current_filter, Filter::Active);
@@ -829,8 +840,8 @@ mod tests {
 
     #[test]
     fn should_select_filter_on_numeric_key() {
-        let (mut state, mut ui, _, _) = setup_ctx();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         EventHandler::handle_left_panel(KeyCode::Char('3'), &mut ctrl);
         assert_eq!(ctrl.ui.current_filter, Filter::Completed);
@@ -844,11 +855,11 @@ mod tests {
 
     #[test]
     fn should_test_focus_stabilization_on_filter_change() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         state.todos.push(Todo::new("T", "", None));
         state.select_state.select(Some(10));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         EventHandler::handle_left_panel(KeyCode::Char('3'), &mut ctrl);
 
         assert!(
@@ -859,9 +870,9 @@ mod tests {
 
     #[test]
     fn should_ignore_unrelated_keys_in_left_panel() {
-        let (mut state, mut ui, _, _) = setup_ctx();
+        let (mut state, mut ui, _, mut config, _) = setup_ctx();
         ui.current_filter = Filter::All;
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         EventHandler::handle_left_panel(KeyCode::Char('x'), &mut ctrl);
         assert_eq!(ctrl.ui.current_filter, Filter::All);

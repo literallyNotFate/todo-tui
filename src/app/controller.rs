@@ -1,5 +1,6 @@
 use crate::{
     app::TodoService,
+    config::Config,
     core::TodoError,
     models::{Priority, Todo},
     state::{ApplicationState, UIState},
@@ -11,11 +12,16 @@ use uuid::Uuid;
 pub struct ApplicationController<'a> {
     pub state: &'a mut ApplicationState,
     pub ui: &'a mut UIState,
+    pub config: &'a mut Config,
 }
 
 impl<'a> ApplicationController<'a> {
-    pub fn new(state: &'a mut ApplicationState, ui: &'a mut UIState) -> Self {
-        Self { state, ui }
+    pub fn new(
+        state: &'a mut ApplicationState,
+        ui: &'a mut UIState,
+        config: &'a mut Config,
+    ) -> Self {
+        Self { state, ui, config }
     }
 
     /// Handle appending a task
@@ -135,11 +141,24 @@ impl<'a> ApplicationController<'a> {
         }
     }
 
-    /// Handle saving on Ctrl+S
-    pub fn dispatch_save(&mut self) {
+    /// Handle saving all (todos + config) on Ctrl+S
+    pub fn dispatch_save(&mut self) -> bool {
+        self.config.update_from_ui(&self.ui);
+
+        if let Err(e) = self.config.save(None) {
+            self.ui.show_result_popup(Err(e.into()));
+            return false;
+        }
+
         match self.state.save(None) {
-            Ok(string) => self.ui.show_result_popup(Ok(string)),
-            Err(e) => self.ui.show_result_popup(Err(e)),
+            Ok(msg) => {
+                self.ui.show_result_popup(Ok(msg));
+                true
+            }
+            Err(e) => {
+                self.ui.show_result_popup(Err(e));
+                false
+            }
         }
     }
 
@@ -212,8 +231,12 @@ mod tests {
     use std::path::{Path, PathBuf};
     use tempdir::TempDir;
 
-    fn setup() -> (ApplicationState, UIState) {
-        (ApplicationState::default(), UIState::default())
+    fn setup() -> (ApplicationState, UIState, Config) {
+        (
+            ApplicationState::default(),
+            UIState::default(),
+            Config::default(),
+        )
     }
 
     fn mock_dispatch_save(state: &mut ApplicationState, ui: &mut UIState, path: &Path) {
@@ -225,8 +248,8 @@ mod tests {
 
     #[test]
     fn should_append_task_and_set_notification() {
-        let (mut state, mut ui) = setup();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let (mut state, mut ui, mut config) = setup();
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         ctrl.dispatch_append("Test", "Desc", Some(Priority::High));
 
@@ -239,8 +262,8 @@ mod tests {
 
     #[test]
     fn should_handle_empty_title_error_on_append() {
-        let (mut state, mut ui) = setup();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let (mut state, mut ui, mut config) = setup();
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         ctrl.dispatch_append("  ", "Description", None);
         assert_eq!(state.todos.len(), 0);
@@ -252,7 +275,7 @@ mod tests {
 
     #[test]
     fn should_handle_update_and_maintain_focus() {
-        let (mut state, mut ui) = setup();
+        let (mut state, mut ui, mut config) = setup();
 
         let task_high = Todo::new("High Task", "", Some(Priority::High));
         let task_low = Todo::new("Low Task", "", Some(Priority::Low));
@@ -266,7 +289,7 @@ mod tests {
         updated_task.title = "Updated to High".into();
         updated_task.priority = Priority::High;
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         ctrl.dispatch_update(low_id, updated_task);
 
         let new_pos = state.todos.iter().position(|t| t.id == low_id).unwrap();
@@ -284,13 +307,13 @@ mod tests {
 
     #[test]
     fn should_handle_empty_title_error_on_update() {
-        let (mut state, mut ui) = setup();
+        let (mut state, mut ui, mut config) = setup();
         let task: Todo = Todo::new("Task", "", Some(Priority::Low));
         let id: Uuid = task.id;
 
         state.todos.push(task);
         let mut updated_task: Todo = state.todos[0].clone();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         updated_task.title = "".into();
         ctrl.dispatch_update(id, updated_task);
@@ -302,8 +325,8 @@ mod tests {
 
     #[test]
     fn should_handle_update_non_existent_task() {
-        let (mut state, mut ui) = setup();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let (mut state, mut ui, mut config) = setup();
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         let fake_id: Uuid = Uuid::new_v4();
         let task: Todo = Todo::new("Title", "", None);
 
@@ -316,12 +339,12 @@ mod tests {
 
     #[test]
     fn should_remove_task_and_adjust_selection() {
-        let (mut state, mut ui) = setup();
+        let (mut state, mut ui, mut config) = setup();
         state.todos.push(Todo::new("T1", "", None));
         state.todos.push(Todo::new("T2", "", None));
         state.select_state.select(Some(1));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         ctrl.dispatch_remove();
 
         assert_eq!(state.todos.len(), 1);
@@ -331,11 +354,11 @@ mod tests {
 
     #[test]
     fn should_handle_remove_non_existent_task() {
-        let (mut state, mut ui) = setup();
+        let (mut state, mut ui, mut config) = setup();
         state.todos.push(Todo::new("Task", "", None));
         state.select_state.select(Some(999));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         ctrl.dispatch_remove();
 
         let note: &Notification = state.notification.as_ref().unwrap();
@@ -345,7 +368,7 @@ mod tests {
 
     #[test]
     fn should_sort_with_focus_stabilized() {
-        let (mut state, mut ui) = setup();
+        let (mut state, mut ui, mut config) = setup();
         let id_a = Uuid::new_v4();
         let id_b = Uuid::new_v4();
 
@@ -364,7 +387,7 @@ mod tests {
 
         state.select_state.select(Some(0));
         state.sort = Sort::new(SortBy::Title, SortOrder::Asc);
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         ctrl.dispatch_sorting();
 
@@ -374,11 +397,11 @@ mod tests {
 
     #[test]
     fn should_stabilize_focus_out_of_bounds() {
-        let (mut state, mut ui) = setup();
+        let (mut state, mut ui, mut config) = setup();
         state.todos = vec![Todo::new("One", "", Some(Priority::Low))];
         state.select_state.select(Some(10));
 
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
         ctrl.stabilize_ui_focus(None);
 
         assert_eq!(ctrl.state.select_state.selected(), Some(0));
@@ -386,8 +409,8 @@ mod tests {
 
     #[test]
     fn should_clear_with_empty_list_error() {
-        let (mut state, mut ui) = setup();
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui);
+        let (mut state, mut ui, mut config) = setup();
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         ctrl.dispatch_clear();
 
@@ -404,7 +427,7 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        let (mut state, mut ui) = setup();
+        let (mut state, mut ui, _) = setup();
 
         mock_dispatch_save(&mut state, &mut ui, &path);
         assert!(ui.modal.is_some());

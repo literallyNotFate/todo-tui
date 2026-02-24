@@ -134,11 +134,11 @@ impl Modal for Popup {
 
     /// Popup rendering
     fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
+        use ratatui::widgets::{Block, Paragraph, Wrap};
 
         let palette: ThemePalette = ctx.palette();
         let popup_block: Block = Block::bordered()
-            .border_type(BorderType::Rounded)
+            .border_type(ctx.config.border_type.into())
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
             .title_bottom(self.bottom_title(&palette))

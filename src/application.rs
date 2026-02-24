@@ -1,4 +1,5 @@
 use crate::{
+    config::Config,
     core::{ApplicationMode, Autosave},
     enums::FocusArea,
     events::EventHandler,
@@ -22,17 +23,30 @@ pub struct Application {
     pub mode: ApplicationMode,
     pub autosave: Autosave,
 
+    pub config: Config,
     pub size: (u16, u16),
 }
 
 impl Application {
     pub fn new() -> Self {
         let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
+        let cfg_result = Config::load(None);
+        let full_config: Config = match cfg_result {
+            Ok(ref c) => c.clone(),
+            Err(_) => Config::default(),
+        };
+
+        let mut ui: UIState = UIState::new(full_config.ui.clone());
+        if let Err(e) = cfg_result {
+            ui.show_result_popup(Err(e));
+        }
+
         Self {
+            config: full_config,
+            ui,
             mode: ApplicationMode::Browsing,
             data: ApplicationState::new(),
             running: true,
-            ui: UIState::default(),
             renderer: Renderer,
             autosave: Autosave::new(false),
             size,
@@ -87,9 +101,13 @@ impl Application {
             }
 
             if has_changes && self.autosave.should_save(has_changes) {
-                match self.data.save(None) {
-                    Ok(_) => self.autosave.reset_timer(),
-                    Err(e) => self.ui.push_notification(&mut self.data, Err(e)),
+                self.config.update_from_ui(&self.ui);
+
+                let config_saved: bool = self.config.save(None).is_ok();
+                let data_saved: bool = self.data.save(None).is_ok();
+
+                if config_saved && data_saved {
+                    self.autosave.reset_timer();
                 }
             }
 
@@ -136,6 +154,7 @@ impl Application {
             renderer: Renderer,
             autosave: Autosave::new(false),
             size: (80, 24),
+            config: Config::default(),
         }
     }
 }

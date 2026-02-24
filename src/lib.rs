@@ -1,5 +1,6 @@
 pub mod app;
 pub mod application;
+pub mod config;
 pub mod core;
 pub mod enums;
 pub mod events;

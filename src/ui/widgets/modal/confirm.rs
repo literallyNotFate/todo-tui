@@ -111,7 +111,7 @@ impl Modal for Confirm {
     fn render(&self, ctx: &mut RenderContext, area: Rect) {
         use ratatui::{
             style::Stylize,
-            widgets::{Block, BorderType, Paragraph, Wrap},
+            widgets::{Block, Paragraph, Wrap},
         };
 
         let palette: ThemePalette = ctx.palette();
@@ -120,7 +120,7 @@ impl Modal for Confirm {
             .border_style(Style::default().fg(palette.info))
             .title_top(Line::from(" Action ").centered())
             .title_bottom(self.bottom_keys(&palette).centered())
-            .border_type(BorderType::Rounded);
+            .border_type(ctx.config.border_type.into());
 
         let inner_area: Rect = confirm_block.inner(area);
         ctx.render_widget(confirm_block.clone(), area);

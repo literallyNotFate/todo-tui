@@ -58,6 +58,7 @@ impl ApplicationMode {
                 self.add_command(&mut lines, "t", "Next Theme", palette);
                 self.add_command(&mut lines, "<C-t>", "Prev Theme", palette);
                 self.add_command(&mut lines, "m", "Theme Mode", palette);
+                self.add_command(&mut lines, "b", "Sidebar", palette);
                 self.add_command(&mut lines, "C-s", "Save", palette);
                 self.add_command(&mut lines, "A-a", "Autosave", palette);
                 self.add_command(&mut lines, "q", "Quit", palette);

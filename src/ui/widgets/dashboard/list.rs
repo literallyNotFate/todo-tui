@@ -59,7 +59,7 @@ impl<'a> ListTasks<'a> {
         }
 
         let main_block: Block = Block::bordered()
-            .title(" Tasks ".bold())
+            .title(format!(" Tasks: ({}) ", ctx.filter()).bold())
             .title_top(
                 Line::styled(
                     " todo-tui ",
@@ -92,6 +92,7 @@ impl<'a> ListTasks<'a> {
                 ])
                 .right_aligned(),
             )
+            .border_type(ctx.config.border_type.into())
             .border_style(ctx.focused_color(palette.accent, focus_area))
             .bg(palette.bg);
 
@@ -126,6 +127,7 @@ impl<'a> ListTasks<'a> {
                         utils::truncate(&todo.title, area.width.saturating_sub(20) as usize)
                     ))
                     .bg(palette.bg)
+                    .border_type(ctx.config.border_type.into())
                     .border_style(Style::default().fg(palette.muted));
 
                 let desc_fg = ctx.focused_color(palette.fg, FocusArea::MainContent);
@@ -175,10 +177,16 @@ impl<'a> ListTasks<'a> {
 
         let rows = self.todos.iter().map(|todo| {
             let priority_color: Color = todo.priority.palette(&palette);
-            let (icon, icon_color): (&str, Color) = if todo.completed {
-                ("✓", ctx.focused_color(palette.success, focus_area))
+            let (icon, icon_color): (String, Color) = if todo.completed {
+                (
+                    ctx.config.symbols.completed.clone(),
+                    ctx.focused_color(palette.success, focus_area),
+                )
             } else {
-                ("☐", ctx.focused_color(priority_color, focus_area))
+                (
+                    ctx.config.symbols.pending.clone(),
+                    ctx.focused_color(palette.success, focus_area),
+                )
             };
 
             let truncated_title = utils::truncate(&todo.title, title_column_width);
@@ -206,7 +214,7 @@ impl<'a> ListTasks<'a> {
             .bg(palette.bg)
             .row_highlight_style(Style::default().bg(palette.selection))
             .highlight_symbol(Text::styled(
-                ">>   ",
+                format!("{}   ", ctx.config.symbols.selection),
                 Style::default().fg(ctx.focused_color(palette.secondary, focus_area)),
             ));
 

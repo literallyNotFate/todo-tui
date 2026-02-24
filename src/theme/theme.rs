@@ -1,8 +1,11 @@
 use crate::theme::ThemePalette;
 use ratatui::style::Color;
+use serde::{Deserialize, Serialize};
 
 /// Themes for application
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum ThemeName {
     // Dark themes
     #[default]
@@ -20,6 +23,8 @@ pub enum ThemeName {
     KanagawaLotus,
     MelangeLight,
     RosePineDawn,
+
+    #[serde(rename = "github-light")]
     GitHubLight,
     SolarizedLight,
 }
@@ -281,42 +286,19 @@ impl ThemeName {
             },
         }
     }
+
+    pub fn is_light(&self) -> bool {
+        self.palette().is_light()
+    }
+
+    pub fn is_dark(&self) -> bool {
+        self.palette().is_dark()
+    }
 }
 
 impl std::fmt::Display for ThemeName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.display_name())
-    }
-}
-
-impl std::str::FromStr for ThemeName {
-    type Err = String;
-
-    /// Parse a theme name from a string
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let normalized: String = s
-            .to_lowercase()
-            .chars()
-            .filter(|c| c.is_alphanumeric())
-            .collect();
-
-        match normalized.as_str() {
-            "gruvboxdark" | "gruvbox" => Ok(Self::GruvboxDark),
-            "catppuccinmocha" | "mocha" => Ok(Self::CatppuccinMocha),
-            "tokyonight" | "tokyo" => Ok(Self::TokyoNight),
-            "kanagawawave" | "wave" => Ok(Self::KanagawaWave),
-            "melangedark" | "melange" => Ok(Self::MelangeDark),
-            "rosepinemoon" | "moon" => Ok(Self::RosePineMoon),
-            "oxocarbon" => Ok(Self::Oxocarbon),
-            "gruvboxlight" => Ok(Self::GruvboxLight),
-            "catppuccinlatte" | "latte" => Ok(Self::CatppuccinLatte),
-            "kanagawalotus" | "lotus" => Ok(Self::KanagawaLotus),
-            "melangelight" => Ok(Self::MelangeLight),
-            "rosepinedawn" | "dawn" => Ok(Self::RosePineDawn),
-            "githublight" | "github" => Ok(Self::GitHubLight),
-            "solarizedlight" | "solarized" => Ok(Self::SolarizedLight),
-            _ => Err(format!("Unknown theme: {s}")),
-        }
     }
 }
 
