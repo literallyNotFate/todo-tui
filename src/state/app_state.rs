@@ -1,4 +1,5 @@
 use crate::{
+    config::StorageConfig,
     core::{ApplicationError, Storage},
     models::{Filter, Priority, Sort, Todo},
     ui::Notification,
@@ -31,10 +32,10 @@ pub struct ApplicationState {
 pub type ApplicationResult<T> = Result<T, ApplicationError>;
 
 impl ApplicationState {
-    pub fn new() -> Self {
-        let mut state = Self::load(None).unwrap_or_default();
+    pub fn new(config: &StorageConfig) -> Self {
+        let mut state = Self::load(None, config).unwrap_or_default();
         if state.todos.is_empty() {
-            let _ = state.save(None);
+            let _ = state.save(None, config);
         }
 
         state
@@ -108,8 +109,12 @@ impl ApplicationState {
     }
 
     /// Save todos to a file
-    pub fn save(&mut self, path: Option<&Path>) -> ApplicationResult<String> {
-        Storage::save(&self.todos, path)?;
+    pub fn save(
+        &mut self,
+        path: Option<&Path>,
+        config: &StorageConfig,
+    ) -> ApplicationResult<String> {
+        Storage::save(&self.todos, path, config)?;
         self.saved_hash = self.hash_state();
         self.is_unsaved_cache.set(false);
 
@@ -117,8 +122,8 @@ impl ApplicationState {
     }
 
     /// Load todos from a file
-    pub fn load(path: Option<&Path>) -> ApplicationResult<Self> {
-        let todos: Vec<Todo> = Storage::load(path)?;
+    pub fn load(path: Option<&Path>, config: &StorageConfig) -> ApplicationResult<Self> {
+        let todos: Vec<Todo> = Storage::load(path, config)?;
         let mut state: ApplicationState = Self {
             todos,
             ..Self::default()

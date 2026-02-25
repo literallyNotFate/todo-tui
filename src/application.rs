@@ -36,7 +36,7 @@ impl Application {
             config: config.clone(),
             ui: UIState::new(config.ui.clone()),
             mode: ApplicationMode::Browsing,
-            data: ApplicationState::new(),
+            data: ApplicationState::new(&config.storage),
             running: true,
             renderer: Renderer,
             autosave: Autosave::new(false),
@@ -100,7 +100,7 @@ impl Application {
                 self.config.update_from_ui(&self.ui);
 
                 let config_saved: bool = self.config.save(None).is_ok();
-                let data_saved: bool = self.data.save(None).is_ok();
+                let data_saved: bool = self.data.save(None, &self.config.storage).is_ok();
 
                 if config_saved && data_saved {
                     self.autosave.reset_timer();
@@ -193,7 +193,7 @@ mod tests {
             }
 
             if has_changes && app.autosave.should_save(has_changes) {
-                if app.data.save(path).is_ok() {
+                if app.data.save(path, &app.config.storage).is_ok() {
                     app.autosave.reset_timer();
                 }
             }
@@ -328,7 +328,7 @@ mod tests {
         app.autosave.enabled = true;
 
         app.data.todos.push(Todo::new("Initial", "", None));
-        let _ = app.data.save(Some(&path));
+        let _ = app.data.save(Some(&path), &app.config.storage);
         assert!(!app.data.any_unsaved_changes());
 
         app.data.todos.push(Todo::new("Change", "", None));

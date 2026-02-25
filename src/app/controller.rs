@@ -150,7 +150,7 @@ impl<'a> ApplicationController<'a> {
             return false;
         }
 
-        match self.state.save(None) {
+        match self.state.save(None, &self.config.storage) {
             Ok(msg) => {
                 self.ui.show_result_popup(Ok(msg));
                 true
@@ -226,6 +226,7 @@ impl<'a> ApplicationController<'a> {
 mod tests {
     use super::*;
     use crate::{
+        config::StorageConfig,
         models::{Sort, SortBy, SortOrder},
         ui::Notification,
     };
@@ -240,8 +241,13 @@ mod tests {
         )
     }
 
-    fn mock_dispatch_save(state: &mut ApplicationState, ui: &mut UIState, path: &Path) {
-        match state.save(Some(path)) {
+    fn mock_dispatch_save(
+        state: &mut ApplicationState,
+        ui: &mut UIState,
+        path: &Path,
+        config: &StorageConfig,
+    ) {
+        match state.save(Some(path), config) {
             Ok(string) => ui.show_result_popup(Ok(string)),
             Err(e) => ui.show_result_popup(Err(e)),
         }
@@ -428,9 +434,9 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        let (mut state, mut ui, _) = setup();
+        let (mut state, mut ui, config) = setup();
 
-        mock_dispatch_save(&mut state, &mut ui, &path);
+        mock_dispatch_save(&mut state, &mut ui, &path, &config.storage);
         assert!(ui.modal.is_some());
     }
 }

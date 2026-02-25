@@ -273,7 +273,7 @@ pub fn is_exit_key(key_event: &KeyEvent) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        config::Config,
+        config::{Config, StorageConfig},
         models::{SortBy, SortOrder},
         state::{ApplicationState, UIState},
     };
@@ -300,6 +300,7 @@ mod tests {
         ctrl: &mut ApplicationController,
         running: &mut bool,
         path: &Path,
+        config: &StorageConfig,
     ) {
         let result = {
             let modal_wrapper = ctrl.ui.modal.as_mut().unwrap();
@@ -311,7 +312,7 @@ mod tests {
             ctrl.ui.close_modal();
 
             if result == ModalResult::Confirmed && action == ModalAction::UnsavedExit {
-                match ctrl.state.save(Some(path)) {
+                match ctrl.state.save(Some(path), config) {
                     Ok(string) => ctrl.ui.show_result_popup(Ok(string)),
                     Err(e) => ctrl.ui.show_result_popup(Err(e)),
                 }
@@ -548,10 +549,11 @@ mod tests {
 
         let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         ui.unsaved_confirm();
+        let cfg: StorageConfig = config.storage.clone();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
-        mock_unsaved_modal(event, &mut ctrl, &mut running, &path);
+        mock_unsaved_modal(event, &mut ctrl, &mut running, &path, &cfg);
 
         assert!(!running, "App should be closed");
     }

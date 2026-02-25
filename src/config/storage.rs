@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct StorageConfig {
     pub autosave_enabled: bool,
     pub autosave_interval: u64,
+    pub backup_enabled: bool,
 }
 
 impl Default for StorageConfig {
@@ -13,6 +14,7 @@ impl Default for StorageConfig {
         Self {
             autosave_enabled: false,
             autosave_interval: 30,
+            backup_enabled: true,
         }
     }
 }
