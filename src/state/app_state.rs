@@ -82,17 +82,26 @@ impl ApplicationState {
     }
 
     /// Navigate through tasks
-    pub fn move_selection(&mut self, delta: i32, displayed_count: usize) {
+    pub fn move_selection(&mut self, delta: i32, displayed_count: usize, wrap: bool) {
         if displayed_count == 0 {
             self.select_state.select(None);
             return;
         }
 
         let current: usize = self.select_state.selected().unwrap_or(0);
+
         let next: usize = if delta > 0 {
-            (current + 1) % displayed_count
+            if current >= displayed_count - 1 {
+                if wrap { 0 } else { current }
+            } else {
+                current + 1
+            }
         } else {
-            (current + displayed_count - 1) % displayed_count
+            if current == 0 {
+                if wrap { displayed_count - 1 } else { 0 }
+            } else {
+                current - 1
+            }
         };
 
         self.select_state.select(Some(next));

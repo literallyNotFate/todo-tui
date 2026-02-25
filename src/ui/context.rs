@@ -58,7 +58,13 @@ impl<'a, 'b> RenderContext<'a, 'b> {
 
     /// Render modal overlay (dimmed bg if popup/confirm is open)
     pub fn render_modal_overlay(&mut self) {
-        let overlay_style: Style = Style::default().bg(Color::Rgb(10, 10, 10)).dim();
+        let overlay_color: Color = if self.theme.is_dark() {
+            Color::Rgb(10, 10, 10)
+        } else {
+            Color::Rgb(200, 200, 200)
+        };
+
+        let overlay_style: Style = Style::default().bg(overlay_color).dim();
         self.frame
             .render_widget(Block::default().style(overlay_style), self.area());
     }

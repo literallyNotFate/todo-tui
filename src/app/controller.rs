@@ -143,10 +143,10 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle saving all (todos + config) on Ctrl+S
     pub fn dispatch_save(&mut self) -> bool {
-        self.config.update_from_ui(&self.ui);
+        self.config.update_from_ui(self.ui);
 
         if let Err(e) = self.config.save(None) {
-            self.ui.show_result_popup(Err(e.into()));
+            self.ui.show_result_popup(Err(e));
             return false;
         }
 
@@ -190,7 +190,8 @@ impl<'a> ApplicationController<'a> {
     /// Handle selection change
     pub fn dispatch_move_selection(&mut self, delta: i32) {
         let len = self.state.filter(&self.ui.current_filter).count();
-        self.state.move_selection(delta, len);
+        let wrap: bool = self.config.behavior.wrap_scrolling;
+        self.state.move_selection(delta, len, wrap);
         self.ui.desc_scroll.reset();
     }
 

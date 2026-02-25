@@ -1,3 +1,4 @@
+use super::utils::{is_default, is_default_dark, is_default_light};
 use crate::theme::ThemeName;
 use serde::{Deserialize, Serialize};
 
@@ -74,19 +75,4 @@ impl From<BorderTypeConfig> for ratatui::widgets::BorderType {
             BorderTypeConfig::Thick => Self::Thick,
         }
     }
-}
-
-/// Helper function to skip serialization if default value
-fn is_default<T: Default + PartialEq>(t: &T) -> bool {
-    t == &T::default()
-}
-
-/// Helper function to skip serialization if last dark theme is default (GruvboxDark)
-fn is_default_dark(opt: &Option<ThemeName>) -> bool {
-    opt.as_ref() == Some(&ThemeName::default()) || opt.is_none()
-}
-
-/// Helper function to skip serialization if last dark theme is default (GruvboxLight)
-fn is_default_light(opt: &Option<ThemeName>) -> bool {
-    opt.as_ref() == Some(&ThemeName::GruvboxLight) || opt.is_none()
 }

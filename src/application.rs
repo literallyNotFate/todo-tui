@@ -1,12 +1,11 @@
 use crate::{
     config::Config,
-    core::{ApplicationMode, Autosave},
+    core::{ApplicationError, ApplicationMode, Autosave},
     enums::FocusArea,
     events::EventHandler,
     state::{ApplicationState, UIState},
     ui::Renderer,
 };
-use color_eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::{
@@ -14,6 +13,7 @@ use ratatui::{
         terminal,
     },
 };
+use std::time::{Duration, Instant};
 
 pub struct Application {
     pub data: ApplicationState,
@@ -30,32 +30,28 @@ pub struct Application {
 impl Application {
     pub fn new() -> Self {
         let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
-        let cfg_result = Config::load(None);
-        let full_config: Config = match cfg_result {
-            Ok(ref c) => c.clone(),
-            Err(_) => Config::default(),
-        };
+        let (config, config_error): (Config, Option<ApplicationError>) = Self::load_config();
 
-        let mut ui: UIState = UIState::new(full_config.ui.clone());
-        if let Err(e) = cfg_result {
-            ui.show_result_popup(Err(e));
-        }
-
-        Self {
-            config: full_config,
-            ui,
+        let mut app = Self {
+            config: config.clone(),
+            ui: UIState::new(config.ui.clone()),
             mode: ApplicationMode::Browsing,
             data: ApplicationState::new(),
             running: true,
             renderer: Renderer,
             autosave: Autosave::new(false),
             size,
+        };
+
+        app.setup_autosave();
+        if let Some(e) = config_error {
+            app.ui.show_result_popup(Err(e));
         }
+
+        app
     }
 
-    pub fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        use std::time::{Duration, Instant};
-
+    pub fn run(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         const TICK_RATE: Duration = Duration::from_millis(100);
         let mut last_tick: Instant = Instant::now();
 
@@ -141,6 +137,20 @@ impl Application {
             FocusArea::LeftPanel => ApplicationMode::Browsing,
             FocusArea::MainContent => ApplicationMode::List,
         };
+    }
+
+    /// Helper function to load config
+    fn load_config() -> (Config, Option<ApplicationError>) {
+        match Config::load(None) {
+            Ok(cfg) => (cfg, None),
+            Err(e) => (Config::default(), Some(e)),
+        }
+    }
+
+    /// Setup autosave with config values
+    pub fn setup_autosave(&mut self) {
+        self.autosave.enabled = self.config.storage.autosave_enabled;
+        self.autosave.interval = Duration::from_secs(self.config.storage.safe_interval());
     }
 
     /// Create mock application (for testing)

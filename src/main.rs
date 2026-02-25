@@ -1,6 +1,4 @@
-use color_eyre::Result;
-
-fn main() -> Result<()> {
+fn main() -> color_eyre::Result<()> {
     use ratatui::DefaultTerminal;
     use todo_tui::Application;
 

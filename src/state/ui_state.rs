@@ -28,42 +28,30 @@ pub struct UIState {
     pub sidebar_scroll: AdaptiveScroll,
 
     pub theme: Theme,
-    pub last_dark: Theme,
-    pub last_light: Theme,
-
     pub config: UIConfig,
 }
 
 impl UIState {
-    pub fn new(mut ui_config: UIConfig) -> Self {
-        let is_system_dark = dark_light::detect()
-            .map(|m| m == dark_light::Mode::Dark)
-            .unwrap_or(true);
+    pub fn new(mut config: UIConfig) -> Self {
+        if config.last_dark.is_none() {
+            config.last_dark = Some(ThemeName::GruvboxDark);
+        }
 
-        let last_dark = ui_config.last_dark.unwrap_or(ThemeName::GruvboxDark);
-        let last_light = ui_config.last_light.unwrap_or(ThemeName::GruvboxLight);
+        if config.last_light.is_none() {
+            config.last_light = Some(ThemeName::GruvboxLight);
+        }
 
-        let active: ThemeName = if ui_config.use_system_theme {
-            if is_system_dark {
-                last_dark
-            } else {
-                last_light
-            }
-        } else {
-            ui_config.theme
+        let mut state = Self {
+            theme: Theme::new(config.theme),
+            config,
+            ..Self::default()
         };
 
-        ui_config.theme = active;
-        ui_config.last_dark = Some(last_dark);
-        ui_config.last_light = Some(last_light);
-
-        Self {
-            theme: Theme::new(active),
-            last_dark: Theme::new(last_dark),
-            last_light: Theme::new(last_light),
-            config: ui_config,
-            ..Self::default()
+        if state.config.use_system_theme {
+            state.apply_system_theme();
         }
+
+        state
     }
 
     /// Shows modal widget (confirm/popup)
@@ -130,37 +118,68 @@ impl UIState {
 
     /// Toggle dark/light theme mode
     pub fn toggle_mode(&mut self) {
+        self.config.use_system_theme = false;
+
         if self.theme.is_dark() {
-            self.last_dark = self.theme.clone();
-            self.theme = self.last_light.clone();
+            self.config.last_dark = Some(self.theme.name);
         } else {
-            self.last_light = self.theme.clone();
-            self.theme = self.last_dark.clone();
+            self.config.last_light = Some(self.theme.name);
         }
+
+        let target: ThemeName = if self.theme.is_dark() {
+            self.config.last_light.unwrap_or(ThemeName::GruvboxLight)
+        } else {
+            self.config.last_dark.unwrap_or(ThemeName::GruvboxDark)
+        };
+
+        self.theme = Theme::new(target);
+        self.config.theme = target;
     }
 
     /// Next theme wrapper
     pub fn next_theme(&mut self) {
-        let next: ThemeName = self.theme.name.next();
-        self.theme = Theme::new(next);
+        self.cycle_theme(true);
+    }
+
+    /// Previous theme wrapper
+    pub fn prev_theme(&mut self) {
+        self.cycle_theme(false);
+    }
+
+    /// Base method to cycle through themes in both directions
+    fn cycle_theme(&mut self, forward: bool) {
+        self.config.use_system_theme = false;
+
+        let next_name: ThemeName = if forward {
+            self.theme.name.next()
+        } else {
+            self.theme.name.prev()
+        };
+
+        self.theme = Theme::new(next_name);
+        self.config.theme = next_name;
 
         if self.theme.is_dark() {
-            self.last_dark = self.theme.clone();
+            self.config.last_dark = Some(next_name);
         } else {
-            self.last_light = self.theme.clone();
+            self.config.last_light = Some(next_name);
         }
     }
 
-    /// Prev theme wrapper
-    pub fn prev_theme(&mut self) {
-        let prev: ThemeName = self.theme.name.prev();
-        self.theme = Theme::new(prev);
+    /// Applies theme based on system preferences
+    pub fn apply_system_theme(&mut self) {
+        let is_dark = dark_light::detect()
+            .map(|m| m == dark_light::Mode::Dark)
+            .unwrap_or(true);
 
-        if self.theme.is_dark() {
-            self.last_dark = self.theme.clone();
+        let target_theme = if is_dark {
+            self.config.last_dark.unwrap_or(ThemeName::GruvboxDark)
         } else {
-            self.last_light = self.theme.clone();
-        }
+            self.config.last_light.unwrap_or(ThemeName::GruvboxLight)
+        };
+
+        self.theme = Theme::new(target_theme);
+        self.config.theme = target_theme;
     }
 
     /// Next filter tab (sidebar)
@@ -242,8 +261,6 @@ impl Default for UIState {
             desc_scroll: AdaptiveScroll::default(),
             sidebar_scroll: AdaptiveScroll::default(),
             theme: Theme::new(ThemeName::default()),
-            last_dark: Theme::new(ThemeName::default()),
-            last_light: Theme::new(ThemeName::GruvboxLight),
             config: UIConfig::default(),
         }
     }
@@ -382,24 +399,41 @@ mod tests {
 
     #[test]
     fn should_handle_theme_mode_switching_with_memory() {
-        let mut ui = UIState::default();
+        let mut config = UIConfig::default();
+        config.last_dark = Some(ThemeName::KanagawaWave);
+        config.last_light = Some(ThemeName::KanagawaLotus);
 
+        let mut ui = UIState::new(config);
         ui.theme = Theme::new(ThemeName::KanagawaWave);
-        ui.last_dark = Theme::new(ThemeName::KanagawaWave);
-        ui.last_light = Theme::new(ThemeName::KanagawaLotus);
 
         ui.toggle_mode();
-        assert!(ui.theme.is_light());
         assert_eq!(ui.theme.name, ThemeName::KanagawaLotus);
+        assert!(!ui.config.use_system_theme);
 
         ui.next_theme();
         let current_light = ui.theme.name;
+        assert_eq!(ui.config.last_light, Some(current_light));
 
         ui.toggle_mode();
-        assert!(ui.theme.is_dark());
+        assert_eq!(ui.theme.name, ThemeName::KanagawaWave);
 
         ui.toggle_mode();
         assert_eq!(ui.theme.name, current_light);
+    }
+
+    #[test]
+    fn should_apply_system_theme() {
+        let mut config = UIConfig::default();
+        config.use_system_theme = true;
+        config.last_dark = Some(ThemeName::GruvboxDark);
+        config.last_light = Some(ThemeName::GruvboxLight);
+
+        let mut ui = UIState::new(config);
+        ui.apply_system_theme();
+
+        let is_one_of_ours =
+            ui.theme.name == ThemeName::GruvboxDark || ui.theme.name == ThemeName::GruvboxLight;
+        assert!(is_one_of_ours);
     }
 
     #[test]

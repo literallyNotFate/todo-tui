@@ -143,7 +143,8 @@ impl Modal for Popup {
             .title(self.title.as_str())
             .title_bottom(self.bottom_title(&palette))
             .border_style(self.color_on_kind(&palette))
-            .fg(palette.fg);
+            .fg(palette.fg)
+            .bg(palette.bg);
 
         let inner_area: Rect = popup_block.inner(area);
         ctx.render_widget(popup_block, area);

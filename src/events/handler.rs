@@ -73,7 +73,13 @@ impl EventHandler {
                 ctrl.ui.task_form = Some(Form::new());
                 app.mode = ApplicationMode::Form;
             }
-            (KeyCode::Char('s'), KeyModifiers::CONTROL) => ctrl.ui.save_confirm(),
+            (KeyCode::Char('s'), KeyModifiers::CONTROL) => {
+                if ctrl.config.behavior.confirm_before_save {
+                    ctrl.ui.save_confirm();
+                } else {
+                    let _ = ctrl.dispatch_save();
+                }
+            }
             (KeyCode::Char('t'), KeyModifiers::NONE) => ctrl.ui.next_theme(),
             (KeyCode::Char('t'), KeyModifiers::CONTROL) => ctrl.ui.prev_theme(),
             (KeyCode::Char('b'), KeyModifiers::NONE) => ctrl.ui.toggle_sidebar(),
@@ -163,7 +169,13 @@ impl EventHandler {
                     }
                 }
             }
-            KeyCode::Char('d') => ctrl.ui.remove_confirm(),
+            KeyCode::Char('d') => {
+                if ctrl.config.behavior.confirm_before_remove {
+                    ctrl.ui.remove_confirm();
+                } else {
+                    ctrl.dispatch_remove()
+                }
+            }
             KeyCode::Char('J') => ctrl.dispatch_move_tasks(1),
             KeyCode::Char('K') => ctrl.dispatch_move_tasks(-1),
             KeyCode::Char('[') => ctrl.ui.desc_scroll.scroll_up(),

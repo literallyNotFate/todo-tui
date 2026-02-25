@@ -2,7 +2,6 @@ use super::*;
 use crate::{
     core::{ApplicationError, StorageError},
     state::UIState,
-    theme::ThemeName,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,22 +11,19 @@ use std::{
 
 /// Main application config
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct Config {
     pub ui: UIConfig,
+    pub storage: StorageConfig,
+    pub behavior: BehaviorConfig,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            ui: UIConfig {
-                theme: ThemeName::default(),
-                use_system_theme: true,
-                last_dark: Some(ThemeName::default()),
-                last_light: Some(ThemeName::GruvboxLight),
-                show_sidebar: true,
-                border_type: BorderTypeConfig::default(),
-                symbols: SymbolsConfig::default(),
-            },
+            ui: UIConfig::default(),
+            storage: StorageConfig::default(),
+            behavior: BehaviorConfig::default(),
         }
     }
 }
@@ -81,24 +77,15 @@ impl Config {
 
     /// Update config from UI
     pub fn update_from_ui(&mut self, ui: &UIState) {
-        let cfg = &mut self.ui;
-
-        cfg.theme = ui.theme.name;
-        cfg.last_dark = Some(ui.last_dark.name);
-        cfg.last_light = Some(ui.last_light.name);
-        cfg.show_sidebar = ui.config.show_sidebar;
-        cfg.use_system_theme = ui.config.use_system_theme;
-        cfg.symbols = ui.config.symbols.clone();
-        cfg.border_type = ui.config.border_type;
+        self.ui = ui.config.clone();
     }
 }
 
 /// Unit-tests for config
 #[cfg(test)]
 mod tests {
-    use crate::theme::Theme;
-
     use super::*;
+    use crate::theme::{Theme, ThemeName};
     use tempdir::TempDir;
 
     #[test]
@@ -123,7 +110,7 @@ mod tests {
 
         let loaded_config = Config::load(Some(&path)).unwrap();
         assert_eq!(loaded_config.ui.theme, ThemeName::RosePineMoon);
-        assert_eq!(loaded_config.ui.use_system_theme, true);
+        assert!(loaded_config.ui.use_system_theme);
     }
 
     #[test]
@@ -136,7 +123,7 @@ mod tests {
 
         let config = result.unwrap();
         assert_eq!(config.ui.theme, Config::default().ui.theme);
-        assert_eq!(config.ui.show_sidebar, true);
+        assert!(config.ui.show_sidebar);
     }
 
     #[test]
@@ -198,7 +185,6 @@ mod tests {
         let mut ui = UIState::new(initial_config.ui.clone());
 
         ui.theme = Theme::new(ThemeName::GruvboxDark);
-        ui.last_dark = Theme::new(ThemeName::GruvboxDark);
         ui.config.show_sidebar = false;
         ui.config.use_system_theme = false;
         ui.config.border_type = BorderTypeConfig::Double;
@@ -209,8 +195,8 @@ mod tests {
 
         assert_eq!(config_to_update.ui.theme, ThemeName::GruvboxDark);
         assert_eq!(config_to_update.ui.last_dark, Some(ThemeName::GruvboxDark));
-        assert_eq!(config_to_update.ui.show_sidebar, false);
-        assert_eq!(config_to_update.ui.use_system_theme, false);
+        assert!(!config_to_update.ui.show_sidebar);
+        assert!(!config_to_update.ui.use_system_theme);
         assert_eq!(config_to_update.ui.border_type, BorderTypeConfig::Double);
         assert_eq!(config_to_update.ui.symbols.completed, "DONE");
         assert!(config_to_update.ui.last_light.is_some());

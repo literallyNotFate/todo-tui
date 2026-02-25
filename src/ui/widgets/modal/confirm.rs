@@ -117,6 +117,7 @@ impl Modal for Confirm {
         let palette: ThemePalette = ctx.palette();
         let confirm_block: Block = Block::bordered()
             .fg(palette.fg)
+            .bg(palette.bg)
             .border_style(Style::default().fg(palette.info))
             .title_top(Line::from(" Action ").centered())
             .title_bottom(self.bottom_keys(&palette).centered())
