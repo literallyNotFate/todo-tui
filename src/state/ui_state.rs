@@ -56,6 +56,7 @@ impl UIState {
 
     /// Shows modal widget (confirm/popup)
     pub fn show_modal<M: Modal + 'static>(&mut self, modal: M, action: ModalAction) {
+        log::info!("Opening modal: action={:?}", action);
         self.modal = Some(ActiveModal {
             modal: Box::new(modal),
             action,
@@ -77,11 +78,17 @@ impl UIState {
     /// Show corresponding popup depending on ApplicationResult
     pub fn show_result_popup(&mut self, result: ApplicationResult<String>) {
         match result {
-            Ok(msg) => self.show_modal(Popup::success(msg).close_on_any_key(), ModalAction::None),
-            Err(e) => self.show_modal(
-                Popup::error(e.to_string()).close_on_any_key(),
-                ModalAction::None,
-            ),
+            Ok(msg) => {
+                log::debug!("Result popup (Success): {}", msg);
+                self.show_modal(Popup::success(msg).close_on_any_key(), ModalAction::None)
+            }
+            Err(e) => {
+                log::error!("Result popup (Error): {}", e);
+                self.show_modal(
+                    Popup::error(e.to_string()).close_on_any_key(),
+                    ModalAction::None,
+                )
+            }
         }
     }
 
@@ -132,6 +139,7 @@ impl UIState {
             self.config.last_dark.unwrap_or(ThemeName::GruvboxDark)
         };
 
+        log::info!("Manual theme mode toggle. New theme: {:?}", target);
         self.theme = Theme::new(target);
         self.config.theme = target;
     }
@@ -159,6 +167,7 @@ impl UIState {
         self.theme = Theme::new(next_name);
         self.config.theme = next_name;
 
+        log::info!("Theme changed to: {}", self.theme.name);
         if self.theme.is_dark() {
             self.config.last_dark = Some(next_name);
         } else {
@@ -172,6 +181,7 @@ impl UIState {
             .map(|m| m == dark_light::Mode::Dark)
             .unwrap_or(true);
 
+        log::debug!("System theme detected: dark_mode={}", is_dark);
         let target_theme = if is_dark {
             self.config.last_dark.unwrap_or(ThemeName::GruvboxDark)
         } else {
@@ -185,16 +195,19 @@ impl UIState {
     /// Next filter tab (sidebar)
     pub fn next_tab_filter(&mut self) {
         self.current_filter = self.current_filter.next();
+        log::trace!("Filter changed to: {:?}", self.current_filter);
     }
 
     /// Previous filter tab (sidebar)
     pub fn prev_tab_filter(&mut self) {
         self.current_filter = self.current_filter.prev();
+        log::trace!("Filter changed to: {:?}", self.current_filter);
     }
 
     /// Changes to specific filter
     pub fn change_filter(&mut self, filter: Filter) {
         self.current_filter = filter;
+        log::trace!("Filter changed to: {:?}", self.current_filter);
     }
 
     /// Toggle main menu focus (filters/tasks + form)
@@ -203,6 +216,8 @@ impl UIState {
             FocusArea::LeftPanel => FocusArea::MainContent,
             FocusArea::MainContent => FocusArea::LeftPanel,
         };
+
+        log::trace!("Focus toggled to: {:?}", self.focus_area);
         self.sidebar_scroll.reset();
     }
 
@@ -213,6 +228,10 @@ impl UIState {
 
     /// Closes existing modal widget
     pub fn close_modal(&mut self) {
+        if let Some(m) = &self.modal {
+            log::debug!("Closing modal: action={:?}", m.action);
+        }
+
         self.modal = None;
     }
 

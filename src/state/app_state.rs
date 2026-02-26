@@ -62,8 +62,14 @@ impl ApplicationState {
             self.todos.hash(&mut hasher);
 
             let new_hash: u64 = hasher.finish();
-            self.current_hash.set(new_hash);
+            let old_hash: u64 = self.current_hash.get();
+            log::trace!(
+                "Rehashing state: old={:016X}, new={:016X}",
+                old_hash,
+                new_hash
+            );
 
+            self.current_hash.set(new_hash);
             self.is_unsaved_cache.set(new_hash != self.saved_hash);
             self.needs_rehash.set(false);
         }
@@ -79,6 +85,7 @@ impl ApplicationState {
 
     /// Marks state as dirty (to be called in dispatch operations)
     pub fn mark_as_dirty(&self) {
+        log::trace!("State marked as dirty (needs rehash)");
         self.needs_rehash.set(true);
     }
 
@@ -105,6 +112,12 @@ impl ApplicationState {
             }
         };
 
+        log::trace!(
+            "Selection move: {:?} -> Some({}) (total visible: {})",
+            current,
+            next,
+            displayed_count
+        );
         self.select_state.select(Some(next));
     }
 
@@ -118,11 +131,16 @@ impl ApplicationState {
         self.saved_hash = self.hash_state();
         self.is_unsaved_cache.set(false);
 
+        log::info!(
+            "Data state synchronized. Saved hash: {:016X}",
+            self.saved_hash
+        );
         Ok("Tasks were saved!".to_string())
     }
 
     /// Load todos from a file
     pub fn load(path: Option<&Path>, config: &StorageConfig) -> ApplicationResult<Self> {
+        log::debug!("Loading application state...");
         let todos: Vec<Todo> = Storage::load(path, config)?;
         let mut state: ApplicationState = Self {
             todos,
@@ -139,6 +157,10 @@ impl ApplicationState {
             state.select_state.select_last();
         }
 
+        log::info!(
+            "State loaded successfully. Tasks count: {}",
+            state.todos.len()
+        );
         Ok(state)
     }
 
@@ -160,6 +182,12 @@ impl ApplicationState {
 
     /// Return indices of tasks to swap
     pub fn swap_indices(&self, filter: &Filter, query: &str, delta: i32) -> Option<(usize, usize)> {
+        log::debug!(
+            "Calculating swap: current_idx={:?}, delta={}",
+            self.select_state.selected(),
+            delta
+        );
+
         let filtered: Vec<&Todo> = filter.apply(&self.todos, query);
         let current_index: usize = self.select_state.selected()?;
 
@@ -170,6 +198,10 @@ impl ApplicationState {
         };
 
         if target_index >= filtered.len() {
+            log::trace!(
+                "Swap cancelled: target_index {} out of filtered bounds",
+                target_index
+            );
             return None;
         }
 
@@ -179,6 +211,11 @@ impl ApplicationState {
         let index_a: usize = self.todos.iter().position(|t| t.id == current_id)?;
         let index_b: usize = self.todos.iter().position(|t| t.id == target_id)?;
 
+        log::trace!(
+            "Resolved global indices for swap: {} <-> {}",
+            index_a,
+            index_b
+        );
         Some((index_a, index_b))
     }
 

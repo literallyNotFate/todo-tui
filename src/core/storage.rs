@@ -10,9 +10,28 @@ pub struct Storage;
 impl Storage {
     /// Get default data path to save/load from
     pub fn get_data_path() -> ApplicationResult<PathBuf> {
-        dirs::data_dir()
+        let path: ApplicationResult<PathBuf> = dirs::data_dir()
             .ok_or(StorageError::PathNotFound.into())
-            .map(|dir| dir.join("todo-tui").join("todos.json"))
+            .map(|dir| dir.join("todo-tui").join("todos.json"));
+
+        if let Ok(ref p) = path {
+            log::debug!("Data path resolved to: {:?}", p);
+        }
+
+        path
+    }
+
+    /// Get default logging path
+    pub fn get_log_path() -> ApplicationResult<PathBuf> {
+        // let path: ApplicationResult<PathBuf> = dirs::data_dir()
+        //     .ok_or(StorageError::PathNotFound.into())
+        //     .map(|dir| dir.join("todo-tui").join("todo-tui.log"));
+
+        // if let Ok(ref p) = path {
+        //     log::debug!("Config path resolved to: {:?}", p);
+        // }
+
+        Ok(PathBuf::from("todo-tui.log"))
     }
 
     /// Save todos to user path/default path
@@ -26,6 +45,7 @@ impl Storage {
             None => Self::get_data_path()?,
         };
 
+        log::debug!("Starting atomic save to {:?}", p);
         if let Some(parent) = p.parent() {
             fs::create_dir_all(parent).map_err(|e| StorageError::IOError(e.to_string()))?;
         }
@@ -54,6 +74,7 @@ impl Storage {
         })();
 
         if let Err(e) = result {
+            log::error!("Failed to write temporary file {:?}: {}", temp_path, e);
             let _ = fs::remove_file(&temp_path);
             return Err(e.into());
         }
@@ -61,9 +82,11 @@ impl Storage {
         if config.backup_enabled && p.exists() {
             let mut backup_path = p.clone();
             backup_path.set_extension("json.bak");
+            log::debug!("Creating backup at {:?}", backup_path);
             let _ = fs::rename(&p, backup_path);
         }
 
+        log::info!("Successfully saved {} tasks", todos.len());
         fs::rename(&temp_path, &p).map_err(|err| StorageError::IOError(err.to_string()))?;
         Ok(())
     }
@@ -77,8 +100,12 @@ impl Storage {
 
         if p.exists() {
             match Self::load_from_path(&p) {
-                Ok(todos) => return Ok(todos),
+                Ok(todos) => {
+                    log::info!("Loaded {} tasks from main file", todos.len());
+                    return Ok(todos);
+                }
                 Err(e) => {
+                    log::warn!("Main data file is corrupted: {}", e);
                     if !config.backup_enabled {
                         return Err(e);
                     }
@@ -91,10 +118,12 @@ impl Storage {
             backup.set_extension("json.bak");
 
             if backup.exists() {
+                log::info!("Attempting to restore from backup: {:?}", backup);
                 return Self::load_from_path(&backup);
             }
         }
 
+        log::info!("No data file found, starting with empty list");
         Ok(Vec::new())
     }
 

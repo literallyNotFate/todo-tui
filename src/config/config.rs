@@ -15,6 +15,7 @@ use std::{
 pub struct Config {
     pub ui: UIConfig,
     pub storage: StorageConfig,
+    pub log: LogConfig,
     pub behavior: BehaviorConfig,
 }
 
@@ -24,6 +25,7 @@ impl Default for Config {
             ui: UIConfig::default(),
             storage: StorageConfig::default(),
             behavior: BehaviorConfig::default(),
+            log: LogConfig::default(),
         }
     }
 }

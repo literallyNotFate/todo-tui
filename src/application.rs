@@ -28,15 +28,14 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new() -> Self {
+    pub fn new(config: Config, config_error: Option<ApplicationError>) -> Self {
         let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
-        let (config, config_error): (Config, Option<ApplicationError>) = Self::load_config();
 
         let mut app = Self {
-            config: config.clone(),
             ui: UIState::new(config.ui.clone()),
-            mode: ApplicationMode::Browsing,
             data: ApplicationState::new(&config.storage),
+            config,
+            mode: ApplicationMode::Browsing,
             running: true,
             renderer: Renderer,
             autosave: Autosave::new(false),
@@ -45,13 +44,16 @@ impl Application {
 
         app.setup_autosave();
         if let Some(e) = config_error {
+            log::warn!("Application: Config loaded with errors: {}", e);
             app.ui.show_result_popup(Err(e));
         }
 
+        log::debug!("Application: Instance created, terminal size: {:?}", size);
         app
     }
 
     pub fn run(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
+        log::info!("Run: Entering main event loop, tick rate 100 ms");
         const TICK_RATE: Duration = Duration::from_millis(100);
         let mut last_tick: Instant = Instant::now();
 
@@ -77,6 +79,7 @@ impl Application {
             }
         }
 
+        log::info!("Run: Exiting main event loop");
         Ok(())
     }
 
@@ -97,12 +100,21 @@ impl Application {
             }
 
             if has_changes && self.autosave.should_save(has_changes) {
+                log::debug!("Autosave: Triggered, syncing config and data");
                 self.config.update_from_ui(&self.ui);
 
-                let config_saved: bool = self.config.save(None).is_ok();
-                let data_saved: bool = self.data.save(None, &self.config.storage).is_ok();
+                let config_saved = self.config.save(None);
+                let data_saved = self.data.save(None, &self.config.storage);
 
-                if config_saved && data_saved {
+                if let Err(e) = &config_saved {
+                    log::error!("Autosave: Config save failed: {}", e);
+                }
+                if let Err(e) = &data_saved {
+                    log::error!("Autosave: Data save failed: {}", e);
+                }
+
+                if config_saved.is_ok() && data_saved.is_ok() {
+                    log::info!("Autosave: Successfully saved");
                     self.autosave.reset_timer();
                 }
             }
@@ -118,6 +130,7 @@ impl Application {
         let visible_count = indices.len();
 
         if visible_count == 0 {
+            log::debug!("UI Sync: No visible tasks, clearing selection");
             self.data.select_state.select(None);
         } else {
             let current = self.data.select_state.selected();
@@ -128,6 +141,14 @@ impl Application {
                 }
                 _ => {}
             }
+
+            log::trace!(
+                "UI Sync: Filter: {:?}, Query: '{}', Visible: {}, Selected: {:?}",
+                self.ui.current_filter,
+                query,
+                visible_count,
+                self.data.select_state.selected()
+            );
         }
     }
 
@@ -140,7 +161,7 @@ impl Application {
     }
 
     /// Helper function to load config
-    fn load_config() -> (Config, Option<ApplicationError>) {
+    pub fn load_config() -> (Config, Option<ApplicationError>) {
         match Config::load(None) {
             Ok(cfg) => (cfg, None),
             Err(e) => (Config::default(), Some(e)),
@@ -152,10 +173,10 @@ impl Application {
         self.autosave.enabled = self.config.storage.autosave_enabled;
         self.autosave.interval = Duration::from_secs(self.config.storage.safe_interval());
     }
+}
 
-    /// Create mock application (for testing)
-    #[cfg(test)]
-    pub fn test() -> Self {
+impl Default for Application {
+    fn default() -> Self {
         Self {
             data: ApplicationState::default(),
             ui: UIState::default(),
@@ -204,7 +225,7 @@ mod tests {
 
     #[test]
     fn should_create_application() {
-        let app = Application::test();
+        let app = Application::default();
 
         assert!(app.running, "running should be true by default");
         assert_eq!(app.data.todos.len(), 0, "todos should be empty");
@@ -217,7 +238,7 @@ mod tests {
 
     #[test]
     fn should_test_tick_expires_notification() {
-        let mut app = Application::test();
+        let mut app = Application::default();
         let old_time = Instant::now() - Duration::from_secs(10);
 
         let mut notification: Notification = Notification::success("Test");
@@ -234,7 +255,7 @@ mod tests {
 
     #[test]
     fn should_select_none_if_empty_with_sync_ui() {
-        let mut app = Application::test();
+        let mut app = Application::default();
         app.data.select_state.select(Some(5));
         app.data.todos.clear();
 
@@ -249,7 +270,7 @@ mod tests {
 
     #[test]
     fn should_adjust_out_of_bounds_index_with_sync_ui() {
-        let mut app = Application::test();
+        let mut app = Application::default();
 
         app.data.todos.push(Todo::new("1", "", None));
         app.data.todos.push(Todo::new("2", "", None));
@@ -269,7 +290,7 @@ mod tests {
 
     #[test]
     fn should_initialize_selection_with_sync_ui() {
-        let mut app = Application::test();
+        let mut app = Application::default();
 
         app.data.todos.push(Todo::new("Task", "", None));
         app.data.select_state.select(None);
@@ -285,7 +306,7 @@ mod tests {
 
     #[test]
     fn should_adjust_selection_on_filter_change_with_sync_ui() {
-        let mut app = Application::test();
+        let mut app = Application::default();
 
         app.data.todos.push(Todo::new("Active", "", None));
         app.data.todos.push(Todo::new("Done", "", None));
@@ -304,7 +325,7 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        let mut app = Application::test();
+        let mut app = Application::default();
         app.autosave.enabled = true;
         app.autosave.interval = Duration::from_secs(30);
         app.autosave.last_tick_had_changes = false;
@@ -324,7 +345,7 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        let mut app = Application::test();
+        let mut app = Application::default();
         app.autosave.enabled = true;
 
         app.data.todos.push(Todo::new("Initial", "", None));
@@ -362,7 +383,7 @@ mod tests {
         let temp_dir = TempDir::new("todo_test").unwrap();
         let path = temp_dir.path().join("todos.json");
 
-        let mut app = Application::test();
+        let mut app = Application::default();
         app.autosave.enabled = true;
         app.autosave.interval = Duration::from_millis(20);
         app.autosave.debounce = Duration::from_millis(20);
@@ -390,7 +411,7 @@ mod tests {
         let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
         let path: PathBuf = temp_dir.path().join("todos.json");
 
-        let mut app = Application::test();
+        let mut app = Application::default();
         app.autosave.enabled = false;
         app.autosave.interval = Duration::from_millis(0);
 

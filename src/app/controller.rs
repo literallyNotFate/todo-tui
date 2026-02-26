@@ -31,7 +31,10 @@ impl<'a> ApplicationController<'a> {
         desc: impl Into<String>,
         priority: Option<Priority>,
     ) {
-        let task: Todo = Todo::new(title, desc, priority);
+        let title_string: String = title.into();
+        log::debug!("Dispatching append for task: '{}'", title_string);
+
+        let task: Todo = Todo::new(title_string, desc, priority);
         let id: Uuid = task.id;
 
         match TodoService::append_task(&mut self.state.todos, task, &self.state.sort) {
@@ -52,6 +55,7 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_update(&mut self, id: Uuid, task: Todo) {
         match TodoService::update_task(&mut self.state.todos, &id, task, &self.state.sort) {
             Ok(index) => {
+                log::debug!("Dispatching update for task (ID: {})", id);
                 self.stabilize_ui_focus(Some(id));
                 self.state.mark_as_dirty();
 
@@ -72,6 +76,7 @@ impl<'a> ApplicationController<'a> {
         if let Some(id) = self.ui.selected_id(self.state) {
             match TodoService::remove_task(&mut self.state.todos, &id) {
                 Ok(removed) => {
+                    log::debug!("Dispatching remove for task '{}'", removed);
                     self.stabilize_ui_focus(None);
                     self.state.mark_as_dirty();
 
@@ -126,6 +131,7 @@ impl<'a> ApplicationController<'a> {
         let removed: usize = TodoService::clear(&mut self.state.todos, &self.ui.current_filter);
 
         if removed > 0 {
+            log::info!("Clear successful: {} tasks removed", removed);
             self.state.mark_as_dirty();
             self.stabilize_ui_focus(None);
 
@@ -136,6 +142,7 @@ impl<'a> ApplicationController<'a> {
             );
             self.ui.push_notification(self.state, Ok(msg));
         } else {
+            log::debug!("Clear skipped: no tasks matched current filter");
             self.ui
                 .push_notification(self.state, Err(TodoError::ListEmpty.into()));
         }
@@ -202,9 +209,15 @@ impl<'a> ApplicationController<'a> {
             .current_filter
             .apply(&self.state.todos, &self.ui.search_query());
         let len: usize = filtered_todos.len();
+        log::trace!(
+            "Stabilizing UI focus. Focus ID: {:?}, Filtered count: {}",
+            focus_id,
+            len
+        );
 
         if let Some(id) = focus_id {
             if let Some(pos) = filtered_todos.iter().position(|t| t.id == id) {
+                log::trace!("Focus matched ID {} at position {}", id, pos);
                 self.state.select_state.select(Some(pos));
                 return;
             }

@@ -59,6 +59,7 @@ impl EventHandler {
         let mut ctrl = ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config);
         match (event.code, event.modifiers) {
             (KeyCode::Char('q') | KeyCode::Esc, KeyModifiers::NONE) => {
+                log::info!("Exit requested via key event");
                 if ctrl.state.any_unsaved_changes() {
                     ctrl.ui.unsaved_confirm();
                 } else {
@@ -84,16 +85,24 @@ impl EventHandler {
             (KeyCode::Char('t'), KeyModifiers::CONTROL) => ctrl.ui.prev_theme(),
             (KeyCode::Char('b'), KeyModifiers::NONE) => ctrl.ui.toggle_sidebar(),
             (KeyCode::Char('m'), KeyModifiers::NONE) => ctrl.ui.toggle_mode(),
-            (KeyCode::Char('x'), KeyModifiers::NONE) => ctrl.ui.clear_confirm(),
+            (KeyCode::Char('x'), KeyModifiers::NONE) => {
+                log::info!("Requesting confirmation to CLEAR tasks");
+                ctrl.ui.clear_confirm();
+            }
             (KeyCode::Char('j'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_down(),
             (KeyCode::Char('k'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_up(),
-            (KeyCode::Char('a'), KeyModifiers::ALT) => app.autosave.toggle_enabled(),
+            (KeyCode::Char('a'), KeyModifiers::ALT) => {
+                app.autosave.toggle_enabled();
+                log::info!("Autosave toggled: enabled={}", app.autosave.enabled);
+            }
             (KeyCode::Char('s'), KeyModifiers::NONE) => {
                 ctrl.state.sort.parameter = ctrl.state.sort.parameter.next();
+                log::debug!("Sort parameter changed to: {:?}", ctrl.state.sort.parameter);
                 ctrl.dispatch_sorting();
             }
             (KeyCode::Char('r'), KeyModifiers::NONE) => {
                 ctrl.state.sort.order = ctrl.state.sort.order.next();
+                log::debug!("Sort order toggled: {:?}", ctrl.state.sort.order);
                 ctrl.dispatch_sorting();
             }
             _ => Self::handle_main_mode(event, &mut ctrl, &mut app.mode, &mut app.running),
@@ -112,6 +121,7 @@ impl EventHandler {
             ctrl.ui.close_modal();
 
             if result == ModalResult::Confirmed {
+                log::debug!("Modal confirmed: action={:?}", action);
                 match action {
                     ModalAction::Remove => ctrl.dispatch_remove(),
                     ModalAction::Clear => ctrl.dispatch_clear(),
@@ -125,6 +135,8 @@ impl EventHandler {
                     }
                     _ => {}
                 }
+            } else {
+                log::debug!("Modal cancelled: action={:?}", action);
             }
         }
     }
@@ -160,7 +172,10 @@ impl EventHandler {
         match code {
             KeyCode::Char('j') | KeyCode::Down => ctrl.dispatch_move_selection(1),
             KeyCode::Char('k') | KeyCode::Up => ctrl.dispatch_move_selection(-1),
-            KeyCode::Enter => ctrl.dispatch_toggle(),
+            KeyCode::Enter => {
+                log::trace!("Task status toggle requested via Enter");
+                ctrl.dispatch_toggle();
+            }
             KeyCode::Char('e') => {
                 if let Some(id) = ctrl.ui.selected_id(ctrl.state) {
                     if let Some(task) = ctrl.state.todos.iter().find(|t| t.id == id) {
@@ -171,16 +186,25 @@ impl EventHandler {
             }
             KeyCode::Char('d') => {
                 if ctrl.config.behavior.confirm_before_remove {
+                    log::debug!("Requesting confirmation for task removal");
                     ctrl.ui.remove_confirm();
                 } else {
+                    log::info!("Direct task removal (no confirm)");
                     ctrl.dispatch_remove()
                 }
             }
-            KeyCode::Char('J') => ctrl.dispatch_move_tasks(1),
-            KeyCode::Char('K') => ctrl.dispatch_move_tasks(-1),
+            KeyCode::Char('J') => {
+                log::trace!("Moving task down");
+                ctrl.dispatch_move_tasks(1);
+            }
+            KeyCode::Char('K') => {
+                log::trace!("Moving task up");
+                ctrl.dispatch_move_tasks(-1);
+            }
             KeyCode::Char('[') => ctrl.ui.desc_scroll.scroll_up(),
             KeyCode::Char(']') => ctrl.ui.desc_scroll.scroll_down(),
             KeyCode::Char('/') => {
+                log::debug!("Entering search mode");
                 ctrl.ui.show_search();
                 *mode = ApplicationMode::Search;
             }
@@ -215,9 +239,11 @@ impl EventHandler {
                 WidgetResponse::Submit => {
                     let (id, title, desc, priority) = form.data();
                     if let Some(task_id) = id {
+                        log::info!("Form submitted: updating task '{}' ({})", title, task_id);
                         let updated: Todo = Todo::from_id(task_id, title, desc, Some(priority));
                         ctrl.dispatch_update(task_id, updated);
                     } else {
+                        log::info!("Form submitted: creating new task '{}'", title);
                         ctrl.dispatch_append(title, desc, Some(priority));
                     }
 
@@ -258,7 +284,13 @@ impl EventHandler {
 
 /// Check if its kill process key
 pub fn is_kill_process_key(key_event: &KeyEvent) -> bool {
-    key_event.code == KeyCode::Char('c') && key_event.modifiers.contains(KeyModifiers::CONTROL)
+    let killed: bool =
+        key_event.code == KeyCode::Char('c') && key_event.modifiers.contains(KeyModifiers::CONTROL);
+    if killed {
+        log::warn!("Process kill signal (Ctrl+C) detected");
+    }
+
+    killed
 }
 
 /// Check if its exit key
@@ -281,7 +313,7 @@ mod tests {
     use tempdir::TempDir;
 
     fn setup_app() -> Application {
-        let mut app = Application::test();
+        let mut app = Application::default();
         app.size = (100, 100);
         app
     }

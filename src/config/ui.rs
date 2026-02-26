@@ -24,7 +24,7 @@ pub struct UIConfig {
 
 /// Border configuration
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "lowercase")]
 pub enum BorderTypeConfig {
     Plain,
     #[default]

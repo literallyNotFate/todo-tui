@@ -17,6 +17,8 @@ chrono = { version = "0.4", features = ["serde"] }
 textwrap = { version = "0.16.2" }
 dark-light = "2.0.0"
 toml = { version = "1.0.3", features = ["parse", "display"] }
+log = "0.4"
+simplelog = "0.12"
 
 [features]
 default = ["serde"]

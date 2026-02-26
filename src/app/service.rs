@@ -17,10 +17,12 @@ impl TodoService {
         sort: &Sort,
     ) -> ApplicationResult<String> {
         if task.title.trim().is_empty() {
+            log::debug!("Validation error on append: Task title is empty");
             return Err(TodoError::EmptyTitle.into());
         }
 
         let title: String = task.title.clone();
+        log::info!("Adding new task: '{}' (ID: {})", title, task.id);
         todos.push(task);
         Self::sorting(todos, sort);
 
@@ -35,13 +37,17 @@ impl TodoService {
         sort: &Sort,
     ) -> ApplicationResult<usize> {
         if task.title.trim().is_empty() {
+            log::debug!("Validation error on update: Task title is empty");
             return Err(TodoError::EmptyTitle.into());
         }
 
-        let index: usize = todos
-            .iter()
-            .position(|t| t.id == *id)
-            .ok_or(TodoError::TaskNotFound)?;
+        let index: usize = todos.iter().position(|t| t.id == *id).ok_or_else(|| {
+            log::warn!(
+                "Update failed: Task with ID {} not found in current list",
+                id
+            );
+            TodoError::TaskNotFound
+        })?;
 
         todos[index].update(task);
         Self::sorting(todos, sort);
@@ -52,21 +58,36 @@ impl TodoService {
 
     /// Remove task by id
     pub fn remove_task(todos: &mut Vec<Todo>, id: &Uuid) -> ApplicationResult<String> {
-        let index: usize = todos
-            .iter()
-            .position(|t| t.id == *id)
-            .ok_or(TodoError::TaskNotFound)?;
-        Ok(todos.remove(index).title)
+        let index: usize = todos.iter().position(|t| t.id == *id).ok_or_else(|| {
+            log::error!(
+                "Remove failed: Attempted to remove non-existent task ID {}",
+                id
+            );
+            TodoError::TaskNotFound
+        })?;
+
+        let task: Todo = todos.remove(index);
+        log::info!("Task removed: '{}' (ID: {})", task.title, id);
+        Ok(task.title)
     }
 
     /// Toggle completed/uncompleted by id
     pub fn toggle_task(todos: &mut [Todo], id: &Uuid) -> ApplicationResult<()> {
-        let task: &mut Todo = todos
-            .iter_mut()
-            .find(|t| t.id == *id)
-            .ok_or(TodoError::TaskNotFound)?;
+        let task: &mut Todo = todos.iter_mut().find(|t| t.id == *id).ok_or_else(|| {
+            log::error!(
+                "Toggle failed: Attempted to toggle completed the non-existent task ID {}",
+                id
+            );
+            TodoError::TaskNotFound
+        })?;
 
         task.toggle_completed();
+        log::debug!(
+            "Task {} toggled. New state: completed={}",
+            id,
+            task.completed
+        );
+
         Ok(())
     }
 
@@ -85,7 +106,14 @@ impl TodoService {
             }
         }
 
-        initial_len - todos.len()
+        let removed: usize = initial_len - todos.len();
+        log::info!(
+            "Massive clear performed. Filter: {:?}, Removed: {} tasks",
+            filter,
+            removed
+        );
+
+        removed
     }
 
     /// Automatic soritng by priority (considering updated_at also) after operation
@@ -96,6 +124,12 @@ impl TodoService {
     /// Move tasks by indices (change order of them)
     pub fn move_tasks(todos: &mut [Todo], a: usize, b: usize) -> ApplicationResult<()> {
         if a >= todos.len() || b >= todos.len() {
+            log::warn!(
+                "Move failed: Indices out of bounds (a: {}, b: {}, total len: {})",
+                a,
+                b,
+                todos.len()
+            );
             return Err(TodoError::TaskNotFound.into());
         }
 
@@ -104,9 +138,15 @@ impl TodoService {
         }
 
         if todos[a].priority != todos[b].priority {
+            log::warn!(
+                "Move forbidden: tasks have different priorities ({:?} vs {:?})",
+                todos[a].priority,
+                todos[b].priority
+            );
             return Err(TodoError::MoveForbidden.into());
         }
 
+        log::debug!("Swapping tasks at indices {} and {}", a, b);
         todos.swap(a, b);
         Ok(())
     }
