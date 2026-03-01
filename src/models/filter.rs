@@ -1,9 +1,10 @@
 use super::Todo;
 use crate::traits::InteractableEnum;
 use chrono::Local;
+use serde::{Deserialize, Serialize};
 
 /// Selected filter enum
-#[derive(Default, Clone, Copy, Debug, PartialEq)]
+#[derive(Default, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum Filter {
     #[default]
     All,
@@ -41,16 +42,17 @@ impl Filter {
     }
 
     pub fn apply<'a>(&self, todos: &'a [Todo], query: &str) -> Vec<&'a Todo> {
-        let query: String = query.to_lowercase().trim().to_string();
+        let query_lower: String = query.to_lowercase().trim().to_string();
+        let is_empty: bool = query_lower.is_empty();
         let today = Local::now().date_naive();
 
         todos
             .iter()
             .filter(|t| {
-                let matches_type = t.matches_filter(self, &today);
-                let matches_query = query.is_empty() || t.title.to_lowercase().contains(&query);
-
-                matches_type && matches_query
+                if !t.matches_filter(self, &today) {
+                    return false;
+                }
+                is_empty || t.title_lower.contains(&query_lower)
             })
             .collect()
     }

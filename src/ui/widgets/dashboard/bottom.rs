@@ -120,7 +120,9 @@ impl<'a> BottomBarWidget<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::StorageConfig, models::Todo, theme::ThemeName};
+    use crate::{
+        config::StorageConfig, core::Storage, models::Todo, state::UIState, theme::ThemeName,
+    };
     use std::{path::PathBuf, time::Duration};
     use tempdir::TempDir;
 
@@ -192,7 +194,13 @@ mod tests {
         let palette: ThemePalette = ThemeName::GruvboxDark.palette();
 
         state.todos.clear();
-        let _ = state.save(Some(&path), &StorageConfig::default());
+        let _ = Storage::save(
+            &state.todos,
+            UIState::default().to_session(None),
+            Some(&path),
+            &StorageConfig::default(),
+        );
+        state.mark_saved();
 
         assert!(
             !state.any_unsaved_changes(),

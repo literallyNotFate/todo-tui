@@ -1,5 +1,9 @@
 use crate::{enums::WidgetResponse, theme::ThemePalette, traits::Input, ui::RenderContext};
-use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Style};
+use ratatui::{
+    crossterm::event::KeyCode,
+    layout::Rect,
+    style::{Style, Stylize},
+};
 
 pub const TEXT_INPUT_MAX_CHARS: usize = 256;
 
@@ -121,7 +125,9 @@ impl Input for TextInput {
             .border_style(border_style)
             .border_type(ctx.config.border_type.into())
             .style(text_style)
-            .title(self.title.as_str());
+            .title(self.title.as_str())
+            .bg(palette.bg)
+            .fg(palette.fg);
 
         let paragraph = Paragraph::new(text).block(input_block);
 

@@ -1,3 +1,4 @@
+use crate::config::StorageConfig;
 use std::time::{Duration, Instant};
 
 /// Autosave struct for Application with debounced activity
@@ -6,20 +7,42 @@ pub struct Autosave {
     pub interval: Duration,
     pub debounce: Duration,
     pub last_tick_had_changes: bool,
+    pub last_tick_secs: u64,
 
     last_save: Instant,
     last_activity: Instant,
 }
 
 impl Autosave {
+    /// Create new autosave with 30 second interval
     pub fn new(enabled: bool) -> Self {
+        let interval_secs = 30;
+        let now: Instant = Instant::now();
+
         Self {
             enabled,
-            interval: Duration::from_secs(30),
+            interval: Duration::from_secs(interval_secs),
             debounce: Duration::from_secs(5),
             last_tick_had_changes: false,
-            last_save: Instant::now(),
-            last_activity: Instant::now(),
+            last_save: now,
+            last_activity: now,
+            last_tick_secs: interval_secs,
+        }
+    }
+
+    /// Setup autosave from config
+    pub fn from(config: &StorageConfig) -> Self {
+        let interval_secs = config.safe_interval();
+        let now: Instant = Instant::now();
+
+        Self {
+            enabled: config.autosave_enabled,
+            interval: std::time::Duration::from_secs(interval_secs),
+            last_tick_secs: interval_secs,
+            debounce: Duration::from_secs(5),
+            last_tick_had_changes: false,
+            last_save: now,
+            last_activity: now,
         }
     }
 
@@ -67,9 +90,31 @@ impl Autosave {
 
     /// Reseting timer after success save
     pub fn reset_timer(&mut self) {
-        let now: Instant = Instant::now();
+        let now = Instant::now();
         self.last_save = now;
         self.last_activity = now;
+        self.last_tick_secs = self.interval.as_secs();
+    }
+
+    /// Tick function for autosave timer. Returns true if redrawing is needed.
+    pub fn tick(&mut self, has_changes: bool) -> bool {
+        if !self.enabled || !has_changes {
+            return false;
+        }
+
+        let current_time_left = self.time_until_next_save();
+        let is_debouncing = self.is_debouncing(has_changes);
+
+        if current_time_left != self.last_tick_secs {
+            self.last_tick_secs = current_time_left;
+            return true;
+        }
+
+        if is_debouncing {
+            return true;
+        }
+
+        false
     }
 }
 

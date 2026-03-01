@@ -1,7 +1,7 @@
 use crate::{
     config::UIConfig,
     enums::FocusArea,
-    models::Filter,
+    models::{Filter, UISession},
     state::{AdaptiveScroll, ApplicationResult, ApplicationState},
     theme::{Theme, ThemeName},
     traits::{Input, InteractableEnum, Modal, ModalAction},
@@ -33,25 +33,53 @@ pub struct UIState {
 
 impl UIState {
     pub fn new(mut config: UIConfig) -> Self {
-        if config.last_dark.is_none() {
-            config.last_dark = Some(ThemeName::GruvboxDark);
-        }
+        config.last_dark.get_or_insert(ThemeName::GruvboxDark);
+        config.last_light.get_or_insert(ThemeName::GruvboxLight);
 
-        if config.last_light.is_none() {
-            config.last_light = Some(ThemeName::GruvboxLight);
-        }
-
-        let mut state = Self {
+        let mut ui = Self {
             theme: Theme::new(config.theme),
             config,
             ..Self::default()
         };
 
-        if state.config.use_system_theme {
-            state.apply_system_theme();
+        ui.refresh_theme();
+        ui
+    }
+
+    /// Initialize UIState from session and config
+    pub fn from(session: UISession, config: &UIConfig) -> Self {
+        let mut ui = Self {
+            current_filter: session.last_filter,
+            focus_area: session.last_focus,
+            desc_scroll: AdaptiveScroll::with_position(session.description_scroll_pos),
+            sidebar_scroll: AdaptiveScroll::with_position(session.hotkeys_scroll_pos),
+            ..Self::new(config.clone())
+        };
+
+        ui.config.use_system_theme = session.use_system_theme;
+        ui.refresh_theme();
+        if !session.last_query.is_empty() {
+            ui.search_input = Some(TextInput::from(session.last_query));
         }
 
-        state
+        ui
+    }
+
+    /// Parse to UISession from UIState
+    pub fn to_session(&self, selected_id: Option<Uuid>) -> UISession {
+        UISession {
+            last_selected_id: selected_id,
+            last_focus: self.focus_area.clone(),
+            last_filter: self.current_filter.clone(),
+            last_query: self
+                .search_input
+                .as_ref()
+                .map(|i| i.buffer.clone())
+                .unwrap_or_default(),
+            use_system_theme: self.config.use_system_theme,
+            description_scroll_pos: self.desc_scroll.current.get(),
+            hotkeys_scroll_pos: self.sidebar_scroll.current.get(),
+        }
     }
 
     /// Shows modal widget (confirm/popup)
@@ -93,12 +121,19 @@ impl UIState {
     }
 
     /// Expire notification function (close after duration)
-    pub fn expire_notification(&self, notification: &mut Option<Notification>) {
-        if let Some(n) = notification
-            && n.is_expired()
-        {
-            *notification = None;
+    pub fn expire_notification(&self, notification: &mut Option<Notification>) -> bool {
+        if let Some(n) = notification {
+            if n.is_expired() {
+                *notification = None;
+                return true;
+            }
+
+            if n.tick() {
+                return true;
+            }
         }
+
+        false
     }
 
     /// Toggles search input field
@@ -107,11 +142,11 @@ impl UIState {
     }
 
     /// Returns search query string
-    pub fn search_query(&self) -> String {
+    pub fn search_query(&self) -> &str {
         self.search_input
             .as_ref()
-            .map(|i| i.buffer.to_lowercase())
-            .unwrap_or_default()
+            .map(|input| input.buffer.as_str())
+            .unwrap_or("")
     }
 
     /// Return id of a todo based on TableState selection
@@ -154,6 +189,15 @@ impl UIState {
         self.cycle_theme(false);
     }
 
+    /// Helper function to refresh theme
+    fn refresh_theme(&mut self) {
+        if self.config.use_system_theme {
+            self.apply_system_theme();
+        } else {
+            self.theme = Theme::new(self.config.theme);
+        }
+    }
+
     /// Base method to cycle through themes in both directions
     fn cycle_theme(&mut self, forward: bool) {
         self.config.use_system_theme = false;
@@ -176,20 +220,30 @@ impl UIState {
     }
 
     /// Applies theme based on system preferences
-    pub fn apply_system_theme(&mut self) {
+    pub fn apply_system_theme(&mut self) -> bool {
         let is_dark = dark_light::detect()
             .map(|m| m == dark_light::Mode::Dark)
             .unwrap_or(true);
 
-        log::debug!("System theme detected: dark_mode={}", is_dark);
         let target_theme = if is_dark {
             self.config.last_dark.unwrap_or(ThemeName::GruvboxDark)
         } else {
             self.config.last_light.unwrap_or(ThemeName::GruvboxLight)
         };
 
+        if self.config.theme == target_theme {
+            return false;
+        }
+
+        log::info!(
+            "System theme change detected! Switching to {:?}",
+            target_theme
+        );
+
         self.theme = Theme::new(target_theme);
         self.config.theme = target_theme;
+
+        true
     }
 
     /// Next filter tab (sidebar)

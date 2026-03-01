@@ -4,7 +4,11 @@ use crate::{
     traits::{Input, InteractableEnum},
     ui::RenderContext,
 };
-use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Style};
+use ratatui::{
+    crossterm::event::KeyCode,
+    layout::Rect,
+    style::{Style, Stylize},
+};
 
 /// Input widget made for enum types
 #[derive(Debug, Default, Clone)]
@@ -60,7 +64,9 @@ where
             .border_style(border_style)
             .border_type(ctx.config.border_type.into())
             .style(text_style)
-            .title(self.title.as_str());
+            .title(self.title.as_str())
+            .bg(palette.bg)
+            .fg(palette.fg);
 
         let input = Paragraph::new(self.selected.to_string()).block(input_block);
 

@@ -101,6 +101,7 @@ mod tests {
         Todo {
             id: Uuid::new_v4(),
             title: title.to_string(),
+            title_lower: title.to_lowercase(),
             description: String::new(),
             priority,
             completed: false,

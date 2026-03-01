@@ -8,6 +8,13 @@ pub struct AdaptiveScroll {
 }
 
 impl AdaptiveScroll {
+    pub fn with_position(pos: u16) -> Self {
+        Self {
+            current: Cell::new(pos),
+            max_scroll: Cell::new(0),
+        }
+    }
+
     pub fn scroll_down(&self) {
         self.current.set(self.current.get().saturating_add(1));
     }

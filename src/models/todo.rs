@@ -15,6 +15,9 @@ pub struct Todo {
 
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+
+    #[serde(skip)]
+    pub title_lower: String,
 }
 
 impl Todo {
@@ -24,15 +27,19 @@ impl Todo {
         description: impl Into<String>,
         priority: Option<Priority>,
     ) -> Self {
-        let now: DateTime<Utc> = Utc::now();
+        let now = Utc::now();
+        let title: String = title.into();
+        let title_lower = title.to_lowercase();
+
         Self {
             id: Uuid::new_v4(),
-            title: title.into(),
+            title,
             description: description.into(),
             completed: false,
             priority: priority.unwrap_or_default(),
             created_at: now,
             updated_at: now,
+            title_lower,
         }
     }
 
@@ -43,16 +50,9 @@ impl Todo {
         description: impl Into<String>,
         priority: Option<Priority>,
     ) -> Self {
-        let now: DateTime<Utc> = Utc::now();
-        Self {
-            id,
-            title: title.into(),
-            description: description.into(),
-            priority: priority.unwrap_or(Priority::Low),
-            completed: false,
-            created_at: now,
-            updated_at: now,
-        }
+        let mut todo = Self::new(title, description, priority);
+        todo.id = id;
+        todo
     }
 
     /// Update todo using other todo
@@ -60,6 +60,7 @@ impl Todo {
         self.title = other.title;
         self.description = other.description;
         self.priority = other.priority;
+        self.title_lower = self.title.to_lowercase();
         self.updated_at = Utc::now();
     }
 

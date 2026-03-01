@@ -1,7 +1,7 @@
 use crate::{
     app::TodoService,
     config::Config,
-    core::TodoError,
+    core::{Storage, TodoError},
     models::{Priority, Todo},
     state::{ApplicationState, UIState},
     traits::InteractableEnum,
@@ -39,7 +39,7 @@ impl<'a> ApplicationController<'a> {
 
         match TodoService::append_task(&mut self.state.todos, task, &self.state.sort) {
             Ok(added) => {
-                self.stabilize_ui_focus(Some(id));
+                self.stabilize(Some(id));
                 self.state.mark_as_dirty();
 
                 self.ui.push_notification(
@@ -56,7 +56,7 @@ impl<'a> ApplicationController<'a> {
         match TodoService::update_task(&mut self.state.todos, &id, task, &self.state.sort) {
             Ok(index) => {
                 log::debug!("Dispatching update for task (ID: {})", id);
-                self.stabilize_ui_focus(Some(id));
+                self.stabilize(Some(id));
                 self.state.mark_as_dirty();
 
                 let msg = format!(
@@ -77,7 +77,7 @@ impl<'a> ApplicationController<'a> {
             match TodoService::remove_task(&mut self.state.todos, &id) {
                 Ok(removed) => {
                     log::debug!("Dispatching remove for task '{}'", removed);
-                    self.stabilize_ui_focus(None);
+                    self.stabilize(None);
                     self.state.mark_as_dirty();
 
                     self.ui.push_notification(
@@ -97,7 +97,7 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_toggle(&mut self) {
         if let Some(id) = self.ui.selected_id(self.state) {
             if TodoService::toggle_task(&mut self.state.todos, &id).is_ok() {
-                self.stabilize_ui_focus(Some(id));
+                self.stabilize(Some(id));
                 self.state.mark_as_dirty();
             }
         }
@@ -133,7 +133,7 @@ impl<'a> ApplicationController<'a> {
         if removed > 0 {
             log::info!("Clear successful: {} tasks removed", removed);
             self.state.mark_as_dirty();
-            self.stabilize_ui_focus(None);
+            self.stabilize(None);
 
             let msg: String = format!(
                 "Cleared {} tasks from '{}'",
@@ -152,19 +152,25 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_save(&mut self) -> bool {
         self.config.update_from_ui(self.ui);
 
-        if let Err(e) = self.config.save(None) {
-            self.ui.show_result_popup(Err(e));
-            return false;
-        }
+        let current_id = self.state.selected_id(
+            &self.state.todos,
+            &self.ui.current_filter,
+            &self.ui.search_query(),
+        );
+        let session = self.ui.to_session(current_id);
 
-        match self.state.save(None, &self.config.storage) {
+        match Storage::save(&self.state.todos, session, None, &self.config.storage) {
             Ok(msg) => {
+                self.state.mark_saved();
+                let _ = self.config.save(None);
                 self.ui.show_result_popup(Ok(msg));
+
                 true
             }
             Err(e) => {
+                log::error!("Save failed: {}", e);
                 self.ui.show_result_popup(Err(e));
-                false
+                true
             }
         }
     }
@@ -202,35 +208,22 @@ impl<'a> ApplicationController<'a> {
         self.ui.desc_scroll.reset();
     }
 
-    /// Helper function to synchronize cursor and data
-    pub fn stabilize_ui_focus(&mut self, focus_id: Option<Uuid>) {
-        let filtered_todos = self
+    /// Function to synchronize cursor and data
+    pub fn stabilize(&mut self, focus_id: Option<Uuid>) {
+        let visible_ids: Vec<Uuid> = self
             .ui
             .current_filter
-            .apply(&self.state.todos, &self.ui.search_query());
-        let len: usize = filtered_todos.len();
+            .apply(&self.state.todos, &self.ui.search_query())
+            .iter()
+            .map(|t| t.id)
+            .collect();
+
         log::trace!(
-            "Stabilizing UI focus. Focus ID: {:?}, Filtered count: {}",
+            "Stabilizing UI focus. Focus ID: {:?}, filtered count: {}",
             focus_id,
-            len
+            visible_ids.len()
         );
-
-        if let Some(id) = focus_id {
-            if let Some(pos) = filtered_todos.iter().position(|t| t.id == id) {
-                log::trace!("Focus matched ID {} at position {}", id, pos);
-                self.state.select_state.select(Some(pos));
-                return;
-            }
-        }
-
-        if len == 0 {
-            self.state.select_state.select(None);
-        } else {
-            let current_selected = self.state.select_state.selected();
-            if current_selected.is_none_or(|s| s >= len) {
-                self.state.select_state.select(Some(len.saturating_sub(1)));
-            }
-        }
+        self.state.sync_with_ids(&visible_ids, focus_id);
     }
 }
 
@@ -260,7 +253,9 @@ mod tests {
         path: &Path,
         config: &StorageConfig,
     ) {
-        match state.save(Some(path), config) {
+        let selected_id: Option<Uuid> =
+            state.selected_id(&state.todos, &ui.current_filter, &ui.search_query());
+        match Storage::save(&state.todos, ui.to_session(selected_id), Some(path), config) {
             Ok(string) => ui.show_result_popup(Ok(string)),
             Err(e) => ui.show_result_popup(Err(e)),
         }
@@ -422,7 +417,7 @@ mod tests {
         state.select_state.select(Some(10));
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
-        ctrl.stabilize_ui_focus(None);
+        ctrl.stabilize(None);
 
         assert_eq!(ctrl.state.select_state.selected(), Some(0));
     }

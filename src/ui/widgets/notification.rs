@@ -14,26 +14,32 @@ pub struct Notification {
     pub kind: NotificationKind,
     pub duration: Duration,
     pub created_at: Instant,
+
+    #[cfg(not(test))]
+    last_tick_secs: u64,
+    #[cfg(test)]
+    pub last_tick_secs: u64,
 }
 
 impl Notification {
     /// Creating success notification template
     pub fn success(message: impl Into<String>) -> Self {
+        let duration: Duration = Duration::from_secs(3);
+        let created_at: Instant = Instant::now();
         Self {
             message: message.into(),
             kind: NotificationKind::Success,
-            duration: Duration::from_secs(3),
-            created_at: Instant::now(),
+            duration,
+            created_at,
+            last_tick_secs: duration.as_secs(),
         }
     }
 
     /// Creating error notification template
     pub fn error(message: impl Into<String>) -> Self {
         Self {
-            message: message.into(),
             kind: NotificationKind::Error,
-            duration: Duration::from_secs(3),
-            created_at: Instant::now(),
+            ..Self::success(message)
         }
     }
 
@@ -73,12 +79,39 @@ impl Notification {
         self.created_at.elapsed() >= self.duration
     }
 
+    /// Updates the current state of a timer.
+    /// Returns true, if sec changed and needs redrawing.
+    pub fn tick(&mut self) -> bool {
+        let current_remaining: u64 = self.remaining_secs();
+
+        if current_remaining != self.last_tick_secs {
+            self.last_tick_secs = current_remaining;
+            return true;
+        }
+
+        false
+    }
+
     /// Get icon with corresponding color
     fn icon_with_color(&self, palette: &ThemePalette) -> (&'static str, Color) {
         match self.kind {
             NotificationKind::Success => ("✔", palette.success),
             NotificationKind::Error => ("✘", palette.error),
         }
+    }
+
+    /// Testing method to create expired notification
+    #[cfg(test)]
+    pub fn with_age(mut self, secs: u64) -> Self {
+        self.created_at = Instant::now() - Duration::from_secs(secs);
+        self
+    }
+
+    /// Testing method to set duration
+    #[cfg(test)]
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.duration = duration;
+        self
     }
 }
 
@@ -87,7 +120,6 @@ impl Notification {
 mod tests {
     use super::*;
     use crate::theme::ThemeName;
-    use std::thread::sleep;
 
     /// Mock application for tick() and automatic notifcation closing
     struct MockApplication {
@@ -99,12 +131,17 @@ mod tests {
             Self { notification: None }
         }
 
-        pub fn tick(&mut self) {
-            if let Some(n) = &self.notification
-                && n.created_at.elapsed() >= n.duration
-            {
-                self.notification = None;
+        pub fn tick(&mut self) -> bool {
+            if let Some(n) = &mut self.notification {
+                if n.is_expired() {
+                    self.notification = None;
+                    return true;
+                }
+                if n.tick() {
+                    return true;
+                }
             }
+            false
         }
     }
 
@@ -148,51 +185,43 @@ mod tests {
     }
 
     #[test]
+    fn should_return_true_when_second_changes() {
+        let mut n = Notification::success("Test");
+        n.duration = Duration::from_secs(10);
+
+        n = n.with_age(0);
+        n.last_tick_secs = n.remaining_secs();
+
+        assert!(!n.tick());
+
+        n = n.with_age(2);
+        assert!(n.tick(), "Should return true because 10 -> 8");
+    }
+
+    #[test]
     fn should_test_remaining_seconds_of_notification() {
-        let now: Instant = Instant::now();
-        let notification: Notification = Notification {
-            message: "Test".to_string(),
-            kind: NotificationKind::Success,
-            duration: Duration::from_secs(5),
-            created_at: now,
-        };
+        let notification = Notification::success("Test").with_duration(Duration::from_secs(5));
+        assert!(notification.remaining_secs() <= 5);
 
-        assert!(notification.remaining_secs() <= 4);
-
-        sleep(Duration::from_secs(1));
-        assert!(notification.remaining_secs() <= 3);
+        let aged_notification = notification.with_age(2);
+        assert!(aged_notification.remaining_secs() <= 3);
     }
 
     #[test]
     fn should_notification_be_expired() {
-        let notification: Notification = Notification {
-            message: "Test".to_string(),
-            kind: NotificationKind::Success,
-            duration: Duration::from_millis(100),
-            created_at: Instant::now(),
-        };
-
+        let notification = Notification::success("Test").with_duration(Duration::from_millis(100));
         assert!(!notification.is_expired());
 
-        sleep(Duration::from_millis(150));
-        assert!(notification.is_expired());
+        let expired_notification = notification.with_age(1);
+        assert!(expired_notification.is_expired());
     }
 
     #[test]
     fn should_remove_notification_after_time_expired() {
-        let mut app: MockApplication = MockApplication::new();
+        let mut app = MockApplication::new();
+        app.notification = Some(Notification::success("Expired").with_age(4));
 
-        let past: Instant = Instant::now() - Duration::from_secs(4);
-        let notification: Notification = Notification {
-            message: "Expired".to_string(),
-            kind: NotificationKind::Success,
-            duration: Duration::from_secs(3),
-            created_at: past,
-        };
-
-        app.notification = Some(notification);
         app.tick();
-
         assert!(app.notification.is_none());
     }
 

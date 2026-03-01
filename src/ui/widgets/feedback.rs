@@ -39,10 +39,13 @@ impl FeedbackWidget {
             message = self.message(&area.width, &area.height, colors, &palette);
             ctx.render_widget(Clear, area);
 
+            let background_fill: Block = Block::default().bg(palette.bg);
+            ctx.render_widget(background_fill, area);
+
             let p: Paragraph = Paragraph::new(Text::from(message))
                 .style(Style::default().fg(palette.fg))
                 .wrap(Wrap { trim: false })
-                .block(Block::default());
+                .centered();
 
             ctx.render_widget(p, result_area);
             return;

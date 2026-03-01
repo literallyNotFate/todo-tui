@@ -14,57 +14,53 @@ pub struct EventHandler;
 /// Handling all possible keys
 impl EventHandler {
     /// Main key event handling
-    pub fn handle_key(app: &mut Application, event: KeyEvent) {
+    pub fn handle_key(app: &mut Application, event: KeyEvent) -> bool {
         if is_terminal_small(app.size.0, app.size.1) {
             if is_exit_key(&event) {
                 app.running = false;
             }
 
-            return;
+            return false;
         }
 
         if is_kill_process_key(&event) {
             app.running = false;
-            return;
+            return false;
         }
+
+        let mut ctrl = ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config);
+        let mut changed: bool = false;
 
         match app.mode {
             ApplicationMode::Form | ApplicationMode::Search => {
-                let mut ctrl =
-                    ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config);
-
                 if event.code == KeyCode::Esc {
                     ctrl.ui.task_form = None;
                     ctrl.ui.search_input = None;
-                    drop(ctrl);
-
                     app.restore_base_mode();
-                } else if app.mode == ApplicationMode::Form {
-                    Self::handle_form_mode(event, &mut ctrl, &mut app.mode);
-                } else {
-                    Self::handle_search_mode(event, &mut ctrl, &mut app.mode);
+                    return true;
                 }
 
-                return;
+                changed = if app.mode == ApplicationMode::Form {
+                    Self::handle_form_mode(event, &mut ctrl, &mut app.mode)
+                } else {
+                    Self::handle_search_mode(event, &mut ctrl, &mut app.mode)
+                };
+
+                return changed;
             }
-            _ if app.ui.modal.is_some() => {
-                let mut ctrl =
-                    ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config);
-                Self::handle_modal(event, &mut ctrl, &mut app.running);
-                return;
+            _ if ctrl.ui.modal.is_some() => {
+                return Self::handle_modal(event, &mut ctrl, &mut app.running);
             }
             _ => {}
         }
 
-        let mut ctrl = ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config);
         match (event.code, event.modifiers) {
             (KeyCode::Char('q') | KeyCode::Esc, KeyModifiers::NONE) => {
                 log::info!("Exit requested via key event");
                 if ctrl.state.any_unsaved_changes() {
                     ctrl.ui.unsaved_confirm();
+                    changed = true;
                 } else {
-                    drop(ctrl);
-
                     app.config.update_from_ui(&app.ui);
                     let _ = app.config.save(None);
                     app.running = false;
@@ -73,51 +69,82 @@ impl EventHandler {
             (KeyCode::Char('a'), KeyModifiers::NONE) => {
                 ctrl.ui.task_form = Some(Form::new());
                 app.mode = ApplicationMode::Form;
+                changed = true;
             }
             (KeyCode::Char('s'), KeyModifiers::CONTROL) => {
                 if ctrl.config.behavior.confirm_before_save {
                     ctrl.ui.save_confirm();
+                    changed = true;
                 } else {
-                    let _ = ctrl.dispatch_save();
+                    changed = ctrl.dispatch_save();
                 }
             }
-            (KeyCode::Char('t'), KeyModifiers::NONE) => ctrl.ui.next_theme(),
-            (KeyCode::Char('t'), KeyModifiers::CONTROL) => ctrl.ui.prev_theme(),
-            (KeyCode::Char('b'), KeyModifiers::NONE) => ctrl.ui.toggle_sidebar(),
-            (KeyCode::Char('m'), KeyModifiers::NONE) => ctrl.ui.toggle_mode(),
+            (KeyCode::Char('t'), KeyModifiers::NONE) => {
+                ctrl.ui.next_theme();
+                changed = true;
+            }
+            (KeyCode::Char('t'), KeyModifiers::CONTROL) => {
+                ctrl.ui.prev_theme();
+                changed = true;
+            }
+            (KeyCode::Char('b'), KeyModifiers::NONE) => {
+                ctrl.ui.toggle_sidebar();
+                changed = true;
+            }
+            (KeyCode::Char('m'), KeyModifiers::NONE) => {
+                ctrl.ui.toggle_mode();
+                changed = true;
+            }
             (KeyCode::Char('x'), KeyModifiers::NONE) => {
                 log::info!("Requesting confirmation to CLEAR tasks");
                 ctrl.ui.clear_confirm();
+                changed = true;
             }
-            (KeyCode::Char('j'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_down(),
-            (KeyCode::Char('k'), KeyModifiers::ALT) => ctrl.ui.sidebar_scroll.scroll_up(),
+            (KeyCode::Char('j'), KeyModifiers::ALT) => {
+                ctrl.ui.sidebar_scroll.scroll_down();
+                changed = true;
+            }
+            (KeyCode::Char('k'), KeyModifiers::ALT) => {
+                ctrl.ui.sidebar_scroll.scroll_up();
+                changed = true;
+            }
             (KeyCode::Char('a'), KeyModifiers::ALT) => {
                 app.autosave.toggle_enabled();
                 log::info!("Autosave toggled: enabled={}", app.autosave.enabled);
+                changed = true;
             }
             (KeyCode::Char('s'), KeyModifiers::NONE) => {
                 ctrl.state.sort.parameter = ctrl.state.sort.parameter.next();
                 log::debug!("Sort parameter changed to: {:?}", ctrl.state.sort.parameter);
                 ctrl.dispatch_sorting();
+                changed = true;
             }
             (KeyCode::Char('r'), KeyModifiers::NONE) => {
                 ctrl.state.sort.order = ctrl.state.sort.order.next();
                 log::debug!("Sort order toggled: {:?}", ctrl.state.sort.order);
                 ctrl.dispatch_sorting();
+                changed = true;
             }
-            _ => Self::handle_main_mode(event, &mut ctrl, &mut app.mode, &mut app.running),
+            _ => {
+                changed = Self::handle_main_mode(event, &mut ctrl, &mut app.mode, &mut app.running);
+            }
         }
+
+        changed
     }
 
     /// Handle modal keys (confirm/popup)
-    fn handle_modal(event: KeyEvent, ctrl: &mut ApplicationController, running: &mut bool) {
+    fn handle_modal(event: KeyEvent, ctrl: &mut ApplicationController, running: &mut bool) -> bool {
         let result = {
-            let modal_wrapper = ctrl.ui.modal.as_mut().unwrap();
+            let modal_wrapper = match ctrl.ui.modal.as_mut() {
+                Some(m) => m,
+                None => return false,
+            };
             modal_wrapper.modal.handle_key(event.code)
         };
 
         if let Some(result) = result {
-            let action: ModalAction = ctrl.ui.modal.as_ref().unwrap().action.clone();
+            let action = ctrl.ui.modal.as_ref().unwrap().action.clone();
             ctrl.ui.close_modal();
 
             if result == ModalResult::Confirmed {
@@ -138,6 +165,10 @@ impl EventHandler {
             } else {
                 log::debug!("Modal cancelled: action={:?}", action);
             }
+
+            true
+        } else {
+            true
         }
     }
 
@@ -147,14 +178,15 @@ impl EventHandler {
         ctrl: &mut ApplicationController,
         mode: &mut ApplicationMode,
         _running: &mut bool,
-    ) {
+    ) -> bool {
         match event.code {
-            KeyCode::Char('h') | KeyCode::Char('l') => {
+            KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Left | KeyCode::Right => {
                 ctrl.ui.toggle_focus();
                 *mode = match ctrl.ui.focus_area {
                     FocusArea::LeftPanel => ApplicationMode::Browsing,
                     FocusArea::MainContent => ApplicationMode::List,
                 };
+                true
             }
             _ => match ctrl.ui.focus_area {
                 FocusArea::LeftPanel => Self::handle_left_panel(event.code, ctrl),
@@ -164,25 +196,36 @@ impl EventHandler {
     }
 
     /// Handles main content keys
+
     fn handle_main_content(
         code: KeyCode,
         ctrl: &mut ApplicationController,
         mode: &mut ApplicationMode,
-    ) {
+    ) -> bool {
         match code {
-            KeyCode::Char('j') | KeyCode::Down => ctrl.dispatch_move_selection(1),
-            KeyCode::Char('k') | KeyCode::Up => ctrl.dispatch_move_selection(-1),
+            KeyCode::Char('j') | KeyCode::Down => {
+                ctrl.dispatch_move_selection(1);
+                true
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                ctrl.dispatch_move_selection(-1);
+                true
+            }
+
             KeyCode::Enter => {
                 log::trace!("Task status toggle requested via Enter");
                 ctrl.dispatch_toggle();
+                true
             }
             KeyCode::Char('e') => {
                 if let Some(id) = ctrl.ui.selected_id(ctrl.state) {
                     if let Some(task) = ctrl.state.todos.iter().find(|t| t.id == id) {
                         ctrl.ui.task_form = Some(Form::from(&task));
                         *mode = ApplicationMode::Form;
+                        return true;
                     }
                 }
+                false
             }
             KeyCode::Char('d') => {
                 if ctrl.config.behavior.confirm_before_remove {
@@ -190,42 +233,77 @@ impl EventHandler {
                     ctrl.ui.remove_confirm();
                 } else {
                     log::info!("Direct task removal (no confirm)");
-                    ctrl.dispatch_remove()
+                    ctrl.dispatch_remove();
                 }
+                true
             }
             KeyCode::Char('J') => {
                 log::trace!("Moving task down");
                 ctrl.dispatch_move_tasks(1);
+                true
             }
             KeyCode::Char('K') => {
                 log::trace!("Moving task up");
                 ctrl.dispatch_move_tasks(-1);
+                true
             }
-            KeyCode::Char('[') => ctrl.ui.desc_scroll.scroll_up(),
-            KeyCode::Char(']') => ctrl.ui.desc_scroll.scroll_down(),
+            KeyCode::Char('[') => {
+                ctrl.ui.desc_scroll.scroll_up();
+                true
+            }
+            KeyCode::Char(']') => {
+                ctrl.ui.desc_scroll.scroll_down();
+                true
+            }
             KeyCode::Char('/') => {
                 log::debug!("Entering search mode");
                 ctrl.ui.show_search();
                 *mode = ApplicationMode::Search;
+                true
             }
-            _ => {}
+            _ => false,
         }
     }
 
     /// Handles left panel keys
-    fn handle_left_panel(code: KeyCode, ctrl: &mut ApplicationController) {
-        match code {
-            KeyCode::Char('j') | KeyCode::Down => ctrl.ui.next_tab_filter(),
-            KeyCode::Char('k') | KeyCode::Up => ctrl.ui.prev_tab_filter(),
-            KeyCode::Char('1') => ctrl.ui.change_filter(Filter::All),
-            KeyCode::Char('2') => ctrl.ui.change_filter(Filter::Active),
-            KeyCode::Char('3') => ctrl.ui.change_filter(Filter::Completed),
-            KeyCode::Char('4') => ctrl.ui.change_filter(Filter::HighPriority),
-            KeyCode::Char('5') => ctrl.ui.change_filter(Filter::Today),
-            _ => return,
+    fn handle_left_panel(code: KeyCode, ctrl: &mut ApplicationController) -> bool {
+        let changed = match code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                ctrl.ui.next_tab_filter();
+                true
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                ctrl.ui.prev_tab_filter();
+                true
+            }
+            KeyCode::Char('1') => {
+                ctrl.ui.change_filter(Filter::All);
+                true
+            }
+            KeyCode::Char('2') => {
+                ctrl.ui.change_filter(Filter::Active);
+                true
+            }
+            KeyCode::Char('3') => {
+                ctrl.ui.change_filter(Filter::Completed);
+                true
+            }
+            KeyCode::Char('4') => {
+                ctrl.ui.change_filter(Filter::HighPriority);
+                true
+            }
+            KeyCode::Char('5') => {
+                ctrl.ui.change_filter(Filter::Today);
+                true
+            }
+            _ => return false,
+        };
+
+        if changed {
+            ctrl.stabilize(None);
         }
 
-        ctrl.stabilize_ui_focus(None);
+        changed
     }
 
     /// Handles form keys
@@ -233,29 +311,34 @@ impl EventHandler {
         event: KeyEvent,
         ctrl: &mut ApplicationController,
         mode: &mut ApplicationMode,
-    ) {
-        if let Some(form) = &mut ctrl.ui.task_form {
-            match form.handle_key(&event) {
-                WidgetResponse::Submit => {
-                    let (id, title, desc, priority) = form.data();
-                    if let Some(task_id) = id {
-                        log::info!("Form submitted: updating task '{}' ({})", title, task_id);
-                        let updated: Todo = Todo::from_id(task_id, title, desc, Some(priority));
-                        ctrl.dispatch_update(task_id, updated);
-                    } else {
-                        log::info!("Form submitted: creating new task '{}'", title);
-                        ctrl.dispatch_append(title, desc, Some(priority));
-                    }
+    ) -> bool {
+        let form = match &mut ctrl.ui.task_form {
+            Some(f) => f,
+            None => return false,
+        };
 
-                    ctrl.ui.task_form = None;
-                    *mode = ApplicationMode::List;
+        match form.handle_key(&event) {
+            WidgetResponse::Submit => {
+                let (id, title, desc, priority) = form.data();
+                if let Some(task_id) = id {
+                    log::info!("Form submitted: updating task '{}' ({})", title, task_id);
+                    let updated = Todo::from_id(task_id, title, desc, Some(priority));
+                    ctrl.dispatch_update(task_id, updated);
+                } else {
+                    log::info!("Form submitted: creating new task '{}'", title);
+                    ctrl.dispatch_append(title, desc, Some(priority));
                 }
-                WidgetResponse::Cancel => {
-                    ctrl.ui.task_form = None;
-                    *mode = ApplicationMode::List;
-                }
-                WidgetResponse::Continue => {}
+
+                ctrl.ui.task_form = None;
+                *mode = ApplicationMode::List;
+                true
             }
+            WidgetResponse::Cancel => {
+                ctrl.ui.task_form = None;
+                *mode = ApplicationMode::List;
+                true
+            }
+            WidgetResponse::Continue => true,
         }
     }
 
@@ -264,19 +347,27 @@ impl EventHandler {
         event: KeyEvent,
         ctrl: &mut ApplicationController,
         mode: &mut ApplicationMode,
-    ) {
-        if let Some(input) = &mut ctrl.ui.search_input {
-            match input.handle_key(&event.code) {
-                WidgetResponse::Submit => {
-                    *mode = ApplicationMode::List;
-                    ctrl.ui.focus_area = FocusArea::MainContent;
-                }
-                WidgetResponse::Cancel => {
-                    ctrl.ui.search_input = None;
-                    *mode = ApplicationMode::Browsing;
-                    ctrl.ui.focus_area = FocusArea::LeftPanel;
-                }
-                WidgetResponse::Continue => ctrl.state.select_state.select(Some(0)),
+    ) -> bool {
+        let input = match &mut ctrl.ui.search_input {
+            Some(i) => i,
+            None => return false,
+        };
+
+        match input.handle_key(&event.code) {
+            WidgetResponse::Submit => {
+                *mode = ApplicationMode::List;
+                ctrl.ui.focus_area = FocusArea::MainContent;
+                true
+            }
+            WidgetResponse::Cancel => {
+                ctrl.ui.search_input = None;
+                *mode = ApplicationMode::Browsing;
+                ctrl.ui.focus_area = FocusArea::LeftPanel;
+                true
+            }
+            WidgetResponse::Continue => {
+                ctrl.state.select_state.select(Some(0));
+                true
             }
         }
     }
@@ -306,6 +397,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{Config, StorageConfig},
+        core::Storage,
         models::{SortBy, SortOrder},
         state::{ApplicationState, UIState},
     };
@@ -344,7 +436,14 @@ mod tests {
             ctrl.ui.close_modal();
 
             if result == ModalResult::Confirmed && action == ModalAction::UnsavedExit {
-                match ctrl.state.save(Some(path), config) {
+                let current_id = ctrl.state.selected_id(
+                    &ctrl.state.todos,
+                    &ctrl.ui.current_filter,
+                    &ctrl.ui.search_query(),
+                );
+                let session = ctrl.ui.to_session(current_id);
+
+                match Storage::save(&ctrl.state.todos, session, Some(path), config) {
                     Ok(string) => ctrl.ui.show_result_popup(Ok(string)),
                     Err(e) => ctrl.ui.show_result_popup(Err(e)),
                 }
@@ -604,14 +703,16 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn should_panic_if_no_modal_exists() {
+    fn should_do_nothing_if_no_modal_exists() {
         let (mut state, mut ui, _, mut config, mut running) = setup_ctx();
         ui.modal = None;
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
 
         let event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         EventHandler::handle_modal(event, &mut ctrl, &mut running);
+
+        assert!(running);
+        assert!(ui.modal.is_none());
     }
 
     #[test]

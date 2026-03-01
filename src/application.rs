@@ -1,9 +1,9 @@
 use crate::{
     config::Config,
-    core::{ApplicationError, ApplicationMode, Autosave},
+    core::{ApplicationError, ApplicationMode, Autosave, Storage},
     enums::FocusArea,
     events::EventHandler,
-    state::{ApplicationState, UIState},
+    state::{ApplicationResult, ApplicationState, UIState},
     ui::Renderer,
 };
 use ratatui::{
@@ -13,8 +13,11 @@ use ratatui::{
         terminal,
     },
 };
-use std::time::{Duration, Instant};
 
+/// Tick rate of a application
+const TICK_RATE: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Application with renderer, state, config and autosave
 pub struct Application {
     pub data: ApplicationState,
     pub ui: UIState,
@@ -25,24 +28,28 @@ pub struct Application {
 
     pub config: Config,
     pub size: (u16, u16),
+
+    pub ticks_count: u64,
 }
 
 impl Application {
     pub fn new(config: Config, config_error: Option<ApplicationError>) -> Self {
         let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
+        let storage_data = Storage::load(None, &config.storage).unwrap_or_default();
 
         let mut app = Self {
-            ui: UIState::new(config.ui.clone()),
-            data: ApplicationState::new(&config.storage),
+            data: ApplicationState::new(storage_data.todos),
+            ui: UIState::from(storage_data.ui_session.clone(), &config.ui),
+            autosave: Autosave::from(&config.storage),
             config,
             mode: ApplicationMode::Browsing,
             running: true,
             renderer: Renderer,
-            autosave: Autosave::new(false),
             size,
+            ticks_count: 0,
         };
 
-        app.setup_autosave();
+        app.sync_ui(storage_data.ui_session.last_selected_id);
         if let Some(e) = config_error {
             log::warn!("Application: Config loaded with errors: {}", e);
             app.ui.show_result_popup(Err(e));
@@ -54,28 +61,38 @@ impl Application {
 
     pub fn run(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         log::info!("Run: Entering main event loop, tick rate 100 ms");
-        const TICK_RATE: Duration = Duration::from_millis(100);
-        let mut last_tick: Instant = Instant::now();
+        let mut last_tick = std::time::Instant::now();
+        let mut needs_redraw: bool = true;
 
         while self.running {
-            terminal.draw(|frame| self.render(frame))?;
+            if needs_redraw {
+                terminal.draw(|frame| self.render(frame))?;
+                needs_redraw = false;
+            }
 
-            let timeout: Duration = TICK_RATE.saturating_sub(last_tick.elapsed());
+            let timeout = TICK_RATE.saturating_sub(last_tick.elapsed());
 
             if event::poll(timeout)? {
                 match event::read()? {
-                    Event::Resize(w, h) => self.size = (w, h),
+                    Event::Resize(w, h) => {
+                        self.size = (w, h);
+                        needs_redraw = true;
+                    }
                     Event::Key(key_event) => {
                         self.autosave.register_activity();
-                        EventHandler::handle_key(self, key_event);
+                        if EventHandler::handle_key(self, key_event) {
+                            needs_redraw = true;
+                        }
                     }
                     _ => {}
                 }
             }
 
             if last_tick.elapsed() >= TICK_RATE {
-                self.tick();
-                last_tick = Instant::now();
+                if self.tick() {
+                    needs_redraw = true;
+                }
+                last_tick = std::time::Instant::now();
             }
         }
 
@@ -90,66 +107,111 @@ impl Application {
     }
 
     /// Tick function (for notification and autosave)
-    pub fn tick(&mut self) {
-        self.ui.expire_notification(&mut self.data.notification);
-        let has_changes: bool = self.data.any_unsaved_changes();
+    pub fn tick(&mut self) -> bool {
+        let mut needs_redraw = false;
+        let ticks_per_second = 10;
+
+        if self.ui.expire_notification(&mut self.data.notification) {
+            needs_redraw = true;
+        }
+
+        // Every 1 second redrawing created at task time
+        if self.ticks_count % ticks_per_second == 0 {
+            needs_redraw = true;
+        }
+
+        self.ticks_count = self.ticks_count.wrapping_add(1);
+        if self.ticks_count % (ticks_per_second * 20) == 0 && self.ui.config.use_system_theme {
+            if self.ui.apply_system_theme() {
+                log::info!("Theme changed by system, redrawing...");
+                needs_redraw = true;
+            }
+        }
+
+        // 3. Автосохранение (Логика данных)
+        let has_changes = self.data.any_unsaved_changes();
 
         if self.autosave.enabled {
             if has_changes && !self.autosave.last_tick_had_changes {
                 self.autosave.reset_timer();
+                needs_redraw = true;
+            }
+
+            if self.autosave.tick(has_changes) {
+                needs_redraw = true;
             }
 
             if has_changes && self.autosave.should_save(has_changes) {
-                log::debug!("Autosave: Triggered, syncing config and data");
+                log::debug!("Autosave: Triggered");
                 self.config.update_from_ui(&self.ui);
 
-                let config_saved = self.config.save(None);
-                let data_saved = self.data.save(None, &self.config.storage);
+                match self.save_all() {
+                    Ok(_) => {
+                        log::info!("Autosave: Successfully saved everything");
+                        self.autosave.reset_timer();
+                        let _ = self.config.save(None);
 
-                if let Err(e) = &config_saved {
-                    log::error!("Autosave: Config save failed: {}", e);
-                }
-                if let Err(e) = &data_saved {
-                    log::error!("Autosave: Data save failed: {}", e);
-                }
-
-                if config_saved.is_ok() && data_saved.is_ok() {
-                    log::info!("Autosave: Successfully saved");
-                    self.autosave.reset_timer();
+                        needs_redraw = true;
+                    }
+                    Err(e) => log::error!("Autosave: Failed to save: {}", e),
                 }
             }
-
             self.autosave.last_tick_had_changes = has_changes;
         }
+
+        needs_redraw
+    }
+
+    pub fn save_all(&mut self) -> ApplicationResult<()> {
+        let current_id = self.data.selected_id(
+            &self.data.todos,
+            &self.ui.current_filter,
+            &self.ui.search_query(),
+        );
+
+        let session = self.ui.to_session(current_id);
+        Storage::save(&self.data.todos, session, None, &self.config.storage)?;
+
+        self.data.mark_saved();
+        Ok(())
     }
 
     /// Synchronizing selection after tab switching
-    pub fn sync_ui(&mut self) {
-        let query = self.ui.search_query();
-        let indices = self.ui.current_filter.apply(&self.data.todos, &query);
-        let visible_count = indices.len();
+    pub fn sync_ui(&mut self, target_id: Option<uuid::Uuid>) {
+        let query: &str = self.ui.search_query();
+        let filtered_ids: Vec<uuid::Uuid> = self
+            .ui
+            .current_filter
+            .apply(&self.data.todos, query)
+            .iter()
+            .map(|t| t.id)
+            .collect();
 
-        if visible_count == 0 {
-            log::debug!("UI Sync: No visible tasks, clearing selection");
-            self.data.select_state.select(None);
-        } else {
-            let current = self.data.select_state.selected();
-            match current {
-                None => self.data.select_state.select(Some(0)),
-                Some(idx) if idx >= visible_count => {
-                    self.data.select_state.select(Some(visible_count - 1));
-                }
-                _ => {}
+        let id_to_find = target_id.or(self.data.last_selected_id);
+
+        if let Some(id) = id_to_find {
+            if let Some(pos) = filtered_ids.iter().position(|&uid| uid == id) {
+                self.data.select_state.select(Some(pos));
+                self.data.last_selected_id = Some(id);
+                return;
             }
-
-            log::trace!(
-                "UI Sync: Filter: {:?}, Query: '{}', Visible: {}, Selected: {:?}",
-                self.ui.current_filter,
-                query,
-                visible_count,
-                self.data.select_state.selected()
-            );
         }
+
+        self.data.clamp_selection(filtered_ids.len());
+
+        self.data.last_selected_id = self
+            .data
+            .select_state
+            .selected()
+            .and_then(|idx| filtered_ids.get(idx).cloned());
+
+        log::trace!(
+            "UI Sync: Filter: {:?}, Query: '{}', Visible IDs: {}, Selected: {:?}",
+            self.ui.current_filter,
+            query,
+            filtered_ids.len(),
+            self.data.select_state.selected()
+        );
     }
 
     /// Restoring base mode (after form exit)
@@ -167,12 +229,6 @@ impl Application {
             Err(e) => (Config::default(), Some(e)),
         }
     }
-
-    /// Setup autosave with config values
-    pub fn setup_autosave(&mut self) {
-        self.autosave.enabled = self.config.storage.autosave_enabled;
-        self.autosave.interval = Duration::from_secs(self.config.storage.safe_interval());
-    }
 }
 
 impl Default for Application {
@@ -186,6 +242,7 @@ impl Default for Application {
             autosave: Autosave::new(false),
             size: (80, 24),
             config: Config::default(),
+            ticks_count: 0,
         }
     }
 }
@@ -213,13 +270,15 @@ mod tests {
                 app.autosave.reset_timer();
             }
 
+            let session = app.ui.to_session(None);
             if has_changes && app.autosave.should_save(has_changes) {
-                if app.data.save(path, &app.config.storage).is_ok() {
+                if Storage::save(&app.data.todos, session, path, &app.config.storage).is_ok() {
+                    app.data.mark_saved();
                     app.autosave.reset_timer();
                 }
             }
 
-            app.autosave.last_tick_had_changes = has_changes;
+            app.autosave.last_tick_had_changes = app.data.any_unsaved_changes();
         }
     }
 
@@ -259,7 +318,7 @@ mod tests {
         app.data.select_state.select(Some(5));
         app.data.todos.clear();
 
-        app.sync_ui();
+        app.sync_ui(None);
 
         assert_eq!(
             app.data.select_state.selected(),
@@ -279,7 +338,7 @@ mod tests {
         app.data.select_state.select(Some(2));
         app.data.todos.truncate(1);
 
-        app.sync_ui();
+        app.sync_ui(None);
 
         assert_eq!(
             app.data.select_state.selected(),
@@ -295,7 +354,7 @@ mod tests {
         app.data.todos.push(Todo::new("Task", "", None));
         app.data.select_state.select(None);
 
-        app.sync_ui();
+        app.sync_ui(None);
 
         assert_eq!(
             app.data.select_state.selected(),
@@ -315,7 +374,7 @@ mod tests {
         app.ui.current_filter = Filter::Completed;
         app.data.select_state.select(Some(1));
 
-        app.sync_ui();
+        app.sync_ui(None);
 
         assert_eq!(app.data.select_state.selected(), Some(0));
     }
@@ -349,7 +408,13 @@ mod tests {
         app.autosave.enabled = true;
 
         app.data.todos.push(Todo::new("Initial", "", None));
-        let _ = app.data.save(Some(&path), &app.config.storage);
+        let _ = Storage::save(
+            &app.data.todos,
+            UIState::default().to_session(None),
+            Some(&path),
+            &app.config.storage,
+        );
+        app.data.mark_saved();
         assert!(!app.data.any_unsaved_changes());
 
         app.data.todos.push(Todo::new("Change", "", None));

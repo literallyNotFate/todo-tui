@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// Which area of menu is being selected
-#[derive(Default, PartialEq, Debug, Clone, Copy)]
+#[derive(Default, Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
 pub enum FocusArea {
     #[default]
     LeftPanel, // Sidebar

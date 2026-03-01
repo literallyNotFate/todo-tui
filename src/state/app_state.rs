@@ -1,6 +1,5 @@
 use crate::{
-    config::StorageConfig,
-    core::{ApplicationError, Storage},
+    core::ApplicationError,
     models::{Filter, Priority, Sort, Todo},
     ui::Notification,
 };
@@ -9,7 +8,6 @@ use ratatui::widgets::TableState;
 use std::{
     cell::Cell,
     hash::{DefaultHasher, Hash, Hasher},
-    path::Path,
 };
 use uuid::Uuid;
 
@@ -26,18 +24,31 @@ pub struct ApplicationState {
     current_hash: Cell<u64>,
     needs_rehash: Cell<bool>,
     is_unsaved_cache: Cell<bool>,
+
+    pub last_selected_id: Option<Uuid>,
 }
 
 /// Service response (data or TodoError/StorageError)
 pub type ApplicationResult<T> = Result<T, ApplicationError>;
 
 impl ApplicationState {
-    pub fn new(config: &StorageConfig) -> Self {
-        let mut state = Self::load(None, config).unwrap_or_default();
-        if state.todos.is_empty() {
-            let _ = state.save(None, config);
+    pub fn new(mut todos: Vec<Todo>) -> Self {
+        for todo in &mut todos {
+            todo.title_lower = todo.title.to_lowercase();
         }
 
+        let mut state: Self = Self {
+            todos,
+            ..Self::default()
+        };
+
+        state.mark_saved();
+        if let Some(last) = state.todos.last() {
+            state.select_state.select(Some(state.todos.len() - 1));
+            state.last_selected_id = Some(last.id);
+        }
+
+        log::debug!("ApplicationState initialized. Tasks: {}", state.todos.len());
         state
     }
 
@@ -52,6 +63,7 @@ impl ApplicationState {
             current_hash: Cell::new(0),
             needs_rehash: Cell::new(true),
             is_unsaved_cache: Cell::new(false),
+            last_selected_id: None,
         }
     }
 
@@ -89,6 +101,14 @@ impl ApplicationState {
         self.needs_rehash.set(true);
     }
 
+    /// State sync: marks current hash as saved
+    pub fn mark_saved(&mut self) {
+        let current: u64 = self.hash_state();
+        self.saved_hash = current;
+        self.is_unsaved_cache.set(false);
+        log::debug!("State marked as saved at hash: {:016X}", current);
+    }
+
     /// Navigate through tasks
     pub fn move_selection(&mut self, delta: i32, displayed_count: usize, wrap: bool) {
         if displayed_count == 0 {
@@ -119,49 +139,6 @@ impl ApplicationState {
             displayed_count
         );
         self.select_state.select(Some(next));
-    }
-
-    /// Save todos to a file
-    pub fn save(
-        &mut self,
-        path: Option<&Path>,
-        config: &StorageConfig,
-    ) -> ApplicationResult<String> {
-        Storage::save(&self.todos, path, config)?;
-        self.saved_hash = self.hash_state();
-        self.is_unsaved_cache.set(false);
-
-        log::info!(
-            "Data state synchronized. Saved hash: {:016X}",
-            self.saved_hash
-        );
-        Ok("Tasks were saved!".to_string())
-    }
-
-    /// Load todos from a file
-    pub fn load(path: Option<&Path>, config: &StorageConfig) -> ApplicationResult<Self> {
-        log::debug!("Loading application state...");
-        let todos: Vec<Todo> = Storage::load(path, config)?;
-        let mut state: ApplicationState = Self {
-            todos,
-            ..Self::default()
-        };
-
-        let current: u64 = state.hash_state();
-        state.saved_hash = current;
-        state.is_unsaved_cache.set(false);
-
-        if state.todos.is_empty() {
-            state.select_state.select(None);
-        } else {
-            state.select_state.select_last();
-        }
-
-        log::info!(
-            "State loaded successfully. Tasks count: {}",
-            state.todos.len()
-        );
-        Ok(state)
     }
 
     /// Return filtered tasks based on active filter selection
@@ -219,6 +196,23 @@ impl ApplicationState {
         Some((index_a, index_b))
     }
 
+    /// Helper function to select from visible amount of todos
+    pub fn clamp_selection(&mut self, visible_count: usize) {
+        if visible_count == 0 {
+            self.select_state.select(None);
+            self.last_selected_id = None;
+            return;
+        }
+
+        let new_idx = self
+            .select_state
+            .selected()
+            .map(|idx| idx.min(visible_count.saturating_sub(1)))
+            .unwrap_or(0);
+
+        self.select_state.select(Some(new_idx));
+    }
+
     /// Return currently selected todo
     pub fn selected<'a>(
         &self,
@@ -229,6 +223,35 @@ impl ApplicationState {
         let filtered = filter.apply(todos, query);
         let index = self.select_state.selected()?;
         filtered.get(index).copied()
+    }
+
+    /// Return id of current selected todo
+    pub fn selected_id(&self, todos: &[Todo], filter: &Filter, query: &str) -> Option<Uuid> {
+        self.selected(todos, filter, query).map(|t| t.id)
+    }
+
+    /// Sync focus with current state
+    pub fn sync_with_ids(&mut self, visible_ids: &[Uuid], focus_id: Option<Uuid>) {
+        let len: usize = visible_ids.len();
+
+        if let Some(id) = focus_id {
+            if let Some(pos) = visible_ids.iter().position(|&i| i == id) {
+                self.select_state.select(Some(pos));
+                self.last_selected_id = Some(id);
+                return;
+            }
+        }
+
+        if len == 0 {
+            self.select_state.select(None);
+            self.last_selected_id = None;
+        } else {
+            let current_idx = self.select_state.selected().unwrap_or(0);
+            let new_idx = current_idx.min(len.saturating_sub(1));
+
+            self.select_state.select(Some(new_idx));
+            self.last_selected_id = visible_ids.get(new_idx).copied();
+        }
     }
 }
 
@@ -311,9 +334,13 @@ mod tests {
             Todo::new("A", "", Some(Priority::Low)),
             Todo::new("B", "", Some(Priority::Low)),
         ];
-        state.select_state.select(Some(1));
 
+        state.select_state.select(Some(1));
+        let id: Uuid = state.todos[1].id;
         let selected: Option<&Todo> = state.selected(&state.todos, &Filter::All, "");
+        let selected_id: Option<Uuid> = state.selected_id(&state.todos, &Filter::All, "");
+
         assert_eq!(selected.unwrap().title, "B");
+        assert_eq!(selected_id.unwrap(), id);
     }
 }

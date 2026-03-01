@@ -37,7 +37,7 @@ impl<'a> SidebarWidget<'a> {
         let filters_inner_area: Rect = filters_block.inner(sidebar_layout[0]);
         let filter_tab_layout: std::rc::Rc<[Rect]> = self.filters_tab_layout(filters_inner_area);
 
-        let query: String = self.ui.search_query();
+        let query: &str = self.ui.search_query();
         let list: List = self.construct_list(&query, ctx.is_focused(focus_area), &palette);
 
         let mut state: ListState = ListState::default();
