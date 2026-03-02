@@ -15,7 +15,7 @@ pub enum Filter {
 }
 
 impl InteractableEnum for Filter {
-    fn all_variants() -> &'static [Self] {
+    fn all() -> &'static [Self] {
         &[
             Self::All,
             Self::Active,

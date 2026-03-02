@@ -57,6 +57,7 @@ impl<'a> SidebarWidget<'a> {
         let hotkeys_block = Block::bordered()
             .title(" Hotkeys ")
             .border_style(Style::default().fg(palette.muted))
+            .border_type(ctx.config.border_type.into())
             .bg(palette.bg2);
 
         let mut hotkeys_lines = ctx.hotkeys();
@@ -84,7 +85,7 @@ impl<'a> SidebarWidget<'a> {
     fn construct_list(&self, query: &str, focused: bool, palette: &ThemePalette) -> List<'static> {
         use ratatui::widgets::ListItem;
 
-        let items: Vec<ListItem> = Filter::all_variants()
+        let items: Vec<ListItem> = Filter::all()
             .iter()
             .map(|tab| {
                 let count = tab.count(self.todos, query);
@@ -253,7 +254,7 @@ mod tests {
         let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
 
         let list: List = sidebar.construct_list("", true, &ui.theme.palette());
-        assert_eq!(list.len(), Filter::all_variants().len());
+        assert_eq!(list.len(), Filter::all().len());
     }
 
     #[test]

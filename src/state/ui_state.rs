@@ -4,7 +4,7 @@ use crate::{
     models::{Filter, UISession},
     state::{AdaptiveScroll, ApplicationResult, ApplicationState},
     theme::{Theme, ThemeName},
-    traits::{Input, InteractableEnum, Modal, ModalAction},
+    traits::{Input, InteractableEnum, Modal, ModalAction, ModalSize},
     ui::{Confirm, Form, Notification, Popup, TextInput},
 };
 use uuid::Uuid;
@@ -108,12 +108,19 @@ impl UIState {
         match result {
             Ok(msg) => {
                 log::debug!("Result popup (Success): {}", msg);
-                self.show_modal(Popup::success(msg).close_on_any_key(), ModalAction::None)
+                self.show_modal(
+                    Popup::success(msg)
+                        .with_size(ModalSize::Small)
+                        .close_on_any_key(),
+                    ModalAction::None,
+                )
             }
             Err(e) => {
                 log::error!("Result popup (Error): {}", e);
                 self.show_modal(
-                    Popup::error(e.to_string()).close_on_any_key(),
+                    Popup::error(e.to_string())
+                        .with_size(ModalSize::Small)
+                        .close_on_any_key(),
                     ModalAction::None,
                 )
             }

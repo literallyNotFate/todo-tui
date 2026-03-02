@@ -1,6 +1,6 @@
 use crate::{
     theme::ThemePalette,
-    traits::{Modal, ModalResult},
+    traits::{Modal, ModalResult, ModalSize},
     ui::{RenderContext, center},
 };
 use ratatui::{
@@ -9,9 +9,6 @@ use ratatui::{
     style::{Style, Stylize},
     text::{Line, Span},
 };
-
-pub const CONFIRM_WIDTH: u16 = 30;
-pub const CONFIRM_HEIGHT: u16 = 25;
 
 /// Confirm selection options
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +21,7 @@ pub enum ConfirmOption {
 pub struct Confirm {
     pub message: String,
     pub select: ConfirmOption,
+    pub size: ModalSize,
 }
 
 impl Confirm {
@@ -32,7 +30,14 @@ impl Confirm {
         Self {
             message: message.into(),
             select: ConfirmOption::Cancel,
+            size: ModalSize::Small,
         }
+    }
+
+    /// With modal size
+    pub fn with_size(mut self, size: ModalSize) -> Self {
+        self.size = size;
+        self
     }
 
     /// Vertical layout for inner content
@@ -89,7 +94,7 @@ impl Confirm {
     }
 
     /// Bottom hotkeys
-    pub fn bottom_keys(&self, palette: &ThemePalette) -> Line<'static> {
+    fn bottom_keys(&self, palette: &ThemePalette) -> Line<'static> {
         Line::from(vec![
             Span::styled(" y", Style::default().fg(palette.success).bold()),
             Span::styled(":yes ", Style::default().fg(palette.muted)),
@@ -104,7 +109,8 @@ impl Confirm {
 impl Modal for Confirm {
     /// Calculate area for confirm
     fn area(&self, frame_area: Rect) -> Rect {
-        center(frame_area, CONFIRM_WIDTH, CONFIRM_HEIGHT)
+        let (width, height) = self.size.percentages();
+        center(frame_area, width, height)
     }
 
     /// Confirm rendering
@@ -183,17 +189,16 @@ mod tests {
     }
 
     #[test]
-    fn should_create_area_for_confirm() {
+    fn should_calculate_dynamic_area_for_confirm() {
         let frame: Rect = create_helper_frame();
-        let confirm: Confirm = Confirm::new("Test");
+        let small_confirm = Confirm::new("Small").with_size(ModalSize::Small);
+        let large_confirm = Confirm::new("Large").with_size(ModalSize::Large);
 
-        let area: Rect = confirm.area(frame);
+        let small_area = small_confirm.area(frame);
+        let large_area = large_confirm.area(frame);
 
-        let expected_x = (100 - CONFIRM_WIDTH) / 2;
-        let expected_y = (100 - CONFIRM_HEIGHT) / 2;
-
-        assert_eq!(area.x, expected_x);
-        assert_eq!(area.y, expected_y);
+        assert!(large_area.width > small_area.width);
+        assert!(large_area.height > small_area.height);
     }
 
     #[test]

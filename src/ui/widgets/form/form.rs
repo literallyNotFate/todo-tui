@@ -10,7 +10,6 @@ use ratatui::{
     style::Style,
     widgets::{Block, Paragraph},
 };
-use tui_textarea::TextArea;
 use uuid::Uuid;
 
 /// Form for appending/updating task
@@ -47,6 +46,79 @@ impl Form {
             ],
             focused: 0,
             task_id: Some(task.id),
+        }
+    }
+
+    /// Form rendering
+    pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
+        let chunks: std::rc::Rc<[Rect]> = self.layout(area);
+        let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
+        let palette = ctx.palette();
+
+        ctx.render_widget(
+            Block::default().style(Style::default().bg(palette.bg)),
+            area,
+        );
+
+        for (i, field) in self.fields.iter().enumerate() {
+            let is_focused = self.focused == i;
+            let focused_style: Style;
+
+            match &field.field_type {
+                FieldType::Multiline { input } => {
+                    let mut input = input.clone();
+
+                    if is_focused {
+                        input.set_cursor_style(
+                            Style::default().bg(palette.accent).fg(palette.selection),
+                        );
+                        focused_style = Style::default().fg(palette.accent);
+                    } else {
+                        input.set_cursor_style(Style::default());
+                        focused_style = Style::default().fg(palette.muted);
+                    }
+
+                    let block = Block::bordered()
+                        .title(" Description ")
+                        .border_type(ctx.config.border_type.into())
+                        .border_style(focused_style);
+
+                    input.set_block(block);
+                    input.set_style(Style::default().fg(palette.fg));
+
+                    ctx.render_widget(&input, chunks[i]);
+                }
+                FieldType::Text { input } => {
+                    input.render(ctx, chunks[i], is_focused);
+                }
+                FieldType::Enum { input } => {
+                    input.render(ctx, chunks[i], is_focused);
+                }
+                FieldType::Button => {
+                    let (border_style, text_style) = if is_focused {
+                        (
+                            Style::default().fg(palette.accent),
+                            Style::default().fg(palette.fg),
+                        )
+                    } else {
+                        (
+                            Style::default().fg(palette.muted),
+                            Style::default().fg(palette.muted),
+                        )
+                    };
+
+                    let button = Paragraph::new(" Save task ")
+                        .block(
+                            Block::bordered()
+                                .border_type(ctx.config.border_type.into())
+                                .border_style(border_style)
+                                .style(text_style),
+                        )
+                        .centered();
+
+                    ctx.render_widget(button, button_layout[2]);
+                }
+            }
         }
     }
 
@@ -115,7 +187,9 @@ impl Form {
     }
 
     /// Helper function to initialize field values (textbased only) using field key/name (for tests)
+    #[cfg(test)]
     pub fn set_value(&mut self, key: &str, value: &str) {
+        use tui_textarea::TextArea;
         if let Some(field) = self.fields.iter_mut().find(|f| f.name == key) {
             match &mut field.field_type {
                 FieldType::Text { input } => {
@@ -209,79 +283,6 @@ impl Form {
                 Constraint::Length(15), // Button 2
             ])
             .split(area)
-    }
-
-    /// Form rendering
-    pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        let chunks: std::rc::Rc<[Rect]> = self.layout(area);
-        let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
-        let palette = ctx.palette();
-
-        ctx.render_widget(
-            Block::default().style(Style::default().bg(palette.bg)),
-            area,
-        );
-
-        for (i, field) in self.fields.iter().enumerate() {
-            let is_focused = self.focused == i;
-            let focused_style: Style;
-
-            match &field.field_type {
-                FieldType::Multiline { input } => {
-                    let mut input = input.clone();
-
-                    if is_focused {
-                        input.set_cursor_style(
-                            Style::default().bg(palette.accent).fg(palette.selection),
-                        );
-                        focused_style = Style::default().fg(palette.accent);
-                    } else {
-                        input.set_cursor_style(Style::default());
-                        focused_style = Style::default().fg(palette.muted);
-                    }
-
-                    let block = Block::bordered()
-                        .title(" Description ")
-                        .border_type(ctx.config.border_type.into())
-                        .border_style(focused_style);
-
-                    input.set_block(block);
-                    input.set_style(Style::default().fg(palette.fg));
-
-                    ctx.render_widget(&input, chunks[i]);
-                }
-                FieldType::Text { input } => {
-                    input.render(ctx, chunks[i], is_focused);
-                }
-                FieldType::Enum { input } => {
-                    input.render(ctx, chunks[i], is_focused);
-                }
-                FieldType::Button => {
-                    let (border_style, text_style) = if is_focused {
-                        (
-                            Style::default().fg(palette.accent),
-                            Style::default().fg(palette.fg),
-                        )
-                    } else {
-                        (
-                            Style::default().fg(palette.muted),
-                            Style::default().fg(palette.muted),
-                        )
-                    };
-
-                    let button = Paragraph::new(" Save task ")
-                        .block(
-                            Block::bordered()
-                                .border_type(ctx.config.border_type.into())
-                                .border_style(border_style)
-                                .style(text_style),
-                        )
-                        .centered();
-
-                    ctx.render_widget(button, button_layout[2]);
-                }
-            }
-        }
     }
 }
 

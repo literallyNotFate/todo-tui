@@ -24,26 +24,43 @@ pub enum ModalAction {
     UnsavedExit,
 }
 
+/// Modal size
+#[derive(Debug, Clone, Copy)]
+pub enum ModalSize {
+    Small,
+    Medium,
+    Large,
+    Custom { width: u16, height: u16 },
+}
+
+impl ModalSize {
+    pub fn percentages(&self) -> (u16, u16) {
+        match self {
+            ModalSize::Small => (30, 20),
+            ModalSize::Medium => (50, 40),
+            ModalSize::Large => (85, 80),
+            ModalSize::Custom { width, height } => (*width, *height),
+        }
+    }
+}
+
 /// Trait made for EnumInput field, so you are able to switch enum value (in that case Priority/Filter)
 pub trait InteractableEnum: Sized + Copy + PartialEq + 'static {
-    fn all_variants() -> &'static [Self];
+    fn all() -> &'static [Self];
     fn to_string(&self) -> &'static str;
 
     fn index(&self) -> usize {
-        Self::all_variants()
-            .iter()
-            .position(|t| t == self)
-            .unwrap_or(0)
+        Self::all().iter().position(|t| t == self).unwrap_or(0)
     }
 
     fn next(&self) -> Self {
-        let variants = Self::all_variants();
+        let variants = Self::all();
         let idx = self.index();
         variants[(idx + 1) % variants.len()]
     }
 
     fn prev(&self) -> Self {
-        let variants = Self::all_variants();
+        let variants = Self::all();
         let idx = self.index();
         variants[(idx + variants.len() - 1) % variants.len()]
     }

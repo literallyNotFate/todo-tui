@@ -20,6 +20,9 @@ pub struct UIConfig {
     pub border_type: BorderTypeConfig,
     #[serde(skip_serializing_if = "is_default")]
     pub symbols: SymbolsConfig,
+
+    pub date_format: String,
+    pub use_24h: bool,
 }
 
 /// Border configuration
@@ -51,6 +54,8 @@ impl Default for UIConfig {
             show_sidebar: true,
             border_type: BorderTypeConfig::default(),
             symbols: SymbolsConfig::default(),
+            date_format: String::from("%d/%m/%Y"),
+            use_24h: true,
         }
     }
 }

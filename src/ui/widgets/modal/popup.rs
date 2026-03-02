@@ -1,7 +1,9 @@
 use crate::{
+    models::TodoDetails,
+    state::AdaptiveScroll,
     theme::ThemePalette,
-    traits::{Modal, ModalResult},
-    ui::{RenderContext, center},
+    traits::{Modal, ModalResult, ModalSize},
+    ui::{RenderContext, center, scrollable},
 };
 use ratatui::{
     crossterm::event::KeyCode,
@@ -10,8 +12,12 @@ use ratatui::{
     text::{Line, Span},
 };
 
-pub const POPUP_WIDTH: u16 = 40;
-pub const POPUP_HEIGHT: u16 = 25;
+/// What is going to be shown
+#[derive(Debug, Clone)]
+pub enum PopupContent {
+    Message(String),
+    Task(TodoDetails),
+}
 
 /// Defines how popup is getting closed (on any key or on specific)
 #[derive(Debug, Clone, PartialEq)]
@@ -29,12 +35,14 @@ pub enum PopupKind {
 }
 
 /// Popup modal widget
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Popup {
-    pub message: String,
     pub title: String,
+    pub content: PopupContent,
     pub kind: PopupKind,
     pub close_behavior: PopupCloseBehavior,
+    pub scroll: AdaptiveScroll,
+    pub size: ModalSize,
 }
 
 impl Popup {
@@ -43,8 +51,10 @@ impl Popup {
         Self {
             kind: PopupKind::Info,
             title: String::from(" Info "),
-            message: message.into(),
+            content: PopupContent::Message(message.into()),
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
+            scroll: AdaptiveScroll::default(),
+            size: ModalSize::Medium,
         }
     }
 
@@ -66,18 +76,45 @@ impl Popup {
         }
     }
 
+    /// Creating task details popup template
+    pub fn details(title: String, details: TodoDetails) -> Self {
+        Self {
+            title,
+            content: PopupContent::Task(details),
+            kind: PopupKind::Info,
+            close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
+            scroll: AdaptiveScroll::default(),
+            size: ModalSize::Large,
+        }
+    }
+
+    /// With specific title
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = title.into();
         self
     }
 
+    /// Closes on any key
     pub fn close_on_any_key(mut self) -> Self {
         self.close_behavior = PopupCloseBehavior::AnyKey;
         self
     }
 
+    /// Closes on specific key
     pub fn close_on(mut self, key: KeyCode) -> Self {
         self.close_behavior = PopupCloseBehavior::Specific(key);
+        self
+    }
+
+    /// With modal size
+    pub fn with_size(mut self, size: ModalSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// With adaptive scroll
+    pub fn with_scroll(mut self, scroll: AdaptiveScroll) -> Self {
+        self.scroll = scroll;
         self
     }
 
@@ -102,18 +139,29 @@ impl Popup {
     }
 
     /// Generate bottom title based on close behavior
-    fn bottom_title(&self, palette: &ThemePalette) -> Line<'static> {
-        let key: String = match self.close_behavior {
-            PopupCloseBehavior::AnyKey => "any key".to_string(),
-            PopupCloseBehavior::Specific(c) => format!("<{}>", c),
+    fn bottom_keys(&self, palette: &ThemePalette) -> Line<'static> {
+        let mut spans = Vec::new();
+
+        let close_key = match self.close_behavior {
+            PopupCloseBehavior::AnyKey => "any".to_string(),
+            PopupCloseBehavior::Specific(code) => format!("{:?}", code),
         };
 
-        Line::from(vec![
-            Span::styled(" Press ", Style::default().fg(palette.fg)),
-            Span::styled(key, Style::default().fg(palette.success).bold()),
-            Span::styled(" to close this popup. ", Style::default().fg(palette.fg)),
-        ])
-        .centered()
+        spans.push(Span::styled(
+            format!(" <{}>", close_key),
+            Style::default().fg(palette.success).bold(),
+        ));
+        spans.push(Span::styled(":close ", Style::default().fg(palette.muted)));
+
+        if matches!(self.content, PopupContent::Task(_)) {
+            spans.push(Span::styled(
+                " <j/k>",
+                Style::default().fg(palette.accent).bold(),
+            ));
+            spans.push(Span::styled(":scroll ", Style::default().fg(palette.muted)));
+        }
+
+        Line::from(spans).centered()
     }
 
     /// Return color based on kind
@@ -129,38 +177,142 @@ impl Popup {
 impl Modal for Popup {
     /// Calculate area for popup
     fn area(&self, frame_area: Rect) -> Rect {
-        center(frame_area, POPUP_WIDTH, POPUP_HEIGHT)
+        let (width, height) = self.size.percentages();
+        center(frame_area, width, height)
     }
 
     /// Popup rendering
     fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        use ratatui::widgets::{Block, Paragraph, Wrap};
+        use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
 
         let palette: ThemePalette = ctx.palette();
         let popup_block: Block = Block::bordered()
             .border_type(ctx.config.border_type.into())
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
-            .title_bottom(self.bottom_title(&palette))
+            .title_bottom(self.bottom_keys(&palette))
             .border_style(self.color_on_kind(&palette))
             .fg(palette.fg)
             .bg(palette.bg);
 
-        let inner_area: Rect = popup_block.inner(area);
+        let inner_area = popup_block.inner(area);
         ctx.render_widget(popup_block, area);
 
-        let vertical_chunks: std::rc::Rc<[Rect]> = self.vertical_layout(inner_area);
-        let message_area: Rect = self.horizontal_layout(vertical_chunks[1])[1];
+        match &self.content {
+            PopupContent::Message(msg) => {
+                let vertical_chunks: std::rc::Rc<[Rect]> = self.vertical_layout(inner_area);
+                let message_area: Rect = self.horizontal_layout(vertical_chunks[1])[1];
+                let message: Paragraph = Paragraph::new(msg.as_str())
+                    .centered()
+                    .wrap(Wrap { trim: true });
+                ctx.render_widget(message, message_area);
+            }
+            PopupContent::Task(details) => {
+                let (status_text, status_style) = if details.completed {
+                    (
+                        " DONE ",
+                        Style::default().bg(palette.success).fg(palette.bg).bold(),
+                    )
+                } else {
+                    (
+                        " ACTIVE ",
+                        Style::default().bg(palette.accent).fg(palette.bg).bold(),
+                    )
+                };
 
-        let message: Paragraph = Paragraph::new(self.message.as_str())
-            .centered()
-            .wrap(Wrap { trim: true });
+                let header_line = Line::from(vec![
+                    Span::styled(" ● ", Style::default().fg(palette.accent)),
+                    Span::styled(&details.title, Style::default().fg(palette.fg).bold()),
+                    Span::raw(" "),
+                    Span::styled(
+                        format!("#{}", details.id_short),
+                        Style::default().fg(palette.muted).italic(),
+                    ),
+                ]);
 
-        ctx.render_widget(message, message_area);
+                let meta_line = Line::from(vec![
+                    Span::styled(status_text, status_style),
+                    Span::raw("  "),
+                    Span::styled("Created ", Style::default().fg(palette.muted)),
+                    Span::styled(&details.created_at, Style::default().fg(palette.success)),
+                    Span::raw("  •  "),
+                    Span::styled("Updated ", Style::default().fg(palette.muted)),
+                    Span::styled(&details.updated_at, Style::default().fg(palette.accent)),
+                ]);
+
+                let content_lines: Vec<Line> = details
+                    .description
+                    .lines()
+                    .map(|l| Line::from(l.to_string()))
+                    .collect();
+
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(1), // Title + ID
+                        Constraint::Length(1),
+                        Constraint::Length(1), // Status + Times
+                        Constraint::Length(1), // Separator
+                        Constraint::Fill(1),   // Description
+                    ])
+                    .margin(1)
+                    .split(inner_area);
+
+                ctx.render_widget(Paragraph::new(header_line), chunks[0]);
+                ctx.render_widget(Paragraph::new(meta_line), chunks[2]);
+
+                ctx.render_widget(
+                    Block::default()
+                        .borders(Borders::BOTTOM)
+                        .border_style(palette.muted)
+                        .title_alignment(Alignment::Right)
+                        .title(Span::styled(
+                            " info ",
+                            Style::default().fg(palette.muted).italic(),
+                        )),
+                    chunks[3],
+                );
+
+                scrollable(
+                    ctx,
+                    chunks[4],
+                    Block::default()
+                        .title(Span::styled(
+                            " Description ",
+                            Style::default().fg(palette.muted),
+                        ))
+                        .padding(Padding::vertical(1)),
+                    &self.scroll,
+                    &content_lines,
+                    false,
+                    Style::default().fg(palette.accent),
+                    |ctx, area| {
+                        let paragraph = Paragraph::new(content_lines.clone())
+                            .wrap(Wrap { trim: true })
+                            .scroll((self.scroll.current.get() as u16, 0));
+                        ctx.render_widget(paragraph, area);
+                    },
+                );
+            }
+        }
     }
 
     /// Key event handling
     fn handle_key(&mut self, key: KeyCode) -> Option<ModalResult> {
+        if matches!(self.content, PopupContent::Task(_)) {
+            match key {
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.scroll.scroll_down();
+                    return None;
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.scroll.scroll_up();
+                    return None;
+                }
+                _ => {}
+            }
+        }
+
         match self.close_behavior {
             PopupCloseBehavior::AnyKey => Some(ModalResult::Cancelled),
             PopupCloseBehavior::Specific(k) if k == key => Some(ModalResult::Cancelled),
@@ -173,18 +325,18 @@ impl Modal for Popup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::ThemeName;
+    use crate::{config::UIConfig, models::Todo, theme::ThemeName};
 
     fn create_helper_frame() -> Rect {
         Rect::new(0, 0, 100, 100)
     }
 
     #[test]
-    fn should_create_default_popup() {
+    fn should_create_message_popup() {
         let mut popup: Popup = Popup::success("Success");
 
         assert_eq!(popup.kind, PopupKind::Success);
-        assert_eq!(popup.message, "Success");
+        assert!(matches!(popup.content, PopupContent::Message(_)));
         assert_eq!(popup.title, " Success ");
         assert_eq!(
             popup.close_behavior,
@@ -193,11 +345,11 @@ mod tests {
 
         popup = Popup::info("Info");
         assert_eq!(popup.kind, PopupKind::Info);
-        assert_eq!(popup.message, "Info");
+        assert!(matches!(popup.content, PopupContent::Message(_)));
 
         popup = Popup::error("Error");
         assert_eq!(popup.kind, PopupKind::Error);
-        assert_eq!(popup.message, "Error");
+        assert!(matches!(popup.content, PopupContent::Message(_)));
     }
 
     #[test]
@@ -207,22 +359,24 @@ mod tests {
             .close_on_any_key();
 
         assert_eq!(popup.kind, PopupKind::Success);
-        assert_eq!(popup.message, "Task completed!");
+        assert!(matches!(popup.content, PopupContent::Message(_)));
         assert_eq!(popup.title, "Some title");
         assert_eq!(popup.close_behavior, PopupCloseBehavior::AnyKey);
     }
 
     #[test]
-    fn should_create_area_for_popup() {
-        let frame: Rect = create_helper_frame();
-        let popup: Popup = Popup::info("Test");
-        let area: Rect = popup.area(frame);
+    fn should_create_task_details_popup() {
+        let todo = Todo::new("Task 1", "Desc 1", None);
+        let details = TodoDetails::from(&todo, &UIConfig::default());
+        let popup: Popup = Popup::details("Test".to_string(), details);
 
-        let expected_x = (100 - POPUP_WIDTH) / 2;
-        let expected_y = (100 - POPUP_HEIGHT) / 2;
-
-        assert_eq!(area.x, expected_x as u16);
-        assert_eq!(area.y, expected_y as u16);
+        assert_eq!(popup.kind, PopupKind::Info);
+        assert!(matches!(popup.content, PopupContent::Task(_)));
+        assert_eq!(popup.title, "Test");
+        assert_eq!(
+            popup.close_behavior,
+            PopupCloseBehavior::Specific(KeyCode::Esc)
+        );
     }
 
     #[test]
@@ -253,45 +407,53 @@ mod tests {
     }
 
     #[test]
-    fn should_return_bottom_title_for_popup() {
-        let mut popup = Popup::success("Test");
-        let mut palette: ThemePalette = ThemeName::GruvboxDark.palette();
-        let mut bottom_title: Line = popup.bottom_title(&palette);
+    fn should_handle_scroll_input() {
+        let todo = Todo::new("T", "D", None);
+        let config = UIConfig::default();
+        let details = TodoDetails::from(&todo, &config);
+        let mut popup = Popup::details("Test".to_string(), details);
 
-        let expected: Line = Line::from(vec![
-            Span::styled(" Press ", Style::default().fg(Color::Rgb(235, 219, 178))),
-            Span::styled(
-                "<Esc>",
-                Style::default().fg(Color::Rgb(184, 187, 38)).bold(),
-            ),
-            Span::styled(
-                " to close this popup. ",
-                Style::default().fg(Color::Rgb(235, 219, 178)),
-            ),
-        ])
-        .centered();
+        assert_eq!(popup.scroll.current.get(), 0);
 
-        assert_eq!(bottom_title, expected);
+        popup.handle_key(KeyCode::Char('j'));
+        assert_eq!(popup.scroll.current.get(), 1);
 
-        popup = Popup::error("Test").close_on_any_key();
-        bottom_title = popup.bottom_title(&palette);
+        popup.handle_key(KeyCode::Char('k'));
+        assert_eq!(popup.scroll.current.get(), 0);
 
-        assert_eq!(
-            bottom_title.spans[1],
-            Span::styled(
-                "any key",
-                Style::default().fg(Color::Rgb(184, 187, 38)).bold(),
-            )
-        );
+        popup.handle_key(KeyCode::Char('k'));
+        assert_eq!(popup.scroll.current.get(), 0);
+    }
 
-        popup = Popup::info("Test").close_on(KeyCode::Char('q'));
-        palette = ThemeName::CatppuccinMocha.palette();
-        bottom_title = popup.bottom_title(&palette);
+    #[test]
+    fn should_calculate_dynamic_area_for_popup() {
+        let frame: Rect = create_helper_frame();
+        let small_popup = Popup::info("Small").with_size(ModalSize::Small);
+        let large_popup = Popup::info("Large").with_size(ModalSize::Large);
 
-        assert_eq!(
-            bottom_title.spans[1],
-            Span::styled("<q>", Style::default().fg(Color::Rgb(166, 227, 161)).bold())
-        );
+        let small_area = small_popup.area(frame);
+        let large_area = large_popup.area(frame);
+
+        assert!(large_area.width > small_area.width);
+        assert!(large_area.height > small_area.height);
+    }
+
+    #[test]
+    fn should_render_correct_bottom_keys_text() {
+        let palette = ThemeName::GruvboxDark.palette();
+        let popup_msg = Popup::info("Msg");
+        let keys_msg = popup_msg.bottom_keys(&palette);
+
+        assert!(!format!("{:?}", keys_msg).contains("scroll"));
+
+        let todo = Todo::new("T", "D", None);
+        let details = TodoDetails::from(&todo, &UIConfig::default());
+        let popup_task = Popup::details("Test".to_string(), details);
+        let keys_task = popup_task.bottom_keys(&palette);
+
+        let content = format!("{:?}", keys_task);
+        assert!(content.contains("j/k"));
+        assert!(content.contains("scroll"));
     }
 
     #[test]

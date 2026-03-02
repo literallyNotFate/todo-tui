@@ -104,7 +104,7 @@ mod tests {
     }
 
     impl InteractableEnum for MockEnum {
-        fn all_variants() -> &'static [Self] {
+        fn all() -> &'static [Self] {
             &[Self::A, Self::B]
         }
 

@@ -29,7 +29,7 @@ pub struct Application {
     pub config: Config,
     pub size: (u16, u16),
 
-    pub ticks_count: u64,
+    ticks_count: u64,
 }
 
 impl Application {
@@ -110,17 +110,12 @@ impl Application {
     pub fn tick(&mut self) -> bool {
         let mut needs_redraw = false;
         let ticks_per_second = 10;
+        self.ticks_count = self.ticks_count.wrapping_add(1);
 
         if self.ui.expire_notification(&mut self.data.notification) {
             needs_redraw = true;
         }
 
-        // Every 1 second redrawing created at task time
-        if self.ticks_count % ticks_per_second == 0 {
-            needs_redraw = true;
-        }
-
-        self.ticks_count = self.ticks_count.wrapping_add(1);
         if self.ticks_count % (ticks_per_second * 20) == 0 && self.ui.config.use_system_theme {
             if self.ui.apply_system_theme() {
                 log::info!("Theme changed by system, redrawing...");
@@ -128,7 +123,6 @@ impl Application {
             }
         }
 
-        // 3. Автосохранение (Логика данных)
         let has_changes = self.data.any_unsaved_changes();
 
         if self.autosave.enabled {

@@ -38,7 +38,6 @@ impl<'a> ContentWidget<'a> {
                     ctx,
                     area,
                     &mut self.state.select_state,
-                    &self.ui.desc_scroll,
                 );
             }
         }

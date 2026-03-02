@@ -36,7 +36,6 @@ impl ApplicationMode {
                     FocusArea::MainContent => {
                         self.add_command(&mut lines, "j/k", "Select", palette);
                         self.add_command(&mut lines, "J/K", "Move", palette);
-                        self.add_command(&mut lines, "[/]", "Desc", palette);
                     }
                 }
 
@@ -47,6 +46,7 @@ impl ApplicationMode {
                     self.add_command(&mut lines, "Enter", "Check", palette);
                     self.add_command(&mut lines, "e", "Edit", palette);
                     self.add_command(&mut lines, "d", "Delete", palette);
+                    self.add_command(&mut lines, "i/Tab", "Details", palette);
                     self.add_command(&mut lines, "/", "Find", palette);
                 }
 

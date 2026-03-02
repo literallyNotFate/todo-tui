@@ -14,7 +14,7 @@ pub enum Priority {
 }
 
 impl InteractableEnum for Priority {
-    fn all_variants() -> &'static [Self] {
+    fn all() -> &'static [Self] {
         &[Self::Low, Self::Medium, Self::High]
     }
 
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn should_return_variants_from_enum() {
         assert_eq!(
-            Priority::all_variants(),
+            Priority::all(),
             [Priority::Low, Priority::Medium, Priority::High]
         );
     }

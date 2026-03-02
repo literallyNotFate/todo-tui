@@ -230,6 +230,11 @@ impl ApplicationState {
         self.selected(todos, filter, query).map(|t| t.id)
     }
 
+    /// Return todo of a given id
+    pub fn find_by_id(&self, id: Uuid) -> Option<&Todo> {
+        self.todos.iter().find(|t| t.id == id)
+    }
+
     /// Sync focus with current state
     pub fn sync_with_ids(&mut self, visible_ids: &[Uuid], focus_id: Option<Uuid>) {
         let len: usize = visible_ids.len();
@@ -342,5 +347,19 @@ mod tests {
 
         assert_eq!(selected.unwrap().title, "B");
         assert_eq!(selected_id.unwrap(), id);
+    }
+
+    #[test]
+    fn should_return_todo_by_id() {
+        let mut state = ApplicationState::default();
+        state.todos = vec![
+            Todo::new("A", "", Some(Priority::Low)),
+            Todo::new("B", "", Some(Priority::Low)),
+        ];
+        let id_to_find: Uuid = state.todos[1].id;
+        let selected: Option<&Todo> = state.find_by_id(id_to_find);
+
+        assert_eq!(selected.unwrap().title, "B");
+        assert_eq!(selected.unwrap().id, id_to_find);
     }
 }

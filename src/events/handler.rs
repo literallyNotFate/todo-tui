@@ -3,15 +3,15 @@ use crate::{
     app::ApplicationController,
     core::ApplicationMode,
     enums::{FocusArea, WidgetResponse},
-    models::{Filter, Todo},
+    models::{Filter, Todo, TodoDetails},
     traits::{Input, ModalAction, ModalResult},
-    ui::{Form, is_terminal_small},
+    ui::{Form, Popup, is_terminal_small},
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+/// Handling all possible keys
 pub struct EventHandler;
 
-/// Handling all possible keys
 impl EventHandler {
     /// Main key event handling
     pub fn handle_key(app: &mut Application, event: KeyEvent) -> bool {
@@ -67,6 +67,7 @@ impl EventHandler {
                 }
             }
             (KeyCode::Char('a'), KeyModifiers::NONE) => {
+                log::debug!("Opening task append form");
                 ctrl.ui.task_form = Some(Form::new());
                 app.mode = ApplicationMode::Form;
                 changed = true;
@@ -211,7 +212,6 @@ impl EventHandler {
                 ctrl.dispatch_move_selection(-1);
                 true
             }
-
             KeyCode::Enter => {
                 log::trace!("Task status toggle requested via Enter");
                 ctrl.dispatch_toggle();
@@ -219,9 +219,28 @@ impl EventHandler {
             }
             KeyCode::Char('e') => {
                 if let Some(id) = ctrl.ui.selected_id(ctrl.state) {
-                    if let Some(task) = ctrl.state.todos.iter().find(|t| t.id == id) {
+                    if let Some(task) = ctrl.state.find_by_id(id) {
+                        log::debug!("Opening task update form");
                         ctrl.ui.task_form = Some(Form::from(&task));
                         *mode = ApplicationMode::Form;
+                        return true;
+                    }
+                }
+                false
+            }
+            KeyCode::Char('i') | KeyCode::Tab => {
+                if let Some(id) = ctrl.ui.selected_id(ctrl.state) {
+                    if let Some(task) = ctrl.state.find_by_id(id) {
+                        log::debug!("Opening task details popup");
+                        ctrl.ui.show_modal(
+                            Popup::details(
+                                " Details ".into(),
+                                TodoDetails::from(task, &ctrl.config.ui),
+                            )
+                            .close_on(KeyCode::Tab)
+                            .with_scroll(ctrl.ui.desc_scroll.clone()),
+                            ModalAction::None,
+                        );
                         return true;
                     }
                 }
@@ -245,14 +264,6 @@ impl EventHandler {
             KeyCode::Char('K') => {
                 log::trace!("Moving task up");
                 ctrl.dispatch_move_tasks(-1);
-                true
-            }
-            KeyCode::Char('[') => {
-                ctrl.ui.desc_scroll.scroll_up();
-                true
-            }
-            KeyCode::Char(']') => {
-                ctrl.ui.desc_scroll.scroll_down();
                 true
             }
             KeyCode::Char('/') => {
@@ -796,24 +807,6 @@ mod tests {
 
         assert_eq!(mode, ApplicationMode::Search);
         assert!(ctrl.ui.search_input.is_some());
-    }
-
-    #[test]
-    fn should_scroll_through_description() {
-        let (mut state, mut ui, mut mode, mut config, _) = setup_ctx();
-
-        ui.desc_scroll.current.set(10);
-        ui.desc_scroll.max_scroll.set(20);
-        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config);
-
-        EventHandler::handle_main_content(KeyCode::Char('['), &mut ctrl, &mut mode);
-        assert_eq!(ctrl.ui.desc_scroll.current.get(), 9);
-
-        EventHandler::handle_main_content(KeyCode::Char('['), &mut ctrl, &mut mode);
-        assert_eq!(ctrl.ui.desc_scroll.current.get(), 8);
-
-        EventHandler::handle_main_content(KeyCode::Char(']'), &mut ctrl, &mut mode);
-        assert_eq!(ctrl.ui.desc_scroll.current.get(), 9);
     }
 
     #[test]

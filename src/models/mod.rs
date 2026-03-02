@@ -8,4 +8,4 @@ pub use data::{StorageData, UISession};
 pub use filter::Filter;
 pub use priority::Priority;
 pub use sort::{Sort, SortBy, SortOrder};
-pub use todo::Todo;
+pub use todo::{Todo, TodoDetails};

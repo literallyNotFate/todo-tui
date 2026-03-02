@@ -1,4 +1,5 @@
 use super::{Filter, Priority};
+use crate::config::UIConfig;
 use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
@@ -73,6 +74,9 @@ impl Todo {
     pub fn time_ago(&self) -> String {
         let now: DateTime<Utc> = Utc::now();
         let time_passed: TimeDelta = now.signed_duration_since(self.created_at);
+
+        let minutes: i64 = time_passed.num_minutes();
+        let hours: i64 = time_passed.num_hours();
         let days: i64 = time_passed.num_days();
 
         let format_unit = |count: i64, unit: &str| -> String {
@@ -87,16 +91,14 @@ impl Todo {
             format_unit(days / 365, "year")
         } else if days >= 30 {
             format_unit(days / 30, "month")
-        } else if time_passed.num_weeks() > 0 {
-            format_unit(time_passed.num_weeks(), "week")
+        } else if days >= 7 {
+            format_unit(days / 7, "week")
         } else if days > 0 {
             format_unit(days, "day")
-        } else if time_passed.num_hours() > 0 {
-            format_unit(time_passed.num_hours(), "hour")
-        } else if time_passed.num_minutes() > 0 {
-            format_unit(time_passed.num_minutes(), "minute")
-        } else if time_passed.num_seconds() > 0 {
-            format_unit(time_passed.num_seconds(), "second")
+        } else if hours > 0 {
+            format_unit(hours, "hour")
+        } else if minutes > 0 {
+            format_unit(minutes, "minute")
         } else {
             "just now".to_string()
         }
@@ -122,6 +124,44 @@ impl Hash for Todo {
         self.description.hash(state);
         self.completed.hash(state);
         self.priority.hash(state);
+    }
+}
+
+/// Todo details to be shown
+#[derive(Debug, Clone)]
+pub struct TodoDetails {
+    pub id_short: String,
+    pub title: String,
+    pub completed: bool,
+    pub description: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Implementation of initializing todo details from todo with UIConfig (date format)
+impl TodoDetails {
+    pub fn from(todo: &Todo, config: &UIConfig) -> Self {
+        let time_fmt: &str = if config.use_24h { "%H:%M" } else { "%I:%M %p" };
+        let full_fmt: String = format!("{}, {}", config.date_format, time_fmt);
+
+        Self {
+            title: todo.title.clone(),
+            description: todo.description.clone(),
+            created_at: todo
+                .created_at
+                .with_timezone(&Local)
+                .format(&full_fmt)
+                .to_string(),
+
+            updated_at: todo
+                .updated_at
+                .with_timezone(&Local)
+                .format(&full_fmt)
+                .to_string(),
+
+            id_short: todo.id.to_string()[..8].to_string(),
+            completed: todo.completed,
+        }
     }
 }
 
@@ -235,5 +275,17 @@ mod tests {
 
         todo.created_at = Utc::now() - Duration::days(1);
         assert!(!todo.matches_filter(&Filter::Today, &today));
+    }
+
+    #[test]
+    fn should_create_todo_details_from_todo() {
+        let todo = Todo::new("Task 1", "Desc 1", None);
+        let config = UIConfig::default();
+        let details = TodoDetails::from(&todo, &config);
+
+        assert_eq!(details.title, "Task 1");
+        assert_eq!(details.description, "Desc 1");
+        assert_eq!(details.id_short.len(), 8);
+        assert!(details.updated_at.contains(":"));
     }
 }

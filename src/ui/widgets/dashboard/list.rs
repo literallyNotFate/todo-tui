@@ -10,8 +10,8 @@ use crate::{
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
-    text::Line,
-    widgets::{Block, Cell, Paragraph, Row, TableState, Wrap},
+    text::{Line, Span},
+    widgets::{Block, Cell, Row, TableState},
 };
 
 /// List widget for tasks
@@ -33,24 +33,14 @@ impl<'a> ListTasks<'a> {
     }
 
     /// List rendering
-    pub fn render(
-        &self,
-        ctx: &mut RenderContext,
-        area: Rect,
-        select_state: &mut TableState,
-        scroll: &AdaptiveScroll,
-    ) {
-        use ratatui::text::Span;
-
+    pub fn render(&self, ctx: &mut RenderContext, area: Rect, select_state: &mut TableState) {
         let palette: ThemePalette = ctx.palette();
         let mode: ApplicationMode = ctx.mode();
         let focus_area: FocusArea = FocusArea::MainContent;
         let is_focused: bool = ctx.is_focused(focus_area);
 
         let is_search_visible: bool = mode == ApplicationMode::Search || !self.query.is_empty();
-
-        let [search_area, tasks_area, desc_area] =
-            self.calculate_main_layout(area, is_search_visible, !self.todos.is_empty());
+        let [search_area, tasks_area] = self.calculate_main_layout(area, is_search_visible);
 
         if is_search_visible {
             if let Some(input) = self.ui.search_input.as_ref() {
@@ -101,54 +91,9 @@ impl<'a> ListTasks<'a> {
 
         if !self.todos.is_empty() {
             self.build_table(ctx, inner_tasks_area, select_state, is_focused);
-            self.render_description(ctx, desc_area, select_state, scroll);
         } else {
             FeedbackWidget::new(FeedbackKind::NoResults(self.query.to_string()))
                 .render(ctx, tasks_area);
-        }
-    }
-
-    /// Render description for selected task with scroll
-    fn render_description(
-        &self,
-        ctx: &mut RenderContext,
-        area: Rect,
-        select_state: &mut TableState,
-        scroll: &AdaptiveScroll,
-    ) {
-        if let Some(selected_index) = select_state.selected() {
-            if let Some(todo) = self.todos.get(selected_index) {
-                let palette = ctx.palette();
-                let content = todo.description.lines().map(Line::from).collect::<Vec<_>>();
-
-                let desc_block: Block = Block::bordered()
-                    .title(format!(
-                        " Description: {} ",
-                        utils::truncate(&todo.title, area.width.saturating_sub(20) as usize)
-                    ))
-                    .bg(palette.bg)
-                    .border_type(ctx.config.border_type.into())
-                    .border_style(Style::default().fg(palette.muted));
-
-                let desc_fg = ctx.focused_color(palette.fg, FocusArea::MainContent);
-
-                scrollable(
-                    ctx,
-                    area,
-                    desc_block,
-                    scroll,
-                    &content,
-                    false,
-                    Style::default().fg(palette.muted),
-                    |f, rect| {
-                        let p = Paragraph::new(content.clone())
-                            .wrap(Wrap { trim: false })
-                            .scroll((scroll.current.get(), 0))
-                            .style(Style::default().fg(desc_fg));
-                        f.render_widget(p, rect);
-                    },
-                );
-            }
         }
     }
 
@@ -197,13 +142,32 @@ impl<'a> ListTasks<'a> {
                 Line::from(truncated_title)
             };
 
+            let display_date: String =
+                if todo.created_at.date_naive() == chrono::Local::now().date_naive() {
+                    let format_str: &str = if ctx.config.use_24h {
+                        "%H:%M"
+                    } else {
+                        "%I:%M %p"
+                    };
+
+                    todo.created_at
+                        .with_timezone(&chrono::Local)
+                        .format(format_str)
+                        .to_string()
+                } else {
+                    todo.created_at
+                        .with_timezone(&chrono::Local)
+                        .format("%d %b")
+                        .to_string()
+                };
+
             Row::new(vec![
                 Cell::from(icon).style(Style::default().fg(icon_color)),
                 Cell::from(title_content)
                     .style(Style::default().fg(ctx.focused_color(palette.fg, focus_area))),
                 Cell::from(Line::from(todo.priority.to_string()).centered())
                     .style(Style::default().fg(ctx.focused_color(priority_color, focus_area))),
-                Cell::from(Line::from(todo.time_ago()).centered())
+                Cell::from(Line::from(display_date).centered())
                     .style(Style::default().fg(palette.muted)),
             ])
             .height(1)
@@ -239,16 +203,30 @@ impl<'a> ListTasks<'a> {
         );
     }
 
+    /// Highlight title if satisfies query string
+    fn highlight_search(&self, title: &str, query: &str, palette: &ThemePalette) -> Line<'static> {
+        let query_lower: String = query.to_lowercase();
+        let title_lower: String = title.to_lowercase();
+
+        if let Some(start) = title_lower.find(&query_lower) {
+            let end = start + query.len();
+            Line::from(vec![
+                Span::raw(title[..start].to_string()),
+                Span::styled(
+                    title[start..end].to_string(),
+                    Style::default().fg(palette.warning).bold(),
+                ),
+                Span::raw(title[end..].to_string()),
+            ])
+        } else {
+            Line::from(title.to_string())
+        }
+    }
+
     /// Calculate main layout for TaskList (list + details w/dynamic search)
-    fn calculate_main_layout(&self, area: Rect, show_search: bool, has_results: bool) -> [Rect; 3] {
+    fn calculate_main_layout(&self, area: Rect, show_search: bool) -> [Rect; 2] {
         let search_constraint: Constraint = if show_search {
             Constraint::Length(3)
-        } else {
-            Constraint::Length(0)
-        };
-
-        let details_constraint: Constraint = if has_results {
-            Constraint::Length(10)
         } else {
             Constraint::Length(0)
         };
@@ -258,7 +236,6 @@ impl<'a> ListTasks<'a> {
             .constraints(vec![
                 search_constraint,  // Search?
                 Constraint::Min(0), // Table / Empty state message
-                details_constraint, // Details?
             ])
             .areas(area)
     }
@@ -286,27 +263,5 @@ impl<'a> ListTasks<'a> {
                 .bold(),
         )
         .bottom_margin(1)
-    }
-
-    /// Highlight title if satisfies query string
-    fn highlight_search(&self, title: &str, query: &str, palette: &ThemePalette) -> Line<'static> {
-        use ratatui::text::Span;
-
-        let query_lower: String = query.to_lowercase();
-        let title_lower: String = title.to_lowercase();
-
-        if let Some(start) = title_lower.find(&query_lower) {
-            let end = start + query.len();
-            Line::from(vec![
-                Span::raw(title[..start].to_string()),
-                Span::styled(
-                    title[start..end].to_string(),
-                    Style::default().fg(palette.warning).bold(),
-                ),
-                Span::raw(title[end..].to_string()),
-            ])
-        } else {
-            Line::from(title.to_string())
-        }
     }
 }
