@@ -59,6 +59,7 @@ impl<'a> ListTasks<'a> {
                 )
                 .right_aligned(),
             )
+            .title_bottom(Line::from(self.hotkeys(self.ui.focus_area, &palette)).left_aligned())
             .title_bottom(
                 Line::from(vec![
                     Span::styled(
@@ -220,6 +221,36 @@ impl<'a> ListTasks<'a> {
             ])
         } else {
             Line::from(title.to_string())
+        }
+    }
+
+    /// Generate hotkeys
+    fn hotkeys(&self, focus_area: FocusArea, palette: &ThemePalette) -> Vec<Span<'_>> {
+        match focus_area {
+            FocusArea::LeftPanel => {
+                vec![
+                    Span::styled(" <?>", Style::default().fg(palette.accent).bold()),
+                    Span::styled(":help ", Style::default().fg(palette.muted)),
+                    Span::styled(" <h/l>", Style::default().fg(palette.success).bold()),
+                    Span::styled(":focus ", Style::default().fg(palette.muted)),
+                    Span::styled(" <q>", Style::default().fg(palette.error).bold()),
+                    Span::styled(":exit ", Style::default().fg(palette.muted)),
+                ]
+            }
+            FocusArea::MainContent => {
+                vec![
+                    Span::styled(" <a>", Style::default().fg(palette.success).bold()),
+                    Span::styled(":add ", Style::default().fg(palette.muted)),
+                    Span::styled(" <e>", Style::default().fg(palette.secondary).bold()),
+                    Span::styled(":edit ", Style::default().fg(palette.muted)),
+                    Span::styled(" <d>", Style::default().fg(palette.error).bold()),
+                    Span::styled(":remove ", Style::default().fg(palette.muted)),
+                    Span::styled(" <Enter>", Style::default().fg(palette.accent).bold()),
+                    Span::styled(":done ", Style::default().fg(palette.muted)),
+                    Span::styled(" <Tab>", Style::default().fg(palette.selection).bold()),
+                    Span::styled(":details ", Style::default().fg(palette.muted)),
+                ]
+            }
         }
     }
 

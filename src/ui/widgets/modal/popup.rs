@@ -17,6 +17,7 @@ use ratatui::{
 pub enum PopupContent {
     Message(String),
     Task(TodoDetails),
+    Help(Vec<Line<'static>>),
 }
 
 /// Defines how popup is getting closed (on any key or on specific)
@@ -88,6 +89,18 @@ impl Popup {
         }
     }
 
+    /// Creating hotkeys popup templete
+    pub fn help(lines: Vec<Line<'static>>) -> Self {
+        Self {
+            kind: PopupKind::Info,
+            title: " Keyboard Shortcuts ".into(),
+            content: PopupContent::Help(lines),
+            close_behavior: PopupCloseBehavior::Specific(KeyCode::Char('?')),
+            scroll: AdaptiveScroll::default(),
+            size: ModalSize::Medium,
+        }
+    }
+
     /// With specific title
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = title.into();
@@ -144,7 +157,7 @@ impl Popup {
 
         let close_key = match self.close_behavior {
             PopupCloseBehavior::AnyKey => "any".to_string(),
-            PopupCloseBehavior::Specific(code) => format!("{:?}", code),
+            PopupCloseBehavior::Specific(code) => format!("{}", code),
         };
 
         spans.push(Span::styled(
@@ -153,7 +166,9 @@ impl Popup {
         ));
         spans.push(Span::styled(":close ", Style::default().fg(palette.muted)));
 
-        if matches!(self.content, PopupContent::Task(_)) {
+        if matches!(self.content, PopupContent::Task(_))
+            || matches!(self.content, PopupContent::Help(_))
+        {
             spans.push(Span::styled(
                 " <j/k>",
                 Style::default().fg(palette.accent).bold(),
@@ -294,12 +309,50 @@ impl Modal for Popup {
                     },
                 );
             }
+            PopupContent::Help(lines) => {
+                let mid: usize = (lines.len() + 1) / 2;
+                let dummy_lines = vec![Line::from(""); mid];
+
+                scrollable(
+                    ctx,
+                    inner_area,
+                    Block::default().title(""),
+                    &self.scroll,
+                    &dummy_lines,
+                    false,
+                    Style::default().fg(palette.accent),
+                    |ctx, area| {
+                        let chunks = Layout::default()
+                            .direction(Direction::Horizontal)
+                            .constraints([
+                                Constraint::Percentage(48),
+                                Constraint::Percentage(4),
+                                Constraint::Percentage(48),
+                            ])
+                            .split(area);
+
+                        let (left, right) = lines.split_at(mid);
+                        let scroll_val = self.scroll.current.get() as u16;
+
+                        ctx.render_widget(
+                            Paragraph::new(left.to_vec()).scroll((scroll_val, 0)),
+                            chunks[0],
+                        );
+                        ctx.render_widget(
+                            Paragraph::new(right.to_vec()).scroll((scroll_val, 0)),
+                            chunks[2],
+                        );
+                    },
+                );
+            }
         }
     }
 
     /// Key event handling
     fn handle_key(&mut self, key: KeyCode) -> Option<ModalResult> {
-        if matches!(self.content, PopupContent::Task(_)) {
+        if matches!(self.content, PopupContent::Task(_))
+            || matches!(self.content, PopupContent::Help(_))
+        {
             match key {
                 KeyCode::Char('j') | KeyCode::Down => {
                     self.scroll.scroll_down();

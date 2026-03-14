@@ -1,13 +1,15 @@
 use crate::{
     enums::WidgetResponse,
     models::{Priority, Todo},
+    theme::ThemePalette,
     traits::Input,
     ui::{Field, FieldType, RenderContext},
 };
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
+    style::{Style, Stylize},
+    text::{Line, Span},
     widgets::{Block, Paragraph},
 };
 use uuid::Uuid;
@@ -56,7 +58,9 @@ impl Form {
         let palette = ctx.palette();
 
         ctx.render_widget(
-            Block::default().style(Style::default().bg(palette.bg)),
+            Block::default()
+                .title_bottom(self.hotkeys(&palette))
+                .style(Style::default().bg(palette.bg)),
             area,
         );
 
@@ -107,7 +111,7 @@ impl Form {
                         )
                     };
 
-                    let button = Paragraph::new(" Save task ")
+                    let button = Paragraph::new(" Save ")
                         .block(
                             Block::bordered()
                                 .border_type(ctx.config.border_type.into())
@@ -257,6 +261,19 @@ impl Form {
         }
 
         false
+    }
+
+    /// Generates hotkeys for form
+    fn hotkeys(&self, palette: &ThemePalette) -> Line<'static> {
+        Line::from(vec![
+            Span::styled(" <A-Enter>", Style::default().fg(palette.success).bold()),
+            Span::styled(":submit ", Style::default().fg(palette.muted)),
+            Span::styled(" ◄/►", Style::default().fg(palette.accent).bold()),
+            Span::styled(":priority ", Style::default().fg(palette.muted)),
+            Span::styled(" <Esc>", Style::default().fg(palette.warning).bold()),
+            Span::styled(":back ", Style::default().fg(palette.muted)),
+        ])
+        .centered()
     }
 
     /// Main form layout method

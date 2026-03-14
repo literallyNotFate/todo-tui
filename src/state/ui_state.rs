@@ -25,7 +25,7 @@ pub struct UIState {
     pub search_input: Option<TextInput>,
 
     pub desc_scroll: AdaptiveScroll,
-    pub sidebar_scroll: AdaptiveScroll,
+    pub hotkeys_scroll: AdaptiveScroll,
 
     pub theme: Theme,
     pub config: UIConfig,
@@ -52,7 +52,7 @@ impl UIState {
             current_filter: session.last_filter,
             focus_area: session.last_focus,
             desc_scroll: AdaptiveScroll::with_position(session.description_scroll_pos),
-            sidebar_scroll: AdaptiveScroll::with_position(session.hotkeys_scroll_pos),
+            hotkeys_scroll: AdaptiveScroll::with_position(session.hotkeys_scroll_pos),
             ..Self::new(config.clone())
         };
 
@@ -78,7 +78,7 @@ impl UIState {
                 .unwrap_or_default(),
             use_system_theme: self.config.use_system_theme,
             description_scroll_pos: self.desc_scroll.current.get(),
-            hotkeys_scroll_pos: self.sidebar_scroll.current.get(),
+            hotkeys_scroll_pos: self.hotkeys_scroll.current.get(),
         }
     }
 
@@ -279,7 +279,7 @@ impl UIState {
         };
 
         log::trace!("Focus toggled to: {:?}", self.focus_area);
-        self.sidebar_scroll.reset();
+        self.hotkeys_scroll.reset();
     }
 
     /// Toggle sidebar
@@ -339,7 +339,7 @@ impl Default for UIState {
             task_form: None,
             search_input: None,
             desc_scroll: AdaptiveScroll::default(),
-            sidebar_scroll: AdaptiveScroll::default(),
+            hotkeys_scroll: AdaptiveScroll::default(),
             theme: Theme::new(ThemeName::default()),
             config: UIConfig::default(),
         }

@@ -5,7 +5,7 @@ use crate::{
 use ratatui::{
     layout::Rect,
     style::{Color, Style, Stylize},
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{Block, Clear, Paragraph, Wrap},
 };
 
@@ -52,11 +52,17 @@ impl FeedbackWidget {
         }
 
         message = self.message(&area.width, &area.height, colors, &palette);
+        let hotkeys = if self.kind == FeedbackKind::EmptyList {
+            Line::from(self.hotkeys(&palette)).centered()
+        } else {
+            Line::from("")
+        };
 
         let block = Block::bordered()
             .title(" Tasks ")
             .bg(palette.bg)
             .title_top(Line::styled(" todo-tui ", Style::default().fg(palette.fg)).right_aligned())
+            .title_bottom(hotkeys)
             .border_style(palette.warning)
             .border_type(ctx.config.border_type.into());
 
@@ -76,8 +82,6 @@ impl FeedbackWidget {
         colors: (Color, Color),
         palette: &ThemePalette,
     ) -> Vec<Line<'static>> {
-        use ratatui::text::Span;
-
         let message: Vec<Line> = match &self.kind {
             FeedbackKind::EmptyList => vec![
                 Line::from("All clear!").fg(palette.warning).bold(),
@@ -135,6 +139,20 @@ impl FeedbackWidget {
         };
 
         (width_color, height_color)
+    }
+
+    /// Generate hotkeys for feedback (empty list)
+    fn hotkeys(&self, palette: &ThemePalette) -> Vec<Span<'static>> {
+        vec![
+            Span::styled(" <a>", Style::default().fg(palette.success).bold()),
+            Span::styled(":add ", Style::default().fg(palette.muted)),
+            Span::styled(" <?>", Style::default().fg(palette.accent).bold()),
+            Span::styled(":help ", Style::default().fg(palette.muted)),
+            Span::styled(" <h/l>", Style::default().fg(palette.secondary).bold()),
+            Span::styled(":focus ", Style::default().fg(palette.muted)),
+            Span::styled(" <q>", Style::default().fg(palette.error).bold()),
+            Span::styled(":exit ", Style::default().fg(palette.muted)),
+        ]
     }
 }
 

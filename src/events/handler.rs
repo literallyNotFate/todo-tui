@@ -101,14 +101,6 @@ impl EventHandler {
                 ctrl.ui.clear_confirm();
                 changed = true;
             }
-            (KeyCode::Char('j'), KeyModifiers::ALT) => {
-                ctrl.ui.sidebar_scroll.scroll_down();
-                changed = true;
-            }
-            (KeyCode::Char('k'), KeyModifiers::ALT) => {
-                ctrl.ui.sidebar_scroll.scroll_up();
-                changed = true;
-            }
             (KeyCode::Char('a'), KeyModifiers::ALT) => {
                 app.autosave.toggle_enabled();
                 log::info!("Autosave toggled: enabled={}", app.autosave.enabled);
@@ -197,7 +189,6 @@ impl EventHandler {
     }
 
     /// Handles main content keys
-
     fn handle_main_content(
         code: KeyCode,
         ctrl: &mut ApplicationController,
@@ -254,6 +245,16 @@ impl EventHandler {
                     log::info!("Direct task removal (no confirm)");
                     ctrl.dispatch_remove();
                 }
+                true
+            }
+            KeyCode::Char('?') => {
+                log::debug!("Generating hotkeys and opening hotkeys popup");
+                let help_lines = mode.hotkeys(&ctrl.ui.theme, &ctrl.ui.focus_area);
+
+                ctrl.ui.show_modal(
+                    Popup::help(help_lines).with_scroll(ctrl.ui.hotkeys_scroll.clone()),
+                    ModalAction::None,
+                );
                 true
             }
             KeyCode::Char('J') => {
@@ -554,26 +555,6 @@ mod tests {
         event = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
         EventHandler::handle_key(&mut app, event);
         assert_eq!(app.data.sort.order, SortOrder::Asc);
-    }
-
-    #[test]
-    fn should_scroll_through_sidebar() {
-        let mut app = setup_app();
-
-        app.ui.sidebar_scroll.current.set(10);
-        app.ui.sidebar_scroll.max_scroll.set(20);
-
-        let mut event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::ALT);
-        EventHandler::handle_key(&mut app, event);
-        assert_eq!(app.ui.sidebar_scroll.current.get(), 11);
-
-        event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::ALT);
-        EventHandler::handle_key(&mut app, event);
-        assert_eq!(app.ui.sidebar_scroll.current.get(), 12);
-
-        event = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::ALT);
-        EventHandler::handle_key(&mut app, event);
-        assert_eq!(app.ui.sidebar_scroll.current.get(), 11);
     }
 
     #[test]

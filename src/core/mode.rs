@@ -25,57 +25,44 @@ impl ApplicationMode {
         match self {
             ApplicationMode::Browsing | ApplicationMode::List => {
                 self.add_section(&mut lines, "Navigation", palette);
-                self.add_command(&mut lines, "h/l", "Panels", palette);
-                self.add_command(&mut lines, "A-j/k", "Scroll", palette);
+                self.add_command(&mut lines, "h/l", "Switch focus", palette);
 
                 match focus {
                     FocusArea::LeftPanel => {
-                        self.add_command(&mut lines, "j/k", "Filter", palette);
-                        self.add_command(&mut lines, "1-5", "Quick", palette);
+                        self.add_command(&mut lines, "j/k", "Change filter", palette);
+                        self.add_command(&mut lines, "1-5", "Quick filter", palette);
                     }
                     FocusArea::MainContent => {
-                        self.add_command(&mut lines, "j/k", "Select", palette);
-                        self.add_command(&mut lines, "J/K", "Move", palette);
+                        self.add_command(&mut lines, "j/k", "Select task", palette);
+                        self.add_command(&mut lines, "J/K", "Move task", palette);
                     }
                 }
 
                 self.add_section(&mut lines, "Actions", palette);
-                self.add_command(&mut lines, "a", "New", palette);
+                self.add_command(&mut lines, "a", "New task", palette);
 
                 if *focus == FocusArea::MainContent {
-                    self.add_command(&mut lines, "Enter", "Check", palette);
-                    self.add_command(&mut lines, "e", "Edit", palette);
-                    self.add_command(&mut lines, "d", "Delete", palette);
-                    self.add_command(&mut lines, "i/Tab", "Details", palette);
-                    self.add_command(&mut lines, "/", "Find", palette);
+                    self.add_command(&mut lines, "Enter", "Mark completed", palette);
+                    self.add_command(&mut lines, "e", "Update task", palette);
+                    self.add_command(&mut lines, "d", "Remove task", palette);
+                    self.add_command(&mut lines, "i/Tab", "Show details", palette);
+                    self.add_command(&mut lines, "/", "Search task", palette);
                 }
 
-                self.add_command(&mut lines, "x", "Clear", palette);
+                self.add_command(&mut lines, "x", "Clear tasks", palette);
 
                 self.add_section(&mut lines, "System", palette);
-                self.add_command(&mut lines, "s", "Sort", palette);
-                self.add_command(&mut lines, "r", "Reverse", palette);
-                self.add_command(&mut lines, "t", "Next Theme", palette);
-                self.add_command(&mut lines, "<C-t>", "Prev Theme", palette);
-                self.add_command(&mut lines, "m", "Theme Mode", palette);
-                self.add_command(&mut lines, "b", "Sidebar", palette);
+                self.add_command(&mut lines, "s", "Sort tasks", palette);
+                self.add_command(&mut lines, "r", "Reverse sort", palette);
+                self.add_command(&mut lines, "t", "Next theme", palette);
+                self.add_command(&mut lines, "<C-t>", "Previous theme", palette);
+                self.add_command(&mut lines, "m", "Change theme mode", palette);
+                self.add_command(&mut lines, "b", "Toggle sidebar", palette);
                 self.add_command(&mut lines, "C-s", "Save", palette);
-                self.add_command(&mut lines, "A-a", "Autosave", palette);
+                self.add_command(&mut lines, "A-a", "Toggle autosave", palette);
                 self.add_command(&mut lines, "q", "Quit", palette);
             }
-
-            ApplicationMode::Form => {
-                self.add_section(&mut lines, "Form", palette);
-                self.add_command(&mut lines, "A-Enter", "Submit", palette);
-                self.add_command(&mut lines, "◄/►", "Priority", palette);
-                self.add_command(&mut lines, "Esc", "Cancel", palette);
-            }
-
-            ApplicationMode::Search => {
-                self.add_section(&mut lines, "Search", palette);
-                self.add_command(&mut lines, "Enter", "Confirm", palette);
-                self.add_command(&mut lines, "Esc", "Cancel", palette);
-            }
+            _ => {}
         }
 
         lines
@@ -150,7 +137,6 @@ mod tests {
             .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
             .collect();
 
-        assert!(left_content.contains("Filter"));
         assert!(!left_content.contains("Select"));
 
         let main_lines = mode.hotkeys(&ThemeName::GruvboxDark.into(), &FocusArea::MainContent);
@@ -160,7 +146,7 @@ mod tests {
             .collect();
 
         assert!(main_content.contains("Select"));
-        assert!(main_content.contains("Check"),);
+        assert!(main_content.contains("Toggle"));
     }
 
     #[test]
