@@ -4,13 +4,14 @@ use crate::{
     state::UIState,
     theme::ThemePalette,
     traits::InteractableEnum,
-    ui::{RenderContext, scrollable, utils},
+    ui::{RenderContext, utils},
 };
+use chrono::{Datelike, Local};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span},
-    widgets::{List, Wrap},
+    widgets::List,
 };
 
 /// Sidebar widget
@@ -33,8 +34,15 @@ impl<'a> SidebarWidget<'a> {
 
         let sidebar_layout: std::rc::Rc<[Rect]> = self.layout(area);
 
+        let system_block: Block = ctx.static_block("System").bg(palette.bg2);
+        let system_inner_area: Rect = system_block.inner(sidebar_layout[0]);
+        let system_text: Vec<Line> = self.system_text(&palette);
+
+        ctx.render_widget(system_block, sidebar_layout[0]);
+        ctx.render_widget(Paragraph::new(system_text), system_inner_area);
+
         let filters_block: Block = ctx.block("Filters", focus_area).bg(palette.bg2);
-        let filters_inner_area: Rect = filters_block.inner(sidebar_layout[0]);
+        let filters_inner_area: Rect = filters_block.inner(sidebar_layout[1]);
         let filter_tab_layout: std::rc::Rc<[Rect]> = self.filters_tab_layout(filters_inner_area);
 
         let query: &str = self.ui.search_query();
@@ -43,42 +51,30 @@ impl<'a> SidebarWidget<'a> {
         let mut state: ListState = ListState::default();
         state.select(Some(self.ui.current_filter.index()));
 
-        ctx.render_widget(filters_block, sidebar_layout[0]);
+        ctx.render_widget(filters_block, sidebar_layout[1]);
         ctx.render_stateful_widget(list, filter_tab_layout[1], &mut state);
 
-        let summary_block: Block = ctx.static_block("Summary").bg(palette.bg2);
-        let summary_inner_area: Rect = summary_block.inner(sidebar_layout[1]);
-        let summary_inner_layout: std::rc::Rc<[Rect]> = self.summary_layout(summary_inner_area);
-        let summary_text: Vec<Line> = self.summary_text(summary_inner_area.width, &palette);
+        let progress_block: Block = ctx.static_block("Progress").bg(palette.bg2);
+        let progress_inner_area: Rect = progress_block.inner(sidebar_layout[2]);
+        let progress_text: Vec<Line> = self.progress_text(&palette);
 
-        ctx.render_widget(summary_block, sidebar_layout[1]);
-        ctx.render_widget(Paragraph::new(summary_text), summary_inner_layout[1]);
+        ctx.render_widget(progress_block, sidebar_layout[2]);
+        ctx.render_widget(Paragraph::new(progress_text), progress_inner_area);
 
-        let hotkeys_block = Block::bordered()
-            .title(" Hotkeys ")
-            .border_style(Style::default().fg(palette.muted))
-            .border_type(ctx.config.border_type.into())
-            .bg(palette.bg2);
+        let focus_block: Block = ctx.static_block("Focus").bg(palette.bg2);
+        let focus_inner_area: Rect = focus_block.inner(sidebar_layout[3]);
+        let focus_text: Vec<Line> = self.focus_text(focus_inner_area.width, &palette);
 
-        let mut hotkeys_lines = ctx.hotkeys();
-        hotkeys_lines.insert(0, Line::from(""));
+        ctx.render_widget(focus_block, sidebar_layout[3]);
+        ctx.render_widget(Paragraph::new(focus_text), focus_inner_area);
 
-        scrollable(
-            ctx,
-            sidebar_layout[2],
-            hotkeys_block,
-            &self.ui.sidebar_scroll,
-            &hotkeys_lines,
-            false,
-            Style::default().fg(palette.muted),
-            |f, rect| {
-                let p = Paragraph::new(hotkeys_lines.clone())
-                    .wrap(Wrap { trim: false })
-                    .scroll((self.ui.sidebar_scroll.current.get(), 0))
-                    .style(Style::default().fg(palette.fg));
-                f.render_widget(p, rect);
-            },
-        );
+        let chart_block: Block = ctx.static_block("Priority Chart").bg(palette.bg2);
+        let chart_inner_area: Rect = chart_block.inner(sidebar_layout[4]);
+        let chart_text: Vec<Line> =
+            self.priority_chart_text(self.todos, &palette, chart_inner_area.width);
+
+        ctx.render_widget(chart_block, sidebar_layout[4]);
+        ctx.render_widget(Paragraph::new(chart_text), chart_inner_area);
     }
 
     /// Construct a list based on filtered todo values
@@ -109,11 +105,11 @@ impl<'a> SidebarWidget<'a> {
             .highlight_symbol("→ ")
     }
 
-    /// Get summary text
-    fn summary_text(&self, width: u16, palette: &ThemePalette) -> Vec<Line<'static>> {
+    /// Focus text
+    fn focus_text(&self, width: u16, palette: &ThemePalette) -> Vec<Line<'_>> {
         let max_title_width = (width as usize).saturating_sub(12);
 
-        let focus_line = if let Some(todo) = self
+        let focus_text = if let Some(todo) = self
             .todos
             .iter()
             .find(|t| !t.completed && t.priority == Priority::High)
@@ -140,6 +136,11 @@ impl<'a> SidebarWidget<'a> {
             ])
         };
 
+        vec![Line::from(""), focus_text]
+    }
+
+    /// Get progress text
+    fn progress_text(&self, palette: &ThemePalette) -> Vec<Line<'static>> {
         let (total, completed): (usize, usize) = (
             self.todos.len(),
             self.todos.iter().filter(|t| t.completed).count(),
@@ -155,17 +156,105 @@ impl<'a> SidebarWidget<'a> {
         let gauge: String = format!(" [{}{}] ", "■".repeat(filled), "□".repeat(10 - filled));
 
         vec![
-            focus_line,
             Line::from(""),
             Line::from(vec![
-                Span::styled(" Progress: ", Style::default().fg(palette.muted)),
+                Span::styled(" Completion: ", Style::default().fg(palette.muted)),
                 Span::styled(
                     format!("{}%", percent),
                     Style::default().fg(palette.success).bold(),
                 ),
             ]),
-            Line::from(Span::styled(gauge, Style::default().fg(palette.success))),
+            Line::from(vec![
+                Span::styled(gauge, Style::default().fg(palette.success)),
+                Span::styled(" (", Style::default().fg(palette.muted)),
+                Span::styled(
+                    format!("{}", completed),
+                    Style::default().fg(palette.success),
+                ),
+                Span::styled(" / ", Style::default().fg(palette.muted)),
+                Span::styled(
+                    format!("{}", total),
+                    Style::default().fg(palette.error).bold(),
+                ),
+                Span::styled(")", Style::default().fg(palette.muted)),
+            ]),
         ]
+    }
+
+    /// Get system date text
+    fn system_text(&self, palette: &ThemePalette) -> Vec<Line<'static>> {
+        let now = Local::now();
+        let day_names = ["M", "T", "W", "T", "F", "S", "S"];
+        let current_day = now.weekday().number_from_monday() as usize;
+
+        let calendar_spans = day_names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                if i + 1 == current_day {
+                    Span::styled(
+                        format!(" {} ", name),
+                        Style::default().bg(palette.accent).fg(palette.bg).bold(),
+                    )
+                } else {
+                    Span::styled(format!(" {} ", name), Style::default().fg(palette.muted))
+                }
+            })
+            .collect::<Vec<_>>();
+
+        vec![
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                now.format("%A, %d %b").to_string(),
+                Style::default().fg(palette.fg),
+            )])
+            .centered(),
+            Line::from(""),
+            Line::from(calendar_spans).centered(),
+        ]
+    }
+
+    /// Get priority horizontal chart
+    fn priority_chart_text(
+        &self,
+        todos: &[Todo],
+        palette: &ThemePalette,
+        width: u16,
+    ) -> Vec<Line<'static>> {
+        let (mut high, mut med, mut low) = (0, 0, 0);
+        for t in todos {
+            match t.priority {
+                Priority::High => high += 1,
+                Priority::Medium => med += 1,
+                Priority::Low => low += 1,
+            }
+        }
+
+        let total = (high + med + low).max(1);
+        let bar_max_width = (width as usize).saturating_sub(12).max(10);
+
+        let mut lines = Vec::new();
+        lines.push(Line::from(""));
+
+        let priorities = [
+            ("HIGH", high, palette.error),
+            ("MED ", med, palette.warning),
+            ("LOW ", low, palette.success),
+        ];
+
+        for (label, count, color) in priorities {
+            let filled = (count * bar_max_width) / total;
+            let empty = bar_max_width - filled;
+
+            lines.push(Line::from(vec![
+                Span::styled(format!(" {} ", label), Style::default().fg(color).bold()),
+                Span::styled("█".repeat(filled), Style::default().fg(color)),
+                Span::styled("░".repeat(empty), Style::default().fg(palette.muted)),
+                Span::styled(format!(" {:>2}", count), Style::default().fg(palette.fg)),
+            ]));
+        }
+
+        lines
     }
 
     /// Layout for sidebar
@@ -173,9 +262,11 @@ impl<'a> SidebarWidget<'a> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
+                Constraint::Length(6), // System
                 Constraint::Fill(1),   // Filters
-                Constraint::Length(8), // Summary
-                Constraint::Max(16),   // Hotkeys
+                Constraint::Length(5), // Progress
+                Constraint::Length(4), // Focus
+                Constraint::Length(6), // Chart
             ])
             .split(area)
     }
@@ -190,17 +281,6 @@ impl<'a> SidebarWidget<'a> {
             ])
             .split(area)
     }
-
-    /// Layout for summary
-    fn summary_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // Summary margin
-                Constraint::Min(0),    // Summary
-            ])
-            .split(area)
-    }
 }
 
 /// Unit-tests for sidebar
@@ -209,7 +289,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_make_summary_for_todos_with_progress() {
+    fn should_generate_progress_with_todos() {
         let todos = vec![
             Todo {
                 completed: true,
@@ -224,25 +304,24 @@ mod tests {
         let ui = UIState::default();
         let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
 
-        let summary: Vec<Line> = sidebar.summary_text(50, &ui.theme.palette());
-        let line_text: String = summary[2].to_string();
+        let summary: Vec<Line> = sidebar.progress_text(&ui.theme.palette());
+        let line_text: String = summary[1].to_string();
         assert!(line_text.contains("50%"));
 
-        let gauge_text: String = summary[3].to_string();
+        let gauge_text: String = summary[2].to_string();
         assert!(gauge_text.contains("■■■■■□□□□□"));
     }
 
     #[test]
-    fn should_make_summary_for_empty_todos() {
+    fn should_generate_progress_with_empty_todos() {
         let todos: Vec<Todo> = vec![];
 
         let ui = UIState::default();
         let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
 
-        let summary: Vec<Line> = sidebar.summary_text(50, &ui.theme.palette());
-        assert!(summary[0].to_string().contains("All tasks completed"));
-        assert!(summary[2].to_string().contains("0%"));
-        assert!(summary[3].to_string().contains("□□□□□□□□□□"));
+        let summary: Vec<Line> = sidebar.progress_text(&ui.theme.palette());
+        assert!(summary[1].to_string().contains("0%"));
+        assert!(summary[2].to_string().contains("□□□□□□□□□□"));
     }
 
     #[test]
@@ -276,9 +355,9 @@ mod tests {
 
         let ui = UIState::default();
         let sidebar = SidebarWidget::new(&ui, &todos);
-        let summary = sidebar.summary_text(50, &ui.theme.palette());
+        let summary = sidebar.focus_text(50, &ui.theme.palette());
 
-        let focus_text = summary[0].to_string();
+        let focus_text = summary[1].to_string();
         assert!(focus_text.contains("⊙ Focus:"));
         assert!(focus_text.contains("Urgent Task"));
         assert!(!focus_text.contains("Normal Task"));
@@ -295,10 +374,51 @@ mod tests {
 
         let ui = UIState::default();
         let sidebar = SidebarWidget::new(&ui, &todos);
-        let summary = sidebar.summary_text(50, &ui.theme.palette());
+        let summary = sidebar.focus_text(50, &ui.theme.palette());
 
-        let focus_text = summary[0].to_string();
+        let focus_text = summary[1].to_string();
         assert!(focus_text.contains("◆ Next:"));
         assert!(focus_text.contains("Only Task"));
+    }
+
+    #[test]
+    fn should_test_priority_chart_math() {
+        let ui = UIState::default();
+        let todos = vec![
+            Todo {
+                title: "H".to_string(),
+                priority: Priority::High,
+                completed: false,
+                ..Default::default()
+            },
+            Todo {
+                title: "M".to_string(),
+                priority: Priority::Medium,
+                completed: false,
+                ..Default::default()
+            },
+            Todo {
+                title: "L".to_string(),
+                priority: Priority::Low,
+                completed: false,
+                ..Default::default()
+            },
+            Todo {
+                title: "L2".to_string(),
+                priority: Priority::Low,
+                completed: false,
+                ..Default::default()
+            },
+        ];
+
+        let sidebar = SidebarWidget::new(&ui, &todos);
+        let lines = sidebar.priority_chart_text(&todos, &ui.theme.palette(), 40);
+
+        let high_line = lines[1].to_string();
+        let low_line = lines[3].to_string();
+
+        assert!(high_line.contains("HIGH"));
+        assert!(high_line.contains(" 1"));
+        assert!(low_line.contains(" 2"));
     }
 }
