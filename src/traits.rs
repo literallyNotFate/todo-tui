@@ -1,11 +1,11 @@
-use crate::{enums::WidgetResponse, theme::ThemePalette, ui::RenderContext};
+use crate::{core::Action, enums::WidgetResponse, theme::ThemePalette, ui::RenderContext};
 use ratatui::{crossterm::event::KeyCode, layout::Rect, style::Style};
 
 /// Modal trait for interactable widgets such as popup and confirm
 pub trait Modal {
     fn area(&self, frame_area: Rect) -> Rect;
     fn render(&self, ctx: &mut RenderContext, area: Rect);
-    fn handle_key(&mut self, key: KeyCode) -> Option<ModalResult>;
+    fn handle_action(&mut self, action: Option<Action>, key: KeyCode) -> Option<ModalResult>;
 }
 
 #[derive(Debug, PartialEq)]

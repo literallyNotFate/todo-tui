@@ -28,15 +28,15 @@ impl Storage {
 
     /// Get default logging path
     pub fn get_log_path() -> ApplicationResult<PathBuf> {
-        // let path: ApplicationResult<PathBuf> = dirs::data_dir()
-        //     .ok_or(StorageError::PathNotFound.into())
-        //     .map(|dir| dir.join("todo-tui").join("todo-tui.log"));
+        let path: ApplicationResult<PathBuf> = dirs::data_dir()
+            .ok_or(StorageError::PathNotFound.into())
+            .map(|dir| dir.join("todo-tui").join("todo-tui.log"));
 
-        // if let Ok(ref p) = path {
-        //     log::debug!("Config path resolved to: {:?}", p);
-        // }
+        if let Ok(ref p) = path {
+            log::debug!("Log path resolved to: {:?}", p);
+        }
 
-        Ok(PathBuf::from("todo-tui.log"))
+        path
     }
 
     /// Save todos and UI Session to user path/default path

@@ -1,5 +1,5 @@
 use crate::{
-    config::Config,
+    config::{Config, KeyMaps},
     core::{ApplicationError, ApplicationMode, Autosave, Storage},
     enums::FocusArea,
     events::EventHandler,
@@ -27,6 +27,7 @@ pub struct Application {
     pub autosave: Autosave,
 
     pub config: Config,
+    pub keymaps: KeyMaps,
     pub size: (u16, u16),
 
     ticks_count: u64,
@@ -36,6 +37,7 @@ impl Application {
     pub fn new(config: Config, config_error: Option<ApplicationError>) -> Self {
         let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
         let storage_data = Storage::load(None, &config.storage).unwrap_or_default();
+        let (keymaps, keymaps_error) = Self::load_keymaps();
 
         let mut app = Self {
             data: ApplicationState::new(storage_data.todos),
@@ -45,6 +47,7 @@ impl Application {
             mode: ApplicationMode::Browsing,
             running: true,
             renderer: Renderer,
+            keymaps,
             size,
             ticks_count: 0,
         };
@@ -55,6 +58,11 @@ impl Application {
             app.ui.show_result_popup(Err(e));
         }
 
+        if let Some(e) = keymaps_error {
+            log::warn!("Application: Keymaps loaded with errors: {}", e);
+            app.ui.show_result_popup(Err(e));
+        }
+
         log::debug!("Application: Instance created, terminal size: {:?}", size);
         app
     }
@@ -62,37 +70,33 @@ impl Application {
     pub fn run(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         log::info!("Run: Entering main event loop, tick rate 100 ms");
         let mut last_tick = std::time::Instant::now();
-        let mut needs_redraw: bool = true;
+        self.ui.request_redraw();
 
         while self.running {
-            if needs_redraw {
-                terminal.draw(|frame| self.render(frame))?;
-                needs_redraw = false;
-            }
-
             let timeout = TICK_RATE.saturating_sub(last_tick.elapsed());
 
             if event::poll(timeout)? {
                 match event::read()? {
                     Event::Resize(w, h) => {
                         self.size = (w, h);
-                        needs_redraw = true;
+                        self.ui.request_redraw();
                     }
                     Event::Key(key_event) => {
                         self.autosave.register_activity();
-                        if EventHandler::handle_key(self, key_event) {
-                            needs_redraw = true;
-                        }
+                        EventHandler::handle_key(self, key_event);
                     }
                     _ => {}
                 }
             }
 
             if last_tick.elapsed() >= TICK_RATE {
-                if self.tick() {
-                    needs_redraw = true;
-                }
+                self.tick();
                 last_tick = std::time::Instant::now();
+            }
+
+            if self.ui.needs_redraw() {
+                terminal.draw(|frame| self.render(frame))?;
+                self.ui.clear_redraw_flag();
             }
         }
 
@@ -107,19 +111,18 @@ impl Application {
     }
 
     /// Tick function (for notification and autosave)
-    pub fn tick(&mut self) -> bool {
-        let mut needs_redraw = false;
+    pub fn tick(&mut self) {
         let ticks_per_second = 10;
         self.ticks_count = self.ticks_count.wrapping_add(1);
 
         if self.ui.expire_notification(&mut self.data.notification) {
-            needs_redraw = true;
+            self.ui.request_redraw();
         }
 
         if self.ticks_count % (ticks_per_second * 20) == 0 && self.ui.config.use_system_theme {
             if self.ui.apply_system_theme() {
                 log::info!("Theme changed by system, redrawing...");
-                needs_redraw = true;
+                self.ui.request_redraw();
             }
         }
 
@@ -128,11 +131,11 @@ impl Application {
         if self.autosave.enabled {
             if has_changes && !self.autosave.last_tick_had_changes {
                 self.autosave.reset_timer();
-                needs_redraw = true;
+                self.ui.request_redraw();
             }
 
             if self.autosave.tick(has_changes) {
-                needs_redraw = true;
+                self.ui.request_redraw();
             }
 
             if has_changes && self.autosave.should_save(has_changes) {
@@ -144,16 +147,13 @@ impl Application {
                         log::info!("Autosave: Successfully saved everything");
                         self.autosave.reset_timer();
                         let _ = self.config.save(None);
-
-                        needs_redraw = true;
+                        self.ui.request_redraw();
                     }
                     Err(e) => log::error!("Autosave: Failed to save: {}", e),
                 }
             }
             self.autosave.last_tick_had_changes = has_changes;
         }
-
-        needs_redraw
     }
 
     pub fn save_all(&mut self) -> ApplicationResult<()> {
@@ -223,6 +223,14 @@ impl Application {
             Err(e) => (Config::default(), Some(e)),
         }
     }
+
+    /// Helper function to load keymaps
+    pub fn load_keymaps() -> (KeyMaps, Option<ApplicationError>) {
+        match KeyMaps::load(None) {
+            Ok(kmps) => (kmps, None),
+            Err(e) => (KeyMaps::default(), Some(e)),
+        }
+    }
 }
 
 impl Default for Application {
@@ -236,6 +244,7 @@ impl Default for Application {
             autosave: Autosave::new(false),
             size: (80, 24),
             config: Config::default(),
+            keymaps: KeyMaps::default(),
             ticks_count: 0,
         }
     }

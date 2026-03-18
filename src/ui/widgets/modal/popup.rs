@@ -1,4 +1,5 @@
 use crate::{
+    core::Action,
     models::TodoDetails,
     state::AdaptiveScroll,
     theme::ThemePalette,
@@ -349,16 +350,14 @@ impl Modal for Popup {
     }
 
     /// Key event handling
-    fn handle_key(&mut self, key: KeyCode) -> Option<ModalResult> {
-        if matches!(self.content, PopupContent::Task(_))
-            || matches!(self.content, PopupContent::Help(_))
-        {
-            match key {
-                KeyCode::Char('j') | KeyCode::Down => {
+    fn handle_action(&mut self, action: Option<Action>, key: KeyCode) -> Option<ModalResult> {
+        if let Some(act) = action {
+            match act {
+                Action::MoveDown => {
                     self.scroll.scroll_down();
                     return None;
                 }
-                KeyCode::Char('k') | KeyCode::Up => {
+                Action::MoveUp => {
                     self.scroll.scroll_up();
                     return None;
                 }
@@ -369,7 +368,13 @@ impl Modal for Popup {
         match self.close_behavior {
             PopupCloseBehavior::AnyKey => Some(ModalResult::Cancelled),
             PopupCloseBehavior::Specific(k) if k == key => Some(ModalResult::Cancelled),
-            _ => None,
+            _ => {
+                if key == KeyCode::Esc {
+                    Some(ModalResult::Cancelled)
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -437,14 +442,17 @@ mod tests {
         let mut popup: Popup = Popup::info("Test").close_on_any_key();
 
         assert_eq!(
-            popup.handle_key(KeyCode::Char('q')),
+            popup.handle_action(None, KeyCode::Char('q')),
             Some(ModalResult::Cancelled)
         );
         assert_eq!(
-            popup.handle_key(KeyCode::Enter),
+            popup.handle_action(None, KeyCode::Enter),
             Some(ModalResult::Cancelled)
         );
-        assert_eq!(popup.handle_key(KeyCode::Esc), Some(ModalResult::Cancelled));
+        assert_eq!(
+            popup.handle_action(None, KeyCode::Esc),
+            Some(ModalResult::Cancelled)
+        );
     }
 
     #[test]
@@ -452,11 +460,19 @@ mod tests {
         let mut popup: Popup = Popup::error("Test").close_on(KeyCode::Char('y'));
 
         assert_eq!(
-            popup.handle_key(KeyCode::Char('y')),
+            popup.handle_action(None, KeyCode::Char('y')),
             Some(ModalResult::Cancelled)
         );
-        assert_eq!(popup.handle_key(KeyCode::Char('n')), None);
-        assert_eq!(popup.handle_key(KeyCode::Esc), None);
+        assert_eq!(popup.handle_action(None, KeyCode::Char('n')), None);
+    }
+
+    #[test]
+    fn should_close_on_esc_anyway() {
+        let mut popup: Popup = Popup::info("Test").close_on(KeyCode::Tab);
+        assert_eq!(
+            popup.handle_action(None, KeyCode::Esc),
+            Some(ModalResult::Cancelled)
+        );
     }
 
     #[test]
@@ -468,13 +484,13 @@ mod tests {
 
         assert_eq!(popup.scroll.current.get(), 0);
 
-        popup.handle_key(KeyCode::Char('j'));
+        popup.handle_action(Some(Action::MoveDown), KeyCode::Null);
         assert_eq!(popup.scroll.current.get(), 1);
 
-        popup.handle_key(KeyCode::Char('k'));
+        popup.handle_action(Some(Action::MoveUp), KeyCode::Null);
         assert_eq!(popup.scroll.current.get(), 0);
 
-        popup.handle_key(KeyCode::Char('k'));
+        popup.handle_action(Some(Action::MoveUp), KeyCode::Null);
         assert_eq!(popup.scroll.current.get(), 0);
     }
 

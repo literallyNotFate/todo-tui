@@ -1,4 +1,5 @@
 use crate::{
+    core::Action,
     theme::ThemePalette,
     traits::{Modal, ModalResult, ModalSize},
     ui::{RenderContext, center},
@@ -151,19 +152,25 @@ impl Modal for Confirm {
     }
 
     /// Key event handling
-    fn handle_key(&mut self, key: KeyCode) -> Option<ModalResult> {
+    fn handle_action(&mut self, action: Option<Action>, key: KeyCode) -> Option<ModalResult> {
         match key {
-            KeyCode::Char('y') => return Some(ModalResult::Confirmed),
-            KeyCode::Char('n') | KeyCode::Esc => return Some(ModalResult::Cancelled),
             KeyCode::Enter => {
                 return Some(match self.select {
                     ConfirmOption::Yes => ModalResult::Confirmed,
                     ConfirmOption::Cancel => ModalResult::Cancelled,
                 });
             }
-            KeyCode::Right | KeyCode::Char('l') => self.select = ConfirmOption::Cancel,
-            KeyCode::Left | KeyCode::Char('h') => self.select = ConfirmOption::Yes,
+            KeyCode::Esc | KeyCode::Char('n') => return Some(ModalResult::Cancelled),
+            KeyCode::Char('y') => return Some(ModalResult::Confirmed),
             _ => {}
+        }
+
+        if let Some(act) = action {
+            match act {
+                Action::MoveRight => self.select = ConfirmOption::Cancel,
+                Action::MoveLeft => self.select = ConfirmOption::Yes,
+                _ => {}
+            }
         }
 
         None
@@ -204,35 +211,27 @@ mod tests {
     #[test]
     fn should_handle_left_right_key_confirm() {
         let mut confirm: Confirm = Confirm::new("Test");
-
         assert_eq!(confirm.select, ConfirmOption::Cancel);
 
-        confirm.handle_key(KeyCode::Left);
+        confirm.handle_action(Some(Action::MoveLeft), KeyCode::Null);
         assert_eq!(confirm.select, ConfirmOption::Yes);
 
-        confirm.handle_key(KeyCode::Right);
-        assert_eq!(confirm.select, ConfirmOption::Cancel);
-
-        confirm.handle_key(KeyCode::Char('h'));
-        assert_eq!(confirm.select, ConfirmOption::Yes);
-
-        confirm.handle_key(KeyCode::Char('l'));
+        confirm.handle_action(Some(Action::MoveRight), KeyCode::Null);
         assert_eq!(confirm.select, ConfirmOption::Cancel);
     }
 
     #[test]
     fn should_handle_key_enter_confirm() {
         let mut confirm: Confirm = Confirm::new("Test");
-
         confirm.select = ConfirmOption::Yes;
         assert_eq!(
-            confirm.handle_key(KeyCode::Enter),
+            confirm.handle_action(None, KeyCode::Enter),
             Some(ModalResult::Confirmed)
         );
 
         confirm.select = ConfirmOption::Cancel;
         assert_eq!(
-            confirm.handle_key(KeyCode::Enter),
+            confirm.handle_action(None, KeyCode::Enter),
             Some(ModalResult::Cancelled)
         );
     }
@@ -242,7 +241,7 @@ mod tests {
         let mut confirm: Confirm = Confirm::new("Test");
 
         assert_eq!(
-            confirm.handle_key(KeyCode::Esc),
+            confirm.handle_action(None, KeyCode::Esc),
             Some(ModalResult::Cancelled)
         );
     }
@@ -251,16 +250,16 @@ mod tests {
     fn should_handle_key_other_keys_confirm() {
         let mut confirm: Confirm = Confirm::new("Test");
 
-        assert_eq!(confirm.handle_key(KeyCode::Char('a')), None);
-        assert_eq!(confirm.handle_key(KeyCode::Down), None);
+        assert_eq!(confirm.handle_action(None, KeyCode::Char('a')), None);
+        assert_eq!(confirm.handle_action(None, KeyCode::Down), None);
         assert_eq!(confirm.select, ConfirmOption::Cancel);
 
         assert_eq!(
-            confirm.handle_key(KeyCode::Char('y')),
+            confirm.handle_action(None, KeyCode::Char('y')),
             Some(ModalResult::Confirmed)
         );
         assert_eq!(
-            confirm.handle_key(KeyCode::Char('n')),
+            confirm.handle_action(None, KeyCode::Char('n')),
             Some(ModalResult::Cancelled)
         );
     }

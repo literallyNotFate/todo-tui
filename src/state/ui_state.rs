@@ -29,6 +29,8 @@ pub struct UIState {
 
     pub theme: Theme,
     pub config: UIConfig,
+
+    should_redraw: bool,
 }
 
 impl UIState {
@@ -80,6 +82,21 @@ impl UIState {
             description_scroll_pos: self.desc_scroll.current.get(),
             hotkeys_scroll_pos: self.hotkeys_scroll.current.get(),
         }
+    }
+
+    /// Request UI to be redrawed in the application draw method
+    pub fn request_redraw(&mut self) {
+        self.should_redraw = true;
+    }
+
+    /// Check whether terminal should redraw the frame
+    pub fn needs_redraw(&self) -> bool {
+        self.should_redraw
+    }
+
+    /// Tells terminal to stop redrawing UI
+    pub fn clear_redraw_flag(&mut self) {
+        self.should_redraw = false;
     }
 
     /// Shows modal widget (confirm/popup)
@@ -342,6 +359,7 @@ impl Default for UIState {
             hotkeys_scroll: AdaptiveScroll::default(),
             theme: Theme::new(ThemeName::default()),
             config: UIConfig::default(),
+            should_redraw: false,
         }
     }
 }
@@ -526,6 +544,41 @@ mod tests {
 
         ui.toggle_sidebar();
         assert!(ui.config.show_sidebar);
+    }
+
+    #[test]
+    fn show_test_redraw_lifecycle() {
+        let mut ui = UIState::default();
+
+        assert!(
+            !ui.needs_redraw(),
+            "Initial state should not require redraw"
+        );
+
+        ui.request_redraw();
+        assert!(
+            ui.needs_redraw(),
+            "Flag should be true after request_redraw"
+        );
+
+        ui.clear_redraw_flag();
+        assert!(
+            !ui.needs_redraw(),
+            "Flag should be false after clear_redraw_flag"
+        );
+    }
+
+    #[test]
+    fn should_send_signal_to_redraw_only_once() {
+        let mut ui = UIState::default();
+
+        ui.request_redraw();
+        ui.request_redraw();
+
+        assert!(ui.needs_redraw());
+
+        ui.clear_redraw_flag();
+        assert!(!ui.needs_redraw());
     }
 
     #[test]
