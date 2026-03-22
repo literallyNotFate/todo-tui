@@ -45,11 +45,10 @@ impl Notification {
 
     /// Notification rendering
     pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        use crate::ui::utils;
         use ratatui::{style::Style, widgets::Paragraph};
 
         let available_width = (area.width as usize).saturating_sub(5);
-        let truncated_message = utils::truncate(&self.message, available_width);
+        let truncated_message = RenderContext::truncate(&self.message, available_width);
         let palette: ThemePalette = ctx.palette();
 
         let (icon, color) = self.icon_with_color(&palette);

@@ -1,4 +1,5 @@
 use crate::{
+    config::KeyMaps,
     core::{ApplicationMode, Autosave},
     state::{ApplicationState, UIState},
     ui::RenderContext,
@@ -16,11 +17,14 @@ impl Renderer {
         ui: &UIState,
         mode: ApplicationMode,
         autosave: &Autosave,
+        keymaps: &KeyMaps,
     ) {
         use crate::ui::{Dashboard, FeedbackKind, FeedbackWidget};
         use ratatui::{layout::Rect, widgets::Clear};
 
-        let mut ctx: RenderContext = RenderContext::new(frame, ui, mode);
+        let has_modal: bool = ui.modal.is_some();
+        let mut ctx: RenderContext =
+            RenderContext::new(frame, ui, keymaps, mode).with_dimmed(has_modal);
         let area: Rect = ctx.area();
 
         if ctx.is_small() {
@@ -32,9 +36,10 @@ impl Renderer {
 
         if let Some(dialog) = &ui.modal {
             let dialog_area: Rect = dialog.modal.area(area);
-
             ctx.render_modal_overlay();
             ctx.render_widget(Clear, dialog_area);
+
+            ctx.set_dimmed(false);
             dialog.modal.render(&mut ctx, dialog_area);
         }
     }

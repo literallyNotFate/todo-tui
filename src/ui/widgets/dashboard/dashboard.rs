@@ -24,20 +24,20 @@ impl<'a> Dashboard<'a> {
     /// Dashboard rendering
     pub fn render(self, ctx: &mut RenderContext, area: Rect) {
         use crate::ui::{
-            main_layout,
+            MainLayout,
             widgets::dashboard::{
-                bottom::BottomBarWidget, content::ContentWidget, sidebar::SidebarWidget,
+                content::ContentWidget, footer::FooterWidget, sidebar::SidebarWidget,
             },
         };
 
         let show_sidebar: bool = ctx.config.show_sidebar;
-        let (left_area, content_area, bottom_area) = main_layout(area, show_sidebar);
+        let layout: MainLayout = MainLayout::split(area, ctx.config.show_sidebar);
 
         if show_sidebar {
-            SidebarWidget::new(self.ui, &self.state.todos).render(ctx, left_area);
+            SidebarWidget::new(self.ui, &self.state.todos).render(ctx, layout.sidebar);
         }
 
-        ContentWidget::new(self.state, self.ui).render(ctx, content_area);
-        BottomBarWidget::new(self.state, self.autosave).render(ctx, bottom_area);
+        ContentWidget::new(self.state, self.ui).render(ctx, layout.content);
+        FooterWidget::new(self.state, self.autosave).render(ctx, layout.footer);
     }
 }

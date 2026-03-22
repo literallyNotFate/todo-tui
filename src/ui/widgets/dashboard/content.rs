@@ -27,7 +27,7 @@ impl<'a> ContentWidget<'a> {
             }
             _ => {
                 let query: &str = &self.ui.search_query();
-                let filtered: Vec<&Todo> = self.ui.current_filter.apply(&self.state.todos, query);
+                let filtered: Vec<&Todo> = self.ui.filter.value.apply(&self.state.todos, query);
 
                 if filtered.is_empty() && query.is_empty() {
                     FeedbackWidget::new(FeedbackKind::EmptyList).render(ctx, area);
