@@ -1,6 +1,7 @@
+use super::{TaskCreatedResult, TaskRemovedResult, TaskUpdatedResult};
 use crate::{
-    core::TodoError,
-    models::{Filter, Priority, Sort, Todo},
+    core::{Sort, TodoError},
+    models::{Filter, Priority, Todo, todo::TodoEditor},
     state::ApplicationResult,
 };
 use chrono::Local;
@@ -15,7 +16,7 @@ impl TodoService {
         todos: &mut Vec<Todo>,
         task: Todo,
         sort: &Sort,
-    ) -> ApplicationResult<String> {
+    ) -> ApplicationResult<TaskCreatedResult> {
         if task.title.trim().is_empty() {
             log::debug!("Validation error on append: Task title is empty");
             return Err(TodoError::EmptyTitle.into());
@@ -23,25 +24,27 @@ impl TodoService {
 
         let title: String = task.title.clone();
         log::info!("Adding new task: '{}' (ID: {})", title, task.id);
-        todos.push(task);
-        Self::sorting(todos, sort);
 
-        Ok(title)
+        todos.push(task.clone());
+        Self::sorting(todos, sort);
+        let index = todos.iter().position(|t| t.id == task.id).unwrap();
+
+        Ok(TaskCreatedResult { index, task })
     }
 
-    /// Update task by id
+    /// Update task by id using TodoEditor model
     pub fn update_task(
         todos: &mut [Todo],
         id: &Uuid,
-        task: Todo,
+        editor: TodoEditor,
         sort: &Sort,
-    ) -> ApplicationResult<usize> {
-        if task.title.trim().is_empty() {
+    ) -> ApplicationResult<TaskUpdatedResult> {
+        if editor.title.trim().is_empty() {
             log::debug!("Validation error on update: Task title is empty");
             return Err(TodoError::EmptyTitle.into());
         }
 
-        let index: usize = todos.iter().position(|t| t.id == *id).ok_or_else(|| {
+        let original_index: usize = todos.iter().position(|t| t.id == *id).ok_or_else(|| {
             log::warn!(
                 "Update failed: Task with ID {} not found in current list",
                 id
@@ -49,15 +52,35 @@ impl TodoService {
             TodoError::TaskNotFound
         })?;
 
-        todos[index].update(task);
-        Self::sorting(todos, sort);
+        let old: Todo = todos[original_index].clone();
+        todos[original_index].update_from_editor(editor);
+        let new: Todo = todos[original_index].clone();
 
-        let new_index: usize = todos.iter().position(|t| t.id == *id).unwrap();
-        Ok(new_index)
+        log::info!(
+            "Task updated successfully: '{}' (ID: {}). Changes: [Title: '{}' -> '{}', Priority: {:?} -> {:?}]",
+            new.title,
+            id,
+            old.title,
+            new.title,
+            old.priority,
+            new.priority
+        );
+
+        Self::sorting(todos, sort);
+        let new_index: usize = todos
+            .iter()
+            .position(|t| t.id == *id)
+            .expect("Task must exist");
+
+        Ok(TaskUpdatedResult {
+            index: new_index,
+            old,
+            new,
+        })
     }
 
     /// Remove task by id
-    pub fn remove_task(todos: &mut Vec<Todo>, id: &Uuid) -> ApplicationResult<String> {
+    pub fn remove_task(todos: &mut Vec<Todo>, id: &Uuid) -> ApplicationResult<TaskRemovedResult> {
         let index: usize = todos.iter().position(|t| t.id == *id).ok_or_else(|| {
             log::error!(
                 "Remove failed: Attempted to remove non-existent task ID {}",
@@ -68,7 +91,7 @@ impl TodoService {
 
         let task: Todo = todos.remove(index);
         log::info!("Task removed: '{}' (ID: {})", task.title, id);
-        Ok(task.title)
+        Ok(TaskRemovedResult { task })
     }
 
     /// Toggle completed/uncompleted by id
@@ -156,27 +179,27 @@ impl TodoService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::ApplicationError;
+    use crate::core::{ApplicationError, Selectable};
 
     #[test]
     fn should_append_task_service() {
         let mut todos: Vec<Todo> = Vec::new();
         let task_to_add: Todo = Todo::new("Buy stuff", "Just buy stuff", Some(Priority::High));
 
-        let result: ApplicationResult<String> =
+        let result: ApplicationResult<TaskCreatedResult> =
             TodoService::append_task(&mut todos, task_to_add, &Sort::default());
         let added_task: &Todo = &todos[0];
 
         assert!(result.is_ok());
         assert_eq!(todos.len(), 1);
-        assert_eq!(result.unwrap(), added_task.title);
+        assert_eq!(result.unwrap().task.title, added_task.title);
     }
 
     #[test]
     fn should_fail_append_task_service_on_empty_title() {
         let mut todos: Vec<Todo> = Vec::new();
         let task_to_add: Todo = Todo::new("", "Just buy stuff", Some(Priority::High));
-        let result: ApplicationResult<String> =
+        let result: ApplicationResult<TaskCreatedResult> =
             TodoService::append_task(&mut todos, task_to_add, &Sort::default());
 
         assert!(matches!(
@@ -194,28 +217,42 @@ mod tests {
             Some(Priority::Medium),
         )];
         let id: Uuid = todos[0].id;
-        let updated_data: Todo = Todo::new("New Title", "Description", Some(Priority::High));
+        let editor: TodoEditor = TodoEditor {
+            title: "New Title".into(),
+            description: "Description".into(),
+            priority: Selectable::new(Priority::High),
+        };
 
-        let result: ApplicationResult<usize> =
-            TodoService::update_task(&mut todos, &id, updated_data, &Sort::default());
-
+        let result = TodoService::update_task(&mut todos, &id, editor, &Sort::default());
         assert!(result.is_ok());
-        assert_eq!(result, Ok(0));
+
+        let res = result.unwrap();
+
+        assert_eq!(res.index, 0);
+        assert_eq!(res.old.title, "Old title");
+        assert_eq!(res.new.title, "New Title");
+        assert_eq!(res.new.priority, Priority::High);
         assert_eq!(todos[0].title, "New Title");
-        assert_eq!(todos[0].priority, Priority::High);
     }
 
     #[test]
     fn should_fail_update_task_service_with_empty_title() {
         let mut todos: Vec<Todo> = vec![Todo::new("Valid", "Desc", None)];
         let id: Uuid = todos[0].id;
-        let invalid_data: Todo = Todo::new("", "Desc", None);
+        let editor: TodoEditor = TodoEditor {
+            title: "".into(),
+            description: "Desc".into(),
+            priority: Selectable::new(Priority::Low),
+        };
 
-        let result: ApplicationResult<usize> =
-            TodoService::update_task(&mut todos, &id, invalid_data, &Sort::default());
+        let result: ApplicationResult<TaskUpdatedResult> =
+            TodoService::update_task(&mut todos, &id, editor, &Sort::default());
 
         assert!(result.is_err());
-        assert_eq!(result, Err(ApplicationError::Todo(TodoError::EmptyTitle)));
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Todo(TodoError::EmptyTitle))
+        ));
         assert_eq!(todos[0].title, "Valid");
     }
 
@@ -223,16 +260,20 @@ mod tests {
     fn should_fail_update_task_service_with_wrong_id() {
         let mut todos: Vec<Todo> = vec![Todo::new("Task", "", None)];
         let fake_id: Uuid = Uuid::new_v4();
+        let editor: TodoEditor = TodoEditor {
+            title: "X".into(),
+            description: "".into(),
+            priority: Selectable::new(Priority::Low),
+        };
 
-        let result: ApplicationResult<usize> = TodoService::update_task(
-            &mut todos,
-            &fake_id,
-            Todo::new("X", "", None),
-            &Sort::default(),
-        );
+        let result: ApplicationResult<TaskUpdatedResult> =
+            TodoService::update_task(&mut todos, &fake_id, editor, &Sort::default());
 
         assert!(result.is_err());
-        assert_eq!(result, Err(ApplicationError::Todo(TodoError::TaskNotFound)));
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Todo(TodoError::TaskNotFound))
+        ));
     }
 
     #[test]
@@ -243,10 +284,11 @@ mod tests {
         ];
         let id_to_remove: Uuid = todos[0].id;
 
-        let result: ApplicationResult<String> = TodoService::remove_task(&mut todos, &id_to_remove);
+        let result: ApplicationResult<TaskRemovedResult> =
+            TodoService::remove_task(&mut todos, &id_to_remove);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "Task 1");
+        assert_eq!(result.unwrap().task.title, "Task 1");
         assert_eq!(todos.len(), 1);
         assert_eq!(todos[0].title, "Task 2");
     }
@@ -256,7 +298,8 @@ mod tests {
         let mut todos: Vec<Todo> = vec![Todo::new("Task", "", None)];
         let fake_id: Uuid = Uuid::new_v4();
 
-        let result: ApplicationResult<String> = TodoService::remove_task(&mut todos, &fake_id);
+        let result: ApplicationResult<TaskRemovedResult> =
+            TodoService::remove_task(&mut todos, &fake_id);
 
         assert!(result.is_err());
         assert!(matches!(

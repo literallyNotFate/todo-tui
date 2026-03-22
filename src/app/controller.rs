@@ -2,9 +2,8 @@ use crate::{
     app::TodoService,
     config::{Config, KeyMaps},
     core::{Storage, TodoError},
-    models::{Priority, Todo},
-    state::{ApplicationState, UIState},
-    traits::InteractableEnum,
+    models::{Priority, Todo, todo::TodoEditor},
+    state::{ApplicationState, Session, UIState},
 };
 use uuid::Uuid;
 
@@ -51,7 +50,10 @@ impl<'a> ApplicationController<'a> {
 
                 self.ui.push_notification(
                     self.state,
-                    Ok(format!("Task '{}' was added to the list!", added)),
+                    Ok(format!(
+                        "Task '{}' was added to the list!",
+                        added.task.title
+                    )),
                 );
             }
             Err(e) => self.ui.push_notification(self.state, Err(e)),
@@ -59,19 +61,14 @@ impl<'a> ApplicationController<'a> {
     }
 
     /// Handle updating an existing todo
-    pub fn dispatch_update(&mut self, id: Uuid, task: Todo) {
-        match TodoService::update_task(&mut self.state.todos, &id, task, &self.state.sort) {
-            Ok(index) => {
+    pub fn dispatch_update(&mut self, id: Uuid, editor: TodoEditor) {
+        match TodoService::update_task(&mut self.state.todos, &id, editor, &self.state.sort) {
+            Ok(result) => {
                 log::debug!("Dispatching update for task (ID: {})", id);
                 self.stabilize(Some(id));
                 self.state.mark_as_dirty();
 
-                let msg = format!(
-                    "Task {} / {} was updated",
-                    index + 1,
-                    self.state.todos.len()
-                );
-
+                let msg = self.format_update_service_message(&result.old, &result.new);
                 self.ui.push_notification(self.state, Ok(msg));
             }
             Err(e) => self.ui.push_notification(self.state, Err(e)),
@@ -83,13 +80,13 @@ impl<'a> ApplicationController<'a> {
         if let Some(id) = self.ui.selected_id(self.state) {
             match TodoService::remove_task(&mut self.state.todos, &id) {
                 Ok(removed) => {
-                    log::debug!("Dispatching remove for task '{}'", removed);
+                    log::debug!("Dispatching remove for task '{}'", removed.task.title);
                     self.stabilize(None);
                     self.state.mark_as_dirty();
 
                     self.ui.push_notification(
                         self.state,
-                        Ok(format!("Task '{}' was removed!", removed)),
+                        Ok(format!("Task '{}' was removed!", removed.task.title)),
                     );
                 }
                 Err(e) => self.ui.push_notification(self.state, Err(e)),
@@ -114,7 +111,7 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_move_tasks(&mut self, delta: i32) {
         if let Some((index_a, index_b)) =
             self.state
-                .swap_indices(&self.ui.current_filter, &self.ui.search_query(), delta)
+                .swap_indices(&self.ui.filter.value, &self.ui.search_query(), delta)
         {
             match TodoService::move_tasks(&mut self.state.todos, index_a, index_b) {
                 Ok(_) => {
@@ -135,18 +132,14 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle clearing tasks by filter
     pub fn dispatch_clear(&mut self) {
-        let removed: usize = TodoService::clear(&mut self.state.todos, &self.ui.current_filter);
+        let removed: usize = TodoService::clear(&mut self.state.todos, &self.ui.filter);
 
         if removed > 0 {
             log::info!("Clear successful: {} tasks removed", removed);
             self.state.mark_as_dirty();
             self.stabilize(None);
 
-            let msg: String = format!(
-                "Cleared {} tasks from '{}'",
-                removed,
-                self.ui.current_filter.to_string()
-            );
+            let msg: String = format!("Cleared {} tasks from '{}'", removed, self.ui.filter);
             self.ui.push_notification(self.state, Ok(msg));
         } else {
             log::debug!("Clear skipped: no tasks matched current filter");
@@ -159,12 +152,10 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_save(&mut self) -> bool {
         self.config.update_from_ui(self.ui);
 
-        let current_id = self.state.selected_id(
-            &self.state.todos,
-            &self.ui.current_filter,
-            &self.ui.search_query(),
-        );
-        let session = self.ui.to_session(current_id);
+        let current_id =
+            self.state
+                .selected_id(&self.state.todos, &self.ui.filter, &self.ui.search_query());
+        let session = Session::from_state(self.ui, current_id);
 
         match Storage::save(&self.state.todos, session, None, &self.config.storage) {
             Ok(msg) => {
@@ -186,11 +177,7 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_sorting(&mut self) {
         let selected_id = self
             .state
-            .selected(
-                &self.state.todos,
-                &self.ui.current_filter,
-                &self.ui.search_query(),
-            )
+            .selected(&self.state.todos, &self.ui.filter, &self.ui.search_query())
             .map(|t| t.id);
 
         TodoService::sorting(&mut self.state.todos, &self.state.sort);
@@ -199,7 +186,8 @@ impl<'a> ApplicationController<'a> {
         if let Some(id) = selected_id {
             let filtered = self
                 .ui
-                .current_filter
+                .filter
+                .value
                 .apply(&self.state.todos, &self.ui.search_query());
             let new_pos = filtered.iter().position(|t| t.id == id);
 
@@ -209,7 +197,7 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle selection change
     pub fn dispatch_move_selection(&mut self, delta: i32) {
-        let len = self.state.filter(&self.ui.current_filter).count();
+        let len = self.state.filter(&self.ui.filter).count();
         let wrap: bool = self.config.behavior.wrap_scrolling;
         self.state.move_selection(delta, len, wrap);
         self.ui.desc_scroll.reset();
@@ -219,7 +207,7 @@ impl<'a> ApplicationController<'a> {
     pub fn stabilize(&mut self, focus_id: Option<Uuid>) {
         let visible_ids: Vec<Uuid> = self
             .ui
-            .current_filter
+            .filter
             .apply(&self.state.todos, &self.ui.search_query())
             .iter()
             .map(|t| t.id)
@@ -232,6 +220,22 @@ impl<'a> ApplicationController<'a> {
         );
         self.state.sync_with_ids(&visible_ids, focus_id);
     }
+
+    /// Helper function to generate update task text based on diff between states
+    fn format_update_service_message(&self, old: &Todo, new: &Todo) -> String {
+        if old.title != new.title {
+            format!("Title: '{}' → '{}'", old.title, new.title)
+        } else if old.priority != new.priority {
+            format!(
+                "Priority: {:?} → {:?} for '{}'",
+                old.priority, new.priority, new.title
+            )
+        } else if old.description != new.description {
+            format!("Description updated for '{}'", new.title)
+        } else {
+            format!("Saved '{}' without changes!", new.title)
+        }
+    }
 }
 
 /// Unit-tests for application controller
@@ -240,7 +244,7 @@ mod tests {
     use super::*;
     use crate::{
         config::StorageConfig,
-        models::{Sort, SortBy, SortOrder},
+        core::{Selectable, Sort, SortBy, SortOrder},
         ui::Notification,
     };
     use std::path::{Path, PathBuf};
@@ -261,12 +265,10 @@ mod tests {
         path: &Path,
         config: &StorageConfig,
     ) {
-        let selected_id: Option<Uuid> =
-            state.selected_id(&state.todos, &ui.current_filter, &ui.search_query());
-        match Storage::save(&state.todos, ui.to_session(selected_id), Some(path), config) {
-            Ok(string) => ui.show_result_popup(Ok(string)),
-            Err(e) => ui.show_result_popup(Err(e)),
-        }
+        let selected_id = state.selected_id(&state.todos, &ui.filter, &ui.search_query());
+        let session = Session::from_state(ui, selected_id);
+        let result = Storage::save(&state.todos, session, Some(path), config);
+        ui.show_result_popup(result);
     }
 
     #[test]
@@ -308,26 +310,40 @@ mod tests {
         TodoService::sorting(&mut state.todos, &state.sort);
         state.select_state.select(Some(1));
 
-        let mut updated_task = state.todos[1].clone();
-        updated_task.title = "Updated to High".into();
-        updated_task.priority = Priority::High;
+        let editor = TodoEditor {
+            title: "Now High".into(),
+            description: "".into(),
+            priority: Selectable::new(Priority::High),
+        };
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
-        ctrl.dispatch_update(low_id, updated_task);
+        ctrl.dispatch_update(low_id, editor);
 
-        let new_pos = state.todos.iter().position(|t| t.id == low_id).unwrap();
+        let new_pos = state
+            .todos
+            .iter()
+            .position(|t| t.id == low_id)
+            .expect("Task must exist in list");
 
         assert_eq!(
             state.select_state.selected(),
             Some(new_pos),
-            "Focus must follow the task"
+            "Selection must follow the task to its new sorted position"
         );
-        assert_eq!(state.todos[new_pos].title, "Updated to High");
 
-        let note: &Notification = state.notification.as_ref().unwrap();
-        assert!(note.message.contains("updated"),);
+        assert_eq!(state.todos[new_pos].title, "Now High");
+
+        let note = state
+            .notification
+            .as_ref()
+            .expect("Notification should be present");
+
+        assert!(
+            note.message.contains("Title: 'Low Task' → 'Now High'"),
+            "Notification should show the title change. Current: {}",
+            note.message
+        );
     }
-
     #[test]
     fn should_handle_empty_title_error_on_update() {
         let (mut state, mut ui, mut config, keymaps) = setup();
@@ -335,11 +351,15 @@ mod tests {
         let id: Uuid = task.id;
 
         state.todos.push(task);
-        let mut updated_task: Todo = state.todos[0].clone();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
 
-        updated_task.title = "".into();
-        ctrl.dispatch_update(id, updated_task);
+        let editor: TodoEditor = TodoEditor {
+            title: "".into(),
+            description: "".into(),
+            priority: Selectable::default(),
+        };
+
+        ctrl.dispatch_update(id, editor);
 
         let note: &Notification = state.notification.as_ref().unwrap();
         assert!(state.notification.is_some());
@@ -351,9 +371,13 @@ mod tests {
         let (mut state, mut ui, mut config, keymaps) = setup();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
         let fake_id: Uuid = Uuid::new_v4();
-        let task: Todo = Todo::new("Title", "", None);
+        let editor: TodoEditor = TodoEditor {
+            title: "Title".into(),
+            description: "".into(),
+            priority: Selectable::default(),
+        };
 
-        ctrl.dispatch_update(fake_id, task);
+        ctrl.dispatch_update(fake_id, editor);
 
         let note: &Notification = state.notification.as_ref().unwrap();
         assert!(state.notification.is_some());
