@@ -1,10 +1,11 @@
 use super::Todo;
-use crate::traits::InteractableEnum;
-use chrono::Local;
 use serde::{Deserialize, Serialize};
 
 /// Selected filter enum
-#[derive(Default, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(
+    Default, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, strum::EnumIter, strum::Display,
+)]
+#[strum(serialize_all = "title_case")]
 pub enum Filter {
     #[default]
     All,
@@ -12,28 +13,6 @@ pub enum Filter {
     Completed,
     HighPriority,
     Today,
-}
-
-impl InteractableEnum for Filter {
-    fn all() -> &'static [Self] {
-        &[
-            Self::All,
-            Self::Active,
-            Self::Completed,
-            Self::HighPriority,
-            Self::Today,
-        ]
-    }
-
-    fn to_string(&self) -> &'static str {
-        match self {
-            Self::All => "All",
-            Self::Active => "Active",
-            Self::Completed => "Completed",
-            Self::HighPriority => "High Priority",
-            Self::Today => "Today",
-        }
-    }
 }
 
 impl Filter {
@@ -44,7 +23,7 @@ impl Filter {
     pub fn apply<'a>(&self, todos: &'a [Todo], query: &str) -> Vec<&'a Todo> {
         let query_lower: String = query.to_lowercase().trim().to_string();
         let is_empty: bool = query_lower.is_empty();
-        let today = Local::now().date_naive();
+        let today = chrono::Local::now().date_naive();
 
         todos
             .iter()
@@ -62,7 +41,7 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::Priority;
+    use crate::models::todo::Priority;
     use chrono::{Duration, Utc};
 
     fn setup_test_todos() -> Vec<Todo> {

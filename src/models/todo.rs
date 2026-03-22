@@ -1,5 +1,5 @@
-use super::{Filter, Priority};
-use crate::config::UIConfig;
+use super::Filter;
+use crate::{config::UIConfig, core::Selectable, theme::ThemePalette};
 use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
@@ -44,23 +44,11 @@ impl Todo {
         }
     }
 
-    /// Creating new todo based on existing id (for update)
-    pub fn from_id(
-        id: Uuid,
-        title: impl Into<String>,
-        description: impl Into<String>,
-        priority: Option<Priority>,
-    ) -> Self {
-        let mut todo = Self::new(title, description, priority);
-        todo.id = id;
-        todo
-    }
-
-    /// Update todo using other todo
-    pub fn update(&mut self, other: Todo) {
-        self.title = other.title;
-        self.description = other.description;
-        self.priority = other.priority;
+    /// Update task using editor model from form
+    pub fn update_from_editor(&mut self, editor: TodoEditor) {
+        self.title = editor.title;
+        self.description = editor.description;
+        self.priority = *editor.priority;
         self.title_lower = self.title.to_lowercase();
         self.updated_at = Utc::now();
     }
@@ -73,35 +61,24 @@ impl Todo {
     /// Return created at string for table
     pub fn time_ago(&self) -> String {
         let now: DateTime<Utc> = Utc::now();
-        let time_passed: TimeDelta = now.signed_duration_since(self.created_at);
+        let diff: TimeDelta = now.signed_duration_since(self.created_at);
 
-        let minutes: i64 = time_passed.num_minutes();
-        let hours: i64 = time_passed.num_hours();
-        let days: i64 = time_passed.num_days();
+        if diff.num_seconds() <= 0 {
+            return "just now".into();
+        }
 
-        let format_unit = |count: i64, unit: &str| -> String {
-            if count == 1 {
-                format!("{} {} ago", count, unit)
-            } else {
-                format!("{} {}s ago", count, unit)
-            }
+        let (count, unit) = match diff {
+            d if d.num_days() >= 365 => (d.num_days() / 365, "year"),
+            d if d.num_days() >= 30 => (d.num_days() / 30, "month"),
+            d if d.num_days() >= 7 => (d.num_days() / 7, "week"),
+            d if d.num_days() >= 1 => (d.num_days(), "day"),
+            d if d.num_hours() >= 1 => (d.num_hours(), "hour"),
+            d if d.num_minutes() >= 1 => (d.num_minutes(), "minute"),
+            _ => return "just now".into(),
         };
 
-        if days >= 365 {
-            format_unit(days / 365, "year")
-        } else if days >= 30 {
-            format_unit(days / 30, "month")
-        } else if days >= 7 {
-            format_unit(days / 7, "week")
-        } else if days > 0 {
-            format_unit(days, "day")
-        } else if hours > 0 {
-            format_unit(hours, "hour")
-        } else if minutes > 0 {
-            format_unit(minutes, "minute")
-        } else {
-            "just now".to_string()
-        }
+        let s = if count == 1 { "" } else { "s" };
+        format!("{} {}{} ago", count, unit, s)
     }
 
     /// Checks whether specific todo matches current filter conditions (for filter)
@@ -143,32 +120,81 @@ impl TodoDetails {
     pub fn from(todo: &Todo, config: &UIConfig) -> Self {
         let time_fmt: &str = if config.use_24h { "%H:%M" } else { "%I:%M %p" };
         let full_fmt: String = format!("{}, {}", config.date_format, time_fmt);
+        let fmt = |dt: DateTime<Utc>| dt.with_timezone(&Local).format(&full_fmt).to_string();
 
         Self {
-            title: todo.title.clone(),
-            description: todo.description.clone(),
-            created_at: todo
-                .created_at
-                .with_timezone(&Local)
-                .format(&full_fmt)
-                .to_string(),
-
-            updated_at: todo
-                .updated_at
-                .with_timezone(&Local)
-                .format(&full_fmt)
-                .to_string(),
-
             id_short: todo.id.to_string()[..8].to_string(),
+            title: todo.title.clone(),
             completed: todo.completed,
+            description: todo.description.clone(),
+            created_at: fmt(todo.created_at),
+            updated_at: fmt(todo.updated_at),
         }
     }
 }
 
-/// Unit-tests for todo model (basic methods)
+/// Task priority
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Default,
+    Hash,
+    Eq,
+    PartialEq,
+    Copy,
+    PartialOrd,
+    Ord,
+    strum::EnumIter,
+    strum::Display,
+)]
+#[strum(serialize_all = "PascalCase")]
+pub enum Priority {
+    #[default]
+    Low,
+    Medium,
+    High,
+}
+
+impl Priority {
+    pub fn palette(&self, palette: &ThemePalette) -> ratatui::style::Color {
+        match self {
+            Priority::High => palette.error,
+            Priority::Medium => palette.warning,
+            Priority::Low => palette.success,
+        }
+    }
+}
+
+/// Model for updating task
+pub struct TodoEditor {
+    pub title: String,
+    pub description: String,
+    pub priority: Selectable<Priority>,
+}
+
+impl TodoEditor {
+    pub fn from_todo(todo: &Todo) -> Self {
+        Self {
+            title: todo.title.clone(),
+            description: todo.description.clone(),
+            priority: Selectable::new(todo.priority),
+        }
+    }
+
+    pub fn save(self, todo: &mut Todo) {
+        todo.title = self.title;
+        todo.description = self.description;
+        todo.priority = *self.priority;
+    }
+}
+
+/// Unit-tests for todo model + priority (basic methods)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::{ThemeName, ThemePalette};
     use chrono::{Days, Duration, Months};
 
     #[test]
@@ -200,18 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn should_return_todo_with_id() {
-        let original_id: Uuid = Uuid::new_v4();
-        let task: Todo =
-            Todo::from_id(original_id, "Original", "Description", Some(Priority::High));
-
-        assert_eq!(task.id, original_id);
-        assert_eq!(task.title, "Original");
-        assert!(!task.completed);
-    }
-
-    #[test]
-    fn should_update_todo_fields() {
+    fn should_update_todo_fields_using_editor() {
         let mut todo: Todo = Todo::new("Test", "Test", None);
         todo.completed = true;
 
@@ -220,8 +235,12 @@ mod tests {
         assert_eq!(todo.priority, Priority::Low);
         assert!(todo.completed);
 
-        let new: Todo = Todo::new("Edit", "Edit", Some(Priority::High));
-        todo.update(new);
+        let editor: TodoEditor = TodoEditor {
+            title: "Edit".into(),
+            description: "Edit".into(),
+            priority: Selectable::new(Priority::High),
+        };
+        todo.update_from_editor(editor);
 
         assert_eq!(todo.title, "Edit");
         assert_eq!(todo.description, "Edit");
@@ -287,5 +306,32 @@ mod tests {
         assert_eq!(details.description, "Desc 1");
         assert_eq!(details.id_short.len(), 8);
         assert!(details.updated_at.contains(":"));
+    }
+
+    #[test]
+    fn should_return_string_from_enum() {
+        assert_eq!(Priority::Low.to_string(), "Low");
+        assert_eq!(Priority::Medium.to_string(), "Medium");
+        assert_eq!(Priority::High.to_string(), "High");
+    }
+
+    #[test]
+    fn should_compare_priorities() {
+        assert!(Priority::High > Priority::Low);
+        assert!(Priority::Medium > Priority::Low);
+        assert!(Priority::High > Priority::Medium);
+    }
+
+    #[test]
+    fn should_return_right_color_of_priority_with_theme() {
+        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let mut priority: Priority = Priority::Low;
+        assert_eq!(priority.palette(&palette), palette.success);
+
+        priority = Priority::Medium;
+        assert_eq!(priority.palette(&palette), palette.warning);
+
+        priority = Priority::High;
+        assert_eq!(priority.palette(&palette), palette.error);
     }
 }

@@ -1,10 +1,22 @@
-use crate::theme::ThemePalette;
+use crate::{core::Selectable, theme::ThemePalette};
 use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
 /// Themes for application
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    strum::EnumIter,
+    strum::Display,
+)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "title_case")]
 #[non_exhaustive]
 pub enum ThemeName {
     // Dark themes
@@ -25,65 +37,12 @@ pub enum ThemeName {
     RosePineDawn,
 
     #[serde(rename = "github-light")]
+    #[strum(to_string = "GitHub Light")]
     GitHubLight,
     SolarizedLight,
 }
 
 impl ThemeName {
-    /// Returns a slice containing all available theme names
-    pub const fn all() -> &'static [Self] {
-        &[
-            Self::GruvboxDark,
-            Self::CatppuccinMocha,
-            Self::TokyoNight,
-            Self::KanagawaWave,
-            Self::MelangeDark,
-            Self::RosePineMoon,
-            Self::Oxocarbon,
-            Self::GruvboxLight,
-            Self::CatppuccinLatte,
-            Self::KanagawaLotus,
-            Self::MelangeLight,
-            Self::RosePineDawn,
-            Self::GitHubLight,
-            Self::SolarizedLight,
-        ]
-    }
-
-    /// Returns the human-readable display name for the theme
-    pub const fn display_name(self) -> &'static str {
-        match self {
-            Self::GruvboxDark => "Gruvbox Dark",
-            Self::CatppuccinMocha => "Catppuccin Mocha",
-            Self::TokyoNight => "Tokyo Night",
-            Self::KanagawaWave => "Kanagawa Wave",
-            Self::MelangeDark => "Melange Dark",
-            Self::RosePineMoon => "Rose Pine Moon",
-            Self::Oxocarbon => "Oxocarbon",
-            Self::GruvboxLight => "Gruvbox Light",
-            Self::CatppuccinLatte => "Catppuccin Latte",
-            Self::KanagawaLotus => "Kanagawa Lotus",
-            Self::MelangeLight => "Melange Light",
-            Self::RosePineDawn => "Rose Pine Dawn",
-            Self::GitHubLight => "GitHub Light",
-            Self::SolarizedLight => "Solarized Light",
-        }
-    }
-
-    /// Returns the next theme in the list
-    pub fn next(self) -> Self {
-        let themes: &[ThemeName] = Self::all();
-        let current: usize = themes.iter().position(|&t| t == self).unwrap_or(0);
-        themes[(current + 1) % themes.len()]
-    }
-
-    /// Returns the previous theme in the list
-    pub fn prev(self) -> Self {
-        let themes: &[ThemeName] = Self::all();
-        let current: usize = themes.iter().position(|&t| t == self).unwrap_or(0);
-        themes[(current + themes.len() - 1) % themes.len()]
-    }
-
     /// Returns the color palette for this theme.
     pub const fn palette(self) -> ThemePalette {
         match self {
@@ -287,31 +246,34 @@ impl ThemeName {
         }
     }
 
+    /// Wrapper function to check whether current theme is light theme
     pub fn is_light(&self) -> bool {
         self.palette().is_light()
     }
 
+    /// Wrapper function to check whether current theme is light theme
     pub fn is_dark(&self) -> bool {
         self.palette().is_dark()
-    }
-}
-
-impl std::fmt::Display for ThemeName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display_name())
     }
 }
 
 /// A theme configuration wrapper providing convenient access to theme colors
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Theme {
-    pub name: ThemeName,
+    pub name: Selectable<ThemeName>,
 }
 
 impl Theme {
     /// Create a new theme with the given name
     pub fn new(name: ThemeName) -> Self {
-        Self { name }
+        Self {
+            name: Selectable::new(name),
+        }
+    }
+
+    /// Gets name of a theme
+    pub fn name(&self) -> ThemeName {
+        *self.name
     }
 
     /// Returns the color palette for the current theme
@@ -329,9 +291,14 @@ impl Theme {
         self.palette().is_dark()
     }
 
-    /// Cycle to the next theme in the list
+    /// Switch to the next theme
     pub fn next(&mut self) {
-        self.name = self.name.next();
+        self.name.next();
+    }
+
+    /// Switch to the prev theme
+    pub fn prev(&mut self) {
+        self.name.prev();
     }
 }
 
@@ -351,25 +318,51 @@ impl std::fmt::Display for Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use strum::IntoEnumIterator;
 
     #[test]
     fn should_check_if_all_themes_have_palettes() {
-        for theme in ThemeName::all() {
+        for theme in ThemeName::iter() {
             let palette = theme.palette();
             assert_ne!(palette.fg, palette.bg);
         }
     }
 
     #[test]
-    fn should_test_theme_cycling() {
-        let mut theme = ThemeName::GruvboxDark;
-        let original = theme;
+    fn should_test_theme_cycling_next() {
+        let mut theme = Theme::new(ThemeName::GruvboxDark);
+        let original = theme.name.value;
+        let count = ThemeName::iter().count();
 
-        for _ in 0..ThemeName::all().len() {
-            theme = theme.next();
+        for _ in 0..count {
+            theme.next();
         }
 
-        assert_eq!(theme, original);
+        assert_eq!(theme.name, original);
+    }
+
+    #[test]
+    fn should_test_theme_cycling_prev() {
+        let mut theme = Theme::new(ThemeName::GruvboxDark);
+        let count = ThemeName::iter().count();
+
+        theme.prev();
+        assert_ne!(theme.name, ThemeName::GruvboxDark);
+
+        theme.next();
+        assert_eq!(theme.name, ThemeName::GruvboxDark);
+
+        for _ in 0..count {
+            theme.prev();
+        }
+        assert_eq!(theme.name, ThemeName::GruvboxDark);
+    }
+
+    #[test]
+    fn should_verify_specific_transition() {
+        let mut theme = Theme::new(ThemeName::GruvboxDark);
+        theme.next();
+        assert_eq!(theme.name, ThemeName::CatppuccinMocha);
     }
 
     #[test]
@@ -380,13 +373,10 @@ mod tests {
     }
 
     #[test]
-    fn should_display_name_for_theme() {
-        assert_eq!(ThemeName::GruvboxDark.display_name(), "Gruvbox Dark");
-        assert_eq!(ThemeName::TokyoNight.display_name(), "Tokyo Night");
-        assert_eq!(
-            ThemeName::CatppuccinMocha.display_name(),
-            "Catppuccin Mocha"
-        );
+    fn should_test_to_string_for_theme() {
+        assert_eq!(ThemeName::GruvboxDark.to_string(), "Gruvbox Dark");
+        assert_eq!(ThemeName::TokyoNight.to_string(), "Tokyo Night");
+        assert_eq!(ThemeName::CatppuccinMocha.to_string(), "Catppuccin Mocha");
     }
 
     #[test]
