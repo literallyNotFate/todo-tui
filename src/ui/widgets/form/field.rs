@@ -1,7 +1,6 @@
 use crate::{
     models::Priority,
-    traits::Input,
-    ui::{EnumInput, TextInput},
+    ui::{EnumInput, TextInput, widgets::input::Input},
 };
 use tui_textarea::TextArea;
 

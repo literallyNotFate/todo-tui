@@ -1,8 +1,10 @@
 use crate::{
     core::Action,
     theme::ThemePalette,
-    traits::{Modal, ModalResult, ModalSize},
-    ui::{RenderContext, center},
+    ui::{
+        RenderContext, center,
+        widgets::modal::{Modal, ModalResult, ModalSize},
+    },
 };
 use ratatui::{
     crossterm::event::KeyCode,
@@ -95,15 +97,47 @@ impl Confirm {
     }
 
     /// Bottom hotkeys
-    fn bottom_keys(&self, palette: &ThemePalette) -> Line<'static> {
-        Line::from(vec![
-            Span::styled(" y", Style::default().fg(palette.success).bold()),
-            Span::styled(":yes ", Style::default().fg(palette.muted)),
-            Span::styled("n", Style::default().fg(palette.error).bold()),
-            Span::styled(":no ", Style::default().fg(palette.muted)),
-            Span::styled(" <h/l>", Style::default().fg(palette.accent)),
-            Span::styled(":move ", Style::default().fg(palette.muted)),
-        ])
+    fn bottom_keys(&self, ctx: &RenderContext) -> Line<'static> {
+        let mut spans = Vec::new();
+        let palette = ctx.palette();
+
+        let yes_label_style = if self.select == ConfirmOption::Yes {
+            Style::default().fg(palette.success).bold()
+        } else {
+            Style::default().fg(palette.muted)
+        };
+
+        spans.push(Span::styled(
+            " y",
+            Style::default().fg(palette.success).bold(),
+        ));
+        spans.push(Span::styled(":yes ", yes_label_style));
+        spans.push(Span::styled(" │ ", Style::default().fg(palette.muted)));
+
+        let no_label_style = if self.select == ConfirmOption::Cancel {
+            Style::default().fg(palette.error).bold()
+        } else {
+            Style::default().fg(palette.muted)
+        };
+
+        spans.push(Span::styled("n", Style::default().fg(palette.error).bold()));
+        spans.push(Span::styled(":no ", no_label_style));
+
+        let left = ctx.get_key(Action::MoveLeft);
+        let right = ctx.get_key(Action::MoveRight);
+
+        if !left.is_empty() && !right.is_empty() {
+            let move_keys = format!(
+                " <{}/{}>",
+                left.trim_matches(|c| c == '<' || c == '>'),
+                right.trim_matches(|c| c == '<' || c == '>')
+            );
+
+            spans.push(Span::styled(move_keys, Style::default().fg(palette.accent)));
+            spans.push(Span::styled(":move ", Style::default().fg(palette.muted)));
+        }
+
+        Line::from(spans).centered()
     }
 }
 
@@ -127,7 +161,7 @@ impl Modal for Confirm {
             .bg(palette.bg)
             .border_style(Style::default().fg(palette.info))
             .title_top(Line::from(" Action ").centered())
-            .title_bottom(self.bottom_keys(&palette).centered())
+            .title_bottom(self.bottom_keys(ctx).centered())
             .border_type(ctx.config.border_type.into());
 
         let inner_area: Rect = confirm_block.inner(area);
@@ -154,21 +188,22 @@ impl Modal for Confirm {
     /// Key event handling
     fn handle_action(&mut self, action: Option<Action>, key: KeyCode) -> Option<ModalResult> {
         match key {
-            KeyCode::Enter => {
-                return Some(match self.select {
-                    ConfirmOption::Yes => ModalResult::Confirmed,
-                    ConfirmOption::Cancel => ModalResult::Cancelled,
-                });
-            }
-            KeyCode::Esc | KeyCode::Char('n') => return Some(ModalResult::Cancelled),
             KeyCode::Char('y') => return Some(ModalResult::Confirmed),
+            KeyCode::Char('n') | KeyCode::Esc => return Some(ModalResult::Cancelled),
             _ => {}
         }
 
         if let Some(act) = action {
             match act {
+                Action::Complete => {
+                    return Some(match self.select {
+                        ConfirmOption::Yes => ModalResult::Confirmed,
+                        ConfirmOption::Cancel => ModalResult::Cancelled,
+                    });
+                }
                 Action::MoveRight => self.select = ConfirmOption::Cancel,
                 Action::MoveLeft => self.select = ConfirmOption::Yes,
+                Action::Quit => return Some(ModalResult::Cancelled),
                 _ => {}
             }
         }

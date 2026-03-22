@@ -1,11 +1,9 @@
 use crate::{
-    core::ApplicationMode,
-    enums::FocusArea,
-    models::{Sort, Todo},
+    core::{Action, ApplicationMode, FocusArea, Sort},
+    models::Todo,
     state::{AdaptiveScroll, UIState},
     theme::ThemePalette,
-    traits::{Input, InteractableEnum},
-    ui::{FeedbackKind, FeedbackWidget, RenderContext, scrollable, utils},
+    ui::{FeedbackKind, FeedbackWidget, RenderContext, scrollable, widgets::input::Input},
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -36,7 +34,7 @@ impl<'a> ListTasks<'a> {
     pub fn render(&self, ctx: &mut RenderContext, area: Rect, select_state: &mut TableState) {
         let palette: ThemePalette = ctx.palette();
         let mode: ApplicationMode = ctx.mode();
-        let focus_area: FocusArea = FocusArea::MainContent;
+        let focus_area: FocusArea = FocusArea::Main;
         let is_focused: bool = ctx.is_focused(focus_area);
 
         let is_search_visible: bool = mode == ApplicationMode::Search || !self.query.is_empty();
@@ -48,7 +46,7 @@ impl<'a> ListTasks<'a> {
             }
         }
 
-        let main_block: Block = Block::bordered()
+        let main_block = Block::bordered()
             .title(format!(" Tasks: ({}) ", ctx.filter()).bold())
             .title_top(
                 Line::styled(
@@ -59,7 +57,7 @@ impl<'a> ListTasks<'a> {
                 )
                 .right_aligned(),
             )
-            .title_bottom(Line::from(self.hotkeys(self.ui.focus_area, &palette)).left_aligned())
+            .title_bottom(Line::from(self.render_hotkeys(ctx)).left_aligned())
             .title_bottom(
                 Line::from(vec![
                     Span::styled(
@@ -69,13 +67,13 @@ impl<'a> ListTasks<'a> {
                             .bold(),
                     ),
                     Span::styled(
-                        self.sort.parameter.label(),
+                        format!("{}", self.sort.parameter),
                         Style::default()
                             .fg(ctx.focused_color(palette.accent, focus_area))
                             .bold(),
                     ),
                     Span::styled(
-                        format!(" {} ", self.sort.order.icon()),
+                        format!(" {} ", self.sort.order),
                         Style::default()
                             .fg(ctx.focused_color(palette.warning, focus_area))
                             .bold(),
@@ -107,14 +105,13 @@ impl<'a> ListTasks<'a> {
         focused: bool,
     ) {
         use ratatui::{
-            style::Color,
             text::Text,
             widgets::{Cell, Row, Table},
         };
 
-        let palette: ThemePalette = ctx.palette();
-        let title_column_width: usize = (area.width as usize).saturating_sub(40);
-        let focus_area: FocusArea = FocusArea::MainContent;
+        let palette = ctx.palette();
+        let title_column_width = (area.width as usize).saturating_sub(40);
+        let focus_area = FocusArea::Main;
 
         let [_, table_area] = Layout::default()
             .direction(Direction::Vertical)
@@ -122,8 +119,8 @@ impl<'a> ListTasks<'a> {
             .areas(area);
 
         let rows = self.todos.iter().map(|todo| {
-            let priority_color: Color = todo.priority.palette(&palette);
-            let (icon, icon_color): (String, Color) = if todo.completed {
+            let priority_color = todo.priority.palette(&palette);
+            let (icon, icon_color) = if todo.completed {
                 (
                     ctx.config.symbols.completed.clone(),
                     ctx.focused_color(palette.success, focus_area),
@@ -135,10 +132,9 @@ impl<'a> ListTasks<'a> {
                 )
             };
 
-            let truncated_title = utils::truncate(&todo.title, title_column_width);
-
+            let truncated_title = RenderContext::truncate(&todo.title, title_column_width);
             let title_content = if !self.query.is_empty() {
-                self.highlight_search(&truncated_title, self.query, &palette)
+                self.highlight_search(&truncated_title, self.query, &palette, ctx.is_dimmed)
             } else {
                 Line::from(truncated_title)
             };
@@ -174,21 +170,19 @@ impl<'a> ListTasks<'a> {
             .height(1)
         });
 
-        let tasks_table: Table = Table::new(rows, self.table_measurements())
-            .header(self.table_header(focused, &palette))
+        let tasks_table = Table::new(rows, self.table_measurements())
+            .header(self.table_header(focused, &palette, ctx.is_dimmed))
             .bg(palette.bg)
             .row_highlight_style(Style::default().bg(palette.selection))
             .highlight_symbol(Text::styled(
-                format!("{}   ", ctx.config.symbols.selection),
+                format!("{}  ", ctx.config.symbols.selection),
                 Style::default().fg(ctx.focused_color(palette.secondary, focus_area)),
             ));
 
-        let total_rows = self.todos.len();
         let current_selected = select_state.selected().unwrap_or(0);
-
         let temp_scroll = AdaptiveScroll::default();
         temp_scroll.current.set(current_selected as u16);
-        let dummy_content = vec![Line::from(""); total_rows];
+        let dummy_content = vec![Line::from(""); self.todos.len()];
 
         scrollable(
             ctx,
@@ -205,9 +199,21 @@ impl<'a> ListTasks<'a> {
     }
 
     /// Highlight title if satisfies query string
-    fn highlight_search(&self, title: &str, query: &str, palette: &ThemePalette) -> Line<'static> {
-        let query_lower: String = query.to_lowercase();
-        let title_lower: String = title.to_lowercase();
+    fn highlight_search(
+        &self,
+        title: &str,
+        query: &str,
+        palette: &ThemePalette,
+        is_dimmed: bool,
+    ) -> Line<'static> {
+        let query_lower = query.to_lowercase();
+        let title_lower = title.to_lowercase();
+
+        let highlight_color = if is_dimmed {
+            palette.muted
+        } else {
+            palette.warning
+        };
 
         if let Some(start) = title_lower.find(&query_lower) {
             let end = start + query.len();
@@ -215,7 +221,7 @@ impl<'a> ListTasks<'a> {
                 Span::raw(title[..start].to_string()),
                 Span::styled(
                     title[start..end].to_string(),
-                    Style::default().fg(palette.warning).bold(),
+                    Style::default().fg(highlight_color).bold(),
                 ),
                 Span::raw(title[end..].to_string()),
             ])
@@ -224,34 +230,29 @@ impl<'a> ListTasks<'a> {
         }
     }
 
-    /// Generate hotkeys
-    fn hotkeys(&self, focus_area: FocusArea, palette: &ThemePalette) -> Vec<Span<'_>> {
-        match focus_area {
-            FocusArea::LeftPanel => {
-                vec![
-                    Span::styled(" <?>", Style::default().fg(palette.accent).bold()),
-                    Span::styled(":help ", Style::default().fg(palette.muted)),
-                    Span::styled(" <h/l>", Style::default().fg(palette.success).bold()),
-                    Span::styled(":focus ", Style::default().fg(palette.muted)),
-                    Span::styled(" <q>", Style::default().fg(palette.error).bold()),
-                    Span::styled(":exit ", Style::default().fg(palette.muted)),
-                ]
+    /// Render hotkeys for list using preconfigured keymaps
+    fn render_hotkeys(&self, ctx: &mut RenderContext) -> Line<'static> {
+        let mut spans = Vec::new();
+        let palette: ThemePalette = ctx.palette();
+
+        match ctx.focus() {
+            FocusArea::Sidebar => {
+                spans.extend(ctx.key_hint(Action::ShowHelp, "help", palette.accent));
+                spans.extend(ctx.key_hint(Action::MoveRight, "list", palette.secondary));
+                spans.extend(ctx.key_hint(Action::ToggleSidebar, "focus", palette.success));
+                spans.extend(ctx.key_hint(Action::Quit, "exit", palette.error));
             }
-            FocusArea::MainContent => {
-                vec![
-                    Span::styled(" <a>", Style::default().fg(palette.success).bold()),
-                    Span::styled(":add ", Style::default().fg(palette.muted)),
-                    Span::styled(" <e>", Style::default().fg(palette.secondary).bold()),
-                    Span::styled(":edit ", Style::default().fg(palette.muted)),
-                    Span::styled(" <d>", Style::default().fg(palette.error).bold()),
-                    Span::styled(":remove ", Style::default().fg(palette.muted)),
-                    Span::styled(" <Enter>", Style::default().fg(palette.accent).bold()),
-                    Span::styled(":done ", Style::default().fg(palette.muted)),
-                    Span::styled(" <Tab>", Style::default().fg(palette.selection).bold()),
-                    Span::styled(":details ", Style::default().fg(palette.muted)),
-                ]
+            FocusArea::Main => {
+                spans.extend(ctx.key_hint(Action::MoveLeft, "sidebar", palette.accent));
+                spans.extend(ctx.key_hint(Action::Add, "add", palette.secondary));
+                spans.extend(ctx.key_hint(Action::Update, "edit", palette.warning));
+                spans.extend(ctx.key_hint(Action::Remove, "remove", palette.error));
+                spans.extend(ctx.key_hint(Action::Complete, "done", palette.success));
+                spans.extend(ctx.key_hint(Action::Details, "details", palette.info));
             }
         }
+
+        Line::from(spans).centered()
     }
 
     /// Calculate main layout for TaskList (list + details w/dynamic search)
@@ -281,18 +282,17 @@ impl<'a> ListTasks<'a> {
         ]
     }
 
-    fn table_header(&self, focused: bool, palette: &ThemePalette) -> Row<'static> {
+    fn table_header(&self, focused: bool, palette: &ThemePalette, is_dimmed: bool) -> Row<'static> {
+        let base_color = if focused { palette.info } else { palette.muted };
+        let header_color = if is_dimmed { palette.muted } else { base_color };
+
         Row::new(vec![
             Cell::from(""),
             Cell::from(Line::from(" Title ").centered()),
             Cell::from(Line::from(" Priority ").centered()),
             Cell::from(Line::from(" Created ").centered()),
         ])
-        .style(
-            Style::default()
-                .fg(if focused { palette.info } else { palette.muted })
-                .bold(),
-        )
+        .style(Style::default().fg(header_color).bold())
         .bottom_margin(1)
     }
 }

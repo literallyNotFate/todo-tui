@@ -1,9 +1,7 @@
 use crate::{
-    enums::WidgetResponse,
     models::{Priority, Todo},
     theme::ThemePalette,
-    traits::Input,
-    ui::{Field, FieldType, RenderContext},
+    ui::{Field, FieldType, RenderContext, WidgetResponse, widgets::input::Input},
 };
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
@@ -136,7 +134,7 @@ impl Form {
             match &field.field_type {
                 FieldType::Text { input } => title = input.buffer.clone(),
                 FieldType::Multiline { input } => description = input.lines().join("\n"),
-                FieldType::Enum { input } => priority = input.selected,
+                FieldType::Enum { input } => priority = *input.selected,
                 FieldType::Button => continue,
             }
         }
@@ -157,6 +155,14 @@ impl Form {
                 return WidgetResponse::Submit;
             }
             (KeyCode::Esc, KeyModifiers::NONE) => return WidgetResponse::Cancel,
+            (KeyCode::Tab, KeyModifiers::NONE) => {
+                self.next_focus();
+                return WidgetResponse::Continue;
+            }
+            (KeyCode::BackTab, KeyModifiers::NONE) => {
+                self.prev_focus();
+                return WidgetResponse::Continue;
+            }
             (KeyCode::Down, KeyModifiers::NONE) => {
                 if !self.is_textarea_focused() || self.is_cursor_at_bottom() {
                     self.next_focus();
@@ -239,6 +245,15 @@ impl Form {
         }
     }
 
+    /// Checks whether textarea is selected
+    fn is_enum_focused(&self) -> bool {
+        if let Some(f) = self.fields.get(self.focused) {
+            matches!(f.field_type, FieldType::Enum { .. })
+        } else {
+            false
+        }
+    }
+
     /// Check if cursor of textarea is on the top (to focus to prev field)
     fn is_cursor_at_top(&self) -> bool {
         if let Some(field) = self.fields.get(self.focused) {
@@ -265,15 +280,38 @@ impl Form {
 
     /// Generates hotkeys for form
     fn hotkeys(&self, palette: &ThemePalette) -> Line<'static> {
-        Line::from(vec![
-            Span::styled(" <A-Enter>", Style::default().fg(palette.success).bold()),
-            Span::styled(":submit ", Style::default().fg(palette.muted)),
-            Span::styled(" ◄/►", Style::default().fg(palette.accent).bold()),
-            Span::styled(":priority ", Style::default().fg(palette.muted)),
-            Span::styled(" <Esc>", Style::default().fg(palette.warning).bold()),
-            Span::styled(":back ", Style::default().fg(palette.muted)),
-        ])
-        .centered()
+        let mut spans = Vec::new();
+
+        spans.push(Span::styled(
+            "<alt+enter>",
+            Style::default().fg(palette.success).bold(),
+        ));
+        spans.push(Span::styled(":submit ", Style::default().fg(palette.muted)));
+
+        if self.is_enum_focused() {
+            spans.push(Span::styled(
+                " ◄/►",
+                Style::default().fg(palette.accent).bold(),
+            ));
+            spans.push(Span::styled(
+                ":priority ",
+                Style::default().fg(palette.muted),
+            ));
+        }
+
+        spans.push(Span::styled(
+            " ▲/▼",
+            Style::default().fg(palette.secondary).bold(),
+        ));
+        spans.push(Span::styled(":move ", Style::default().fg(palette.muted)));
+
+        spans.push(Span::styled(
+            " <esc>",
+            Style::default().fg(palette.warning).bold(),
+        ));
+        spans.push(Span::styled(":back ", Style::default().fg(palette.muted)));
+
+        Line::from(spans).centered()
     }
 
     /// Main form layout method

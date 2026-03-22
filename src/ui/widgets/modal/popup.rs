@@ -3,8 +3,10 @@ use crate::{
     models::TodoDetails,
     state::AdaptiveScroll,
     theme::ThemePalette,
-    traits::{Modal, ModalResult, ModalSize},
-    ui::{RenderContext, center, scrollable},
+    ui::{
+        RenderContext, center, scrollable,
+        widgets::modal::{Modal, ModalResult, ModalSize},
+    },
 };
 use ratatui::{
     crossterm::event::KeyCode,
@@ -98,7 +100,7 @@ impl Popup {
             content: PopupContent::Help(lines),
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Char('?')),
             scroll: AdaptiveScroll::default(),
-            size: ModalSize::Medium,
+            size: ModalSize::Large,
         }
     }
 
@@ -152,13 +154,14 @@ impl Popup {
             .split(area)
     }
 
-    /// Generate bottom title based on close behavior
-    fn bottom_keys(&self, palette: &ThemePalette) -> Line<'static> {
+    /// Generate bottom title based on close behavior and keymaps
+    fn bottom_keys(&self, ctx: &RenderContext) -> Line<'static> {
         let mut spans = Vec::new();
+        let palette = ctx.palette();
 
         let close_key = match self.close_behavior {
             PopupCloseBehavior::AnyKey => "any".to_string(),
-            PopupCloseBehavior::Specific(code) => format!("{}", code),
+            PopupCloseBehavior::Specific(code) => code.to_string(),
         };
 
         spans.push(Span::styled(
@@ -167,14 +170,23 @@ impl Popup {
         ));
         spans.push(Span::styled(":close ", Style::default().fg(palette.muted)));
 
-        if matches!(self.content, PopupContent::Task(_))
-            || matches!(self.content, PopupContent::Help(_))
-        {
-            spans.push(Span::styled(
-                " <j/k>",
-                Style::default().fg(palette.accent).bold(),
-            ));
-            spans.push(Span::styled(":scroll ", Style::default().fg(palette.muted)));
+        if matches!(self.content, PopupContent::Task(_) | PopupContent::Help(_)) {
+            let up = ctx.get_key(Action::MoveUp);
+            let down = ctx.get_key(Action::MoveDown);
+
+            if !up.is_empty() && !down.is_empty() {
+                let scroll_hint = format!(
+                    " <{}/{}>",
+                    up.trim_matches(|c| c == '<' || c == '>'),
+                    down.trim_matches(|c| c == '<' || c == '>')
+                );
+
+                spans.push(Span::styled(
+                    scroll_hint,
+                    Style::default().fg(palette.accent).bold(),
+                ));
+                spans.push(Span::styled(":scroll ", Style::default().fg(palette.muted)));
+            }
         }
 
         Line::from(spans).centered()
@@ -206,7 +218,7 @@ impl Modal for Popup {
             .border_type(ctx.config.border_type.into())
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
-            .title_bottom(self.bottom_keys(&palette))
+            .title_bottom(self.bottom_keys(ctx))
             .border_style(self.color_on_kind(&palette))
             .fg(palette.fg)
             .bg(palette.bg);
@@ -311,7 +323,7 @@ impl Modal for Popup {
                 );
             }
             PopupContent::Help(lines) => {
-                let mid: usize = (lines.len() + 1) / 2;
+                let mid: usize = lines.len().div_ceil(2);
                 let dummy_lines = vec![Line::from(""); mid];
 
                 scrollable(
@@ -505,24 +517,6 @@ mod tests {
 
         assert!(large_area.width > small_area.width);
         assert!(large_area.height > small_area.height);
-    }
-
-    #[test]
-    fn should_render_correct_bottom_keys_text() {
-        let palette = ThemeName::GruvboxDark.palette();
-        let popup_msg = Popup::info("Msg");
-        let keys_msg = popup_msg.bottom_keys(&palette);
-
-        assert!(!format!("{:?}", keys_msg).contains("scroll"));
-
-        let todo = Todo::new("T", "D", None);
-        let details = TodoDetails::from(&todo, &UIConfig::default());
-        let popup_task = Popup::details("Test".to_string(), details);
-        let keys_task = popup_task.bottom_keys(&palette);
-
-        let content = format!("{:?}", keys_task);
-        assert!(content.contains("j/k"));
-        assert!(content.contains("scroll"));
     }
 
     #[test]

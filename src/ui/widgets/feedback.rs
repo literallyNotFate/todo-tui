@@ -1,4 +1,5 @@
 use crate::{
+    core::Action,
     theme::ThemePalette,
     ui::{MIN_HEIGHT, MIN_WIDTH, RenderContext, center},
 };
@@ -33,14 +34,12 @@ impl FeedbackWidget {
         let result_area: Rect = center(area, 50, 50);
         let palette: ThemePalette = ctx.palette();
         let colors: (Color, Color) = self.dimension_colors(&area, &palette);
-        let message: Vec<Line>;
 
         if self.kind == FeedbackKind::SmallTerminal {
-            message = self.message(&area.width, &area.height, colors, &palette);
-            ctx.render_widget(Clear, area);
+            let message = self.message(&area.width, &area.height, colors, &palette, false);
 
-            let background_fill: Block = Block::default().bg(palette.bg);
-            ctx.render_widget(background_fill, area);
+            ctx.render_widget(Clear, area);
+            ctx.render_widget(Block::default().bg(palette.bg), area);
 
             let p: Paragraph = Paragraph::new(Text::from(message))
                 .style(Style::default().fg(palette.fg))
@@ -51,9 +50,9 @@ impl FeedbackWidget {
             return;
         }
 
-        message = self.message(&area.width, &area.height, colors, &palette);
+        let message = self.message(&area.width, &area.height, colors, &palette, ctx.is_dimmed);
         let hotkeys = if self.kind == FeedbackKind::EmptyList {
-            Line::from(self.hotkeys(&palette)).centered()
+            Line::from(self.render_hotkeys(ctx)).centered()
         } else {
             Line::from("")
         };
@@ -61,13 +60,15 @@ impl FeedbackWidget {
         let block = Block::bordered()
             .title(" Tasks ")
             .bg(palette.bg)
-            .title_top(Line::styled(" todo-tui ", Style::default().fg(palette.fg)).right_aligned())
+            .title_top(
+                Line::styled(" todo-tui ", Style::default().fg(ctx.color(palette.fg)))
+                    .right_aligned(),
+            )
             .title_bottom(hotkeys)
-            .border_style(palette.warning)
+            .border_style(Style::default().fg(ctx.color(palette.warning)))
             .border_type(ctx.config.border_type.into());
 
         ctx.render_widget(block, area);
-
         ctx.render_widget(
             Paragraph::new(message).wrap(Wrap { trim: true }).centered(),
             result_area,
@@ -81,15 +82,20 @@ impl FeedbackWidget {
         height: &u16,
         colors: (Color, Color),
         palette: &ThemePalette,
+        is_dimmed: bool,
     ) -> Vec<Line<'static>> {
-        let message: Vec<Line> = match &self.kind {
+        let color = |c: Color| {
+            if is_dimmed { palette.muted } else { c }
+        };
+
+        match &self.kind {
             FeedbackKind::EmptyList => vec![
-                Line::from("All clear!").fg(palette.warning).bold(),
+                Line::from("All clear!").fg(color(palette.warning)).bold(),
                 Line::from(""),
                 Line::from("Press 'a' to add a new task").fg(palette.muted),
             ],
             FeedbackKind::NoResults(q) => vec![
-                Line::from("No matches").fg(palette.error).bold(),
+                Line::from("No matches").fg(color(palette.error)).bold(),
                 Line::from(format!("Nothing found for '{}'", q)).fg(palette.muted),
                 Line::from("Try another query").fg(palette.muted),
             ],
@@ -119,9 +125,7 @@ impl FeedbackWidget {
                 ])
                 .centered(),
             ],
-        };
-
-        message
+        }
     }
 
     /// Get colors for width/height while resized
@@ -141,18 +145,17 @@ impl FeedbackWidget {
         (width_color, height_color)
     }
 
-    /// Generate hotkeys for feedback (empty list)
-    fn hotkeys(&self, palette: &ThemePalette) -> Vec<Span<'static>> {
-        vec![
-            Span::styled(" <a>", Style::default().fg(palette.success).bold()),
-            Span::styled(":add ", Style::default().fg(palette.muted)),
-            Span::styled(" <?>", Style::default().fg(palette.accent).bold()),
-            Span::styled(":help ", Style::default().fg(palette.muted)),
-            Span::styled(" <h/l>", Style::default().fg(palette.secondary).bold()),
-            Span::styled(":focus ", Style::default().fg(palette.muted)),
-            Span::styled(" <q>", Style::default().fg(palette.error).bold()),
-            Span::styled(":exit ", Style::default().fg(palette.muted)),
-        ]
+    /// Render hotkeys for feedback (empty list)
+    fn render_hotkeys(&self, ctx: &RenderContext) -> Line<'static> {
+        let mut spans = Vec::new();
+        let palette: ThemePalette = ctx.palette();
+
+        spans.extend(ctx.key_hint(Action::ShowHelp, "help", palette.accent));
+        spans.extend(ctx.key_hint(Action::Add, "add", palette.secondary));
+        spans.extend(ctx.key_hint(Action::MoveLeft, "sidebar", palette.success));
+        spans.extend(ctx.key_hint(Action::Quit, "exit", palette.error));
+
+        Line::from(spans).centered()
     }
 }
 
@@ -173,8 +176,13 @@ mod tests {
         let width: u16 = 100;
         let height: u16 = 50;
 
-        let result: Vec<Line> =
-            feedback.message(&width, &height, (palette.error, palette.success), &palette);
+        let result: Vec<Line> = feedback.message(
+            &width,
+            &height,
+            (palette.error, palette.success),
+            &palette,
+            false,
+        );
 
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].spans[0], Span::from("All clear!"));
@@ -195,8 +203,13 @@ mod tests {
         let width: u16 = 100;
         let height: u16 = 50;
 
-        let result: Vec<Line> =
-            feedback.message(&width, &height, (palette.error, palette.success), &palette);
+        let result: Vec<Line> = feedback.message(
+            &width,
+            &height,
+            (palette.error, palette.success),
+            &palette,
+            false,
+        );
 
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].spans[0], Span::from("No matches"));
@@ -214,7 +227,7 @@ mod tests {
 
         let palette: ThemePalette = ThemeName::GruvboxDark.palette();
         let colors: (Color, Color) = (palette.error, palette.success);
-        let result: Vec<Line> = feedback.message(&width, &height, colors, &palette);
+        let result: Vec<Line> = feedback.message(&width, &height, colors, &palette, false);
 
         assert_eq!(result.len(), 5);
         assert_eq!(result[0].spans[0], Span::from("Terminal is too small!"));

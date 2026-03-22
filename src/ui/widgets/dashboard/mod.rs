@@ -1,6 +1,6 @@
-pub(crate) mod bottom;
 pub(crate) mod content;
 pub mod dashboard;
+pub(crate) mod footer;
 pub(crate) mod list;
 pub(crate) mod sidebar;
 

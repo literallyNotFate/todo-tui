@@ -1,4 +1,7 @@
-use crate::{enums::WidgetResponse, theme::ThemePalette, traits::Input, ui::RenderContext};
+use crate::{
+    theme::ThemePalette,
+    ui::{RenderContext, WidgetResponse, widgets::input::Input},
+};
 use ratatui::{
     crossterm::event::KeyCode,
     layout::Rect,

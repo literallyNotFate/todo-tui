@@ -1,8 +1,7 @@
 use crate::{
-    enums::WidgetResponse,
+    core::Selectable,
     theme::ThemePalette,
-    traits::{Input, InteractableEnum},
-    ui::RenderContext,
+    ui::{RenderContext, WidgetResponse, widgets::input::Input},
 };
 use ratatui::{
     crossterm::event::KeyCode,
@@ -14,13 +13,16 @@ use ratatui::{
 #[derive(Debug, Default, Clone)]
 pub struct EnumInput<T> {
     pub title: String,
-    pub selected: T,
+    pub selected: Selectable<T>,
 }
 
-impl<T> EnumInput<T> {
-    pub fn from(selected: T) -> Self {
+impl<T> EnumInput<T>
+where
+    T: strum::IntoEnumIterator + Copy + PartialEq + Default + 'static,
+{
+    pub fn from(value: T) -> Self {
         Self {
-            selected,
+            selected: Selectable::new(value),
             title: String::default(),
         }
     }
@@ -28,7 +30,7 @@ impl<T> EnumInput<T> {
 
 impl<T> Input for EnumInput<T>
 where
-    T: InteractableEnum + Clone + Default + 'static,
+    T: strum::IntoEnumIterator + Copy + PartialEq + Default + std::fmt::Display + 'static,
 {
     fn title(mut self, title: impl Into<String>) -> Self {
         self.title = title.into();
@@ -40,8 +42,8 @@ where
         match key {
             KeyCode::Enter => return WidgetResponse::Submit,
             KeyCode::Esc => return WidgetResponse::Cancel,
-            KeyCode::Left | KeyCode::Char('h') => self.selected = self.selected.prev(),
-            KeyCode::Right | KeyCode::Char('l') => self.selected = self.selected.next(),
+            KeyCode::Left | KeyCode::Char('h') => self.selected.prev(),
+            KeyCode::Right | KeyCode::Char('l') => self.selected.next(),
             _ => {}
         }
 
@@ -58,18 +60,22 @@ where
         use ratatui::widgets::{Block, Paragraph};
 
         let palette = ctx.palette();
-        let (border_style, text_style): (Style, Style) = self.on_focused(focused, &palette);
+        let (border_style, text_style) = self.on_focused(focused, &palette);
 
-        let input_block: Block = Block::bordered()
-            .border_style(border_style)
+        let adapted_border_style =
+            Style::default().fg(ctx.color(border_style.fg.unwrap_or(palette.muted)));
+        let adapted_text_style =
+            Style::default().fg(ctx.color(text_style.fg.unwrap_or(palette.fg)));
+
+        let input_block = Block::bordered()
+            .border_style(adapted_border_style)
             .border_type(ctx.config.border_type.into())
-            .style(text_style)
+            .style(adapted_text_style)
             .title(self.title.as_str())
             .bg(palette.bg)
-            .fg(palette.fg);
+            .fg(ctx.color(palette.fg));
 
         let input = Paragraph::new(self.selected.to_string()).block(input_block);
-
         ctx.render_widget(input, area);
     }
 
@@ -89,50 +95,24 @@ where
     }
 }
 
-// Unit-tests for enum input
+/// Unit-tests for enum input
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::theme::ThemeName;
     use ratatui::{crossterm::event::KeyCode, style::Color};
 
-    #[derive(Debug, Clone, PartialEq, Default, Copy)]
+    #[derive(Debug, Clone, PartialEq, Default, Copy, strum::Display, strum::EnumIter)]
     enum MockEnum {
         #[default]
         A,
         B,
     }
 
-    impl InteractableEnum for MockEnum {
-        fn all() -> &'static [Self] {
-            &[Self::A, Self::B]
-        }
-
-        fn to_string(&self) -> &'static str {
-            match self {
-                Self::A => "A",
-                Self::B => "B",
-            }
-        }
-
-        fn next(&self) -> Self {
-            match self {
-                MockEnum::A => MockEnum::B,
-                MockEnum::B => MockEnum::A,
-            }
-        }
-        fn prev(&self) -> Self {
-            match self {
-                MockEnum::A => MockEnum::B,
-                MockEnum::B => MockEnum::A,
-            }
-        }
-    }
-
     #[test]
     fn should_initialize_enum_input() {
         let input = EnumInput::from(MockEnum::B).title("Status");
-        assert_eq!(input.selected, MockEnum::B);
+        assert_eq!(input.selected.value, MockEnum::B);
         assert_eq!(input.title, "Status");
     }
 
@@ -141,11 +121,11 @@ mod tests {
         let mut input = EnumInput::from(MockEnum::A);
 
         let resp = input.handle_key(&KeyCode::Right);
-        assert_eq!(input.selected, MockEnum::B);
+        assert_eq!(input.selected.value, MockEnum::B);
         assert_eq!(resp, WidgetResponse::Continue);
 
         input.handle_key(&KeyCode::Char('h'));
-        assert_eq!(input.selected, MockEnum::A);
+        assert_eq!(input.selected.value, MockEnum::A);
     }
 
     #[test]
@@ -192,7 +172,7 @@ mod tests {
     fn should_handle_reset_enum_input() {
         let mut input = EnumInput::from(MockEnum::B);
         let initial_val = input.selected;
-        assert_eq!(input.selected, MockEnum::B);
+        assert_eq!(input.selected.value, MockEnum::B);
 
         input.reset();
         assert_ne!(initial_val, input.selected);
