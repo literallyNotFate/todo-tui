@@ -1,8 +1,8 @@
 use crate::{
     config::StorageConfig,
     core::StorageError,
-    models::{StorageData, Todo, UISession},
-    state::ApplicationResult,
+    models::Todo,
+    state::{ApplicationResult, Session, TasksStateData},
 };
 use std::{
     fs::{self, File},
@@ -42,7 +42,7 @@ impl Storage {
     /// Save todos and UI Session to user path/default path
     pub fn save(
         todos: &[Todo],
-        ui_session: UISession,
+        session: Session,
         path: Option<&Path>,
         config: &StorageConfig,
     ) -> ApplicationResult<String> {
@@ -59,7 +59,7 @@ impl Storage {
         let mut temp_path: PathBuf = p.clone();
         temp_path.set_extension("tmp");
 
-        let data: StorageData = StorageData::new(todos.to_vec(), ui_session);
+        let data: TasksStateData = TasksStateData::new(todos.to_vec(), session);
 
         let result = (|| -> Result<(), StorageError> {
             let file =
@@ -97,8 +97,8 @@ impl Storage {
         log::info!(
             "Successfully prepared storage data: {} tasks, filter: {:?}, focus: {:?}",
             data.todos.len(),
-            data.ui_session.last_filter,
-            data.ui_session.last_focus
+            data.session.last_filter,
+            data.session.last_focus
         );
 
         fs::rename(&temp_path, &p).map_err(|err| {
@@ -110,7 +110,7 @@ impl Storage {
     }
 
     /// Load todos and UI Session from a user path/default path
-    pub fn load(path: Option<&Path>, config: &StorageConfig) -> ApplicationResult<StorageData> {
+    pub fn load(path: Option<&Path>, config: &StorageConfig) -> ApplicationResult<TasksStateData> {
         let p: PathBuf = match path {
             Some(p) => p.to_path_buf(),
             None => Self::get_data_path()?,
@@ -146,11 +146,11 @@ impl Storage {
         }
 
         log::info!("No data file found, initializing default session and empty list");
-        Ok(StorageData::default())
+        Ok(TasksStateData::default())
     }
 
     /// Helper function to load from path (not to duplicate code)
-    fn load_from_path(p: &Path) -> ApplicationResult<StorageData> {
+    fn load_from_path(p: &Path) -> ApplicationResult<TasksStateData> {
         let file = File::open(p).map_err(|err| StorageError::IOError(err.to_string()))?;
         let storage = serde_json::from_reader(file)
             .map_err(|err| StorageError::JSONError(err.to_string()))?;
@@ -163,8 +163,7 @@ impl Storage {
 mod tests {
     use super::*;
     use crate::{
-        core::ApplicationError,
-        enums::FocusArea,
+        core::{ApplicationError, FocusArea},
         models::{Filter, Priority},
         state::{ApplicationState, UIState},
     };
@@ -184,19 +183,19 @@ mod tests {
         let config: StorageConfig = setup_config(true);
 
         let todos = vec![Todo::new("Task 1", "", None), Todo::new("Task 2", "", None)];
-        let session = UISession::default();
+        let session = Session::default();
 
         let result: ApplicationResult<String> =
             Storage::save(&todos, session, Some(&path), &config);
         assert!(result.is_ok());
 
-        let loaded_data: StorageData = Storage::load(Some(&path), &config).unwrap();
+        let loaded_data: TasksStateData = Storage::load(Some(&path), &config).unwrap();
 
         assert_eq!(loaded_data.todos.len(), 2);
         assert_eq!(loaded_data.todos[0].title, "Task 1");
         assert_eq!(loaded_data.todos[1].title, "Task 2");
-        assert_eq!(loaded_data.ui_session.last_filter, Filter::All);
-        assert_eq!(loaded_data.ui_session.last_focus, FocusArea::LeftPanel);
+        assert_eq!(loaded_data.session.last_filter, Filter::All);
+        assert_eq!(loaded_data.session.last_focus, FocusArea::Sidebar);
     }
 
     #[test]
@@ -208,7 +207,7 @@ mod tests {
 
         Storage::save(
             &vec![Todo::new("V1", "", None)],
-            UISession::default(),
+            Session::default(),
             Some(&path),
             &config,
         )
@@ -220,7 +219,7 @@ mod tests {
 
         Storage::save(
             &vec![Todo::new("V2", "", None)],
-            UISession::default(),
+            Session::default(),
             Some(&path),
             &config,
         )
@@ -241,7 +240,7 @@ mod tests {
         let backup_path: PathBuf = path.with_extension("json.bak");
 
         let todos = vec![Todo::new("Backup Task", "", None)];
-        Storage::save(&todos, UISession::default(), Some(&backup_path), &config).unwrap();
+        Storage::save(&todos, Session::default(), Some(&backup_path), &config).unwrap();
 
         assert!(!path.exists());
 
@@ -258,7 +257,7 @@ mod tests {
 
         Storage::save(
             &vec![Todo::new("Good Data", "", None)],
-            UISession::default(),
+            Session::default(),
             Some(&backup_path),
             &config,
         )
@@ -294,7 +293,7 @@ mod tests {
 
         Storage::save(
             &vec![Todo::new("Test", "", None)],
-            UISession::default(),
+            Session::default(),
             Some(&path),
             &config,
         )
@@ -317,20 +316,16 @@ mod tests {
         let state = Storage::load(Some(&path), &config).unwrap();
         assert!(state.todos.is_empty());
 
-        let result = Storage::save(
-            &state.todos,
-            UIState::default().to_session(None),
-            Some(&path),
-            &config,
-        );
+        let session = Session::from_state(&UIState::default(), None);
+        let result = Storage::save(&state.todos, session, Some(&path), &config);
         assert!(result.is_ok());
         assert!(path.exists());
 
         let content = fs::read_to_string(&path).unwrap();
-        let decoded: StorageData = serde_json::from_str(&content).unwrap();
+        let decoded: TasksStateData = serde_json::from_str(&content).unwrap();
 
         assert!(decoded.todos.is_empty(), "Todos should be an empty list");
-        assert!(decoded.ui_session.last_selected_id.is_none());
+        assert!(decoded.session.last_selected_id.is_none());
     }
 
     #[test]
@@ -342,11 +337,11 @@ mod tests {
         let task = Todo::new("Test Title", "Test Desc", Some(Priority::High));
         let task_id = task.id;
 
-        let storage_data = StorageData {
+        let storage_data = TasksStateData {
             todos: vec![task],
-            ui_session: UISession {
+            session: Session {
                 last_selected_id: Some(task_id),
-                ..UISession::default()
+                ..Session::default()
             },
         };
 
@@ -357,7 +352,7 @@ mod tests {
 
         assert_eq!(loaded_state.todos.len(), 1);
         assert_eq!(loaded_state.todos[0].id, task_id);
-        assert_eq!(loaded_state.ui_session.last_selected_id, Some(task_id));
+        assert_eq!(loaded_state.session.last_selected_id, Some(task_id));
     }
 
     #[test]
@@ -368,7 +363,7 @@ mod tests {
 
         assert!(!path.exists());
 
-        let result: ApplicationResult<StorageData> = Storage::load(Some(&path), &config);
+        let result: ApplicationResult<TasksStateData> = Storage::load(Some(&path), &config);
         assert!(result.is_ok());
 
         let todos = result.unwrap().todos;
@@ -395,7 +390,7 @@ mod tests {
         let config: StorageConfig = setup_config(false);
         assert!(!path.parent().unwrap().exists());
 
-        Storage::save(&vec![], UISession::default(), Some(&path), &config).unwrap();
+        Storage::save(&vec![], Session::default(), Some(&path), &config).unwrap();
         assert!(
             path.parent().unwrap().exists(),
             "Directory hierarchy should be created on save"
@@ -410,7 +405,7 @@ mod tests {
         let config: StorageConfig = setup_config(false);
 
         fs::write(&path, "invalid json {").unwrap();
-        let result: ApplicationResult<StorageData> = Storage::load(Some(&path), &config);
+        let result: ApplicationResult<TasksStateData> = Storage::load(Some(&path), &config);
 
         assert!(result.is_err());
         assert!(matches!(
@@ -434,7 +429,7 @@ mod tests {
 
         let todos = vec![Todo::new("Test", "", None)];
         let result: ApplicationResult<String> =
-            Storage::save(&todos, UISession::default(), Some(&path), &config);
+            Storage::save(&todos, Session::default(), Some(&path), &config);
 
         assert!(result.is_err());
         assert!(matches!(

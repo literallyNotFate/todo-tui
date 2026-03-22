@@ -1,24 +1,24 @@
 use crate::{
     config::UIConfig,
-    enums::FocusArea,
-    models::{Filter, UISession},
-    state::{AdaptiveScroll, ApplicationResult, ApplicationState},
+    core::{FocusArea, Selectable},
+    models::Filter,
+    state::{ActiveModal, AdaptiveScroll, ApplicationResult, ApplicationState, Session},
     theme::{Theme, ThemeName},
-    traits::{Input, InteractableEnum, Modal, ModalAction, ModalSize},
-    ui::{Confirm, Form, Notification, Popup, TextInput},
+    ui::{
+        Confirm, Form, Notification, Popup, TextInput,
+        widgets::{
+            input::Input,
+            modal::{Modal, ModalAction, ModalSize},
+        },
+    },
 };
 use uuid::Uuid;
 
-/// Active modal widget with modal itself and its action like save etc.
-pub struct ActiveModal {
-    pub modal: Box<dyn Modal>,
-    pub action: ModalAction,
-}
-
 /// Main application UI state (only for rendering purposes)
+#[derive(Default)]
 pub struct UIState {
-    pub current_filter: Filter,
-    pub focus_area: FocusArea,
+    pub filter: Selectable<Filter>,
+    pub focused: Selectable<FocusArea>,
 
     pub modal: Option<ActiveModal>,
     pub task_form: Option<Form>,
@@ -48,40 +48,17 @@ impl UIState {
         ui
     }
 
-    /// Initialize UIState from session and config
-    pub fn from(session: UISession, config: &UIConfig) -> Self {
-        let mut ui = Self {
-            current_filter: session.last_filter,
-            focus_area: session.last_focus,
-            desc_scroll: AdaptiveScroll::with_position(session.description_scroll_pos),
-            hotkeys_scroll: AdaptiveScroll::with_position(session.hotkeys_scroll_pos),
-            ..Self::new(config.clone())
-        };
+    /// Apply UI state from loaded session
+    pub fn apply_session(&mut self, session: Session) {
+        self.filter = session.last_filter;
+        self.focused = session.last_focus;
+        self.desc_scroll = AdaptiveScroll::with_position(session.description_scroll_pos);
+        self.hotkeys_scroll = AdaptiveScroll::with_position(session.hotkeys_scroll_pos);
+        self.config.use_system_theme = session.use_system_theme;
 
-        ui.config.use_system_theme = session.use_system_theme;
-        ui.refresh_theme();
-        if !session.last_query.is_empty() {
-            ui.search_input = Some(TextInput::from(session.last_query));
-        }
-
-        ui
-    }
-
-    /// Parse to UISession from UIState
-    pub fn to_session(&self, selected_id: Option<Uuid>) -> UISession {
-        UISession {
-            last_selected_id: selected_id,
-            last_focus: self.focus_area.clone(),
-            last_filter: self.current_filter.clone(),
-            last_query: self
-                .search_input
-                .as_ref()
-                .map(|i| i.buffer.clone())
-                .unwrap_or_default(),
-            use_system_theme: self.config.use_system_theme,
-            description_scroll_pos: self.desc_scroll.current.get(),
-            hotkeys_scroll_pos: self.hotkeys_scroll.current.get(),
-        }
+        self.search_input =
+            (!session.last_query.is_empty()).then(|| TextInput::from(session.last_query));
+        self.refresh_theme();
     }
 
     /// Request UI to be redrawed in the application draw method
@@ -177,7 +154,7 @@ impl UIState {
     pub fn selected_id(&self, state: &ApplicationState) -> Option<Uuid> {
         let index: usize = state.select_state.selected()?;
         state
-            .filter(&self.current_filter)
+            .filter(&self.filter)
             .nth(index)
             .map(|(_, task)| task.id)
     }
@@ -186,20 +163,21 @@ impl UIState {
     pub fn toggle_mode(&mut self) {
         self.config.use_system_theme = false;
 
+        let current_name: ThemeName = self.theme.name();
         if self.theme.is_dark() {
-            self.config.last_dark = Some(self.theme.name);
+            self.config.last_dark = Some(current_name);
         } else {
-            self.config.last_light = Some(self.theme.name);
+            self.config.last_light = Some(current_name);
         }
 
-        let target: ThemeName = if self.theme.is_dark() {
+        let target = if self.theme.is_dark() {
             self.config.last_light.unwrap_or(ThemeName::GruvboxLight)
         } else {
             self.config.last_dark.unwrap_or(ThemeName::GruvboxDark)
         };
 
-        log::info!("Manual theme mode toggle. New theme: {:?}", target);
-        self.theme = Theme::new(target);
+        log::info!("Manual theme mode toggle. New theme: {}", target);
+        self.theme.name.set(target);
         self.config.theme = target;
     }
 
@@ -214,7 +192,7 @@ impl UIState {
     }
 
     /// Helper function to refresh theme
-    fn refresh_theme(&mut self) {
+    pub fn refresh_theme(&mut self) {
         if self.config.use_system_theme {
             self.apply_system_theme();
         } else {
@@ -226,20 +204,20 @@ impl UIState {
     fn cycle_theme(&mut self, forward: bool) {
         self.config.use_system_theme = false;
 
-        let next_name: ThemeName = if forward {
-            self.theme.name.next()
+        if forward {
+            self.theme.next();
         } else {
-            self.theme.name.prev()
-        };
+            self.theme.prev();
+        }
 
-        self.theme = Theme::new(next_name);
-        self.config.theme = next_name;
+        let new_name: ThemeName = self.theme.name();
+        self.config.theme = new_name;
+        log::info!("Theme changed to: {}", new_name);
 
-        log::info!("Theme changed to: {}", self.theme.name);
         if self.theme.is_dark() {
-            self.config.last_dark = Some(next_name);
+            self.config.last_dark = Some(new_name);
         } else {
-            self.config.last_light = Some(next_name);
+            self.config.last_light = Some(new_name);
         }
     }
 
@@ -272,30 +250,26 @@ impl UIState {
 
     /// Next filter tab (sidebar)
     pub fn next_tab_filter(&mut self) {
-        self.current_filter = self.current_filter.next();
-        log::trace!("Filter changed to: {:?}", self.current_filter);
+        self.filter.next();
+        log::trace!("Filter changed to: {:?}", self.filter);
     }
 
     /// Previous filter tab (sidebar)
     pub fn prev_tab_filter(&mut self) {
-        self.current_filter = self.current_filter.prev();
-        log::trace!("Filter changed to: {:?}", self.current_filter);
+        self.filter.prev();
+        log::trace!("Filter changed to: {:?}", self.filter);
     }
 
     /// Changes to specific filter
     pub fn change_filter(&mut self, filter: Filter) {
-        self.current_filter = filter;
-        log::trace!("Filter changed to: {:?}", self.current_filter);
+        self.filter.set(filter);
+        log::trace!("Filter changed to: {:?}", self.filter);
     }
 
     /// Toggle main menu focus (filters/tasks + form)
     pub fn toggle_focus(&mut self) {
-        self.focus_area = match self.focus_area {
-            FocusArea::LeftPanel => FocusArea::MainContent,
-            FocusArea::MainContent => FocusArea::LeftPanel,
-        };
-
-        log::trace!("Focus toggled to: {:?}", self.focus_area);
+        self.focused.next();
+        log::trace!("Focus toggled to: {:?}", self.focused);
         self.hotkeys_scroll.reset();
     }
 
@@ -346,24 +320,6 @@ impl UIState {
     }
 }
 
-/// Defaults for UIState
-impl Default for UIState {
-    fn default() -> Self {
-        Self {
-            current_filter: Filter::default(),
-            focus_area: FocusArea::default(),
-            modal: None,
-            task_form: None,
-            search_input: None,
-            desc_scroll: AdaptiveScroll::default(),
-            hotkeys_scroll: AdaptiveScroll::default(),
-            theme: Theme::new(ThemeName::default()),
-            config: UIConfig::default(),
-            should_redraw: false,
-        }
-    }
-}
-
 /// Unit-tests for UIState
 #[cfg(test)]
 mod tests {
@@ -378,31 +334,31 @@ mod tests {
     #[test]
     fn should_navigate_through_filters() {
         let mut ui = UIState::default();
-        ui.current_filter = Filter::All;
+        ui.filter.set(Filter::All);
 
         ui.next_tab_filter();
-        assert_eq!(ui.current_filter, Filter::Active);
+        assert_eq!(ui.filter, Filter::Active);
 
         ui.next_tab_filter();
-        assert_eq!(ui.current_filter, Filter::Completed);
+        assert_eq!(ui.filter, Filter::Completed);
 
         ui.prev_tab_filter();
-        assert_eq!(ui.current_filter, Filter::Active);
+        assert_eq!(ui.filter, Filter::Active);
 
         ui.change_filter(Filter::HighPriority);
-        assert_eq!(ui.current_filter, Filter::HighPriority);
+        assert_eq!(ui.filter, Filter::HighPriority);
     }
 
     #[test]
     fn should_toggle_focus_properly() {
         let mut ui = UIState::default();
-        ui.focus_area = FocusArea::LeftPanel;
+        ui.focused.set(FocusArea::Sidebar);
 
         ui.toggle_focus();
-        assert_eq!(ui.focus_area, FocusArea::MainContent);
+        assert_eq!(ui.focused, FocusArea::Main);
 
         ui.toggle_focus();
-        assert_eq!(ui.focus_area, FocusArea::LeftPanel);
+        assert_eq!(ui.focused, FocusArea::Sidebar);
     }
 
     #[test]
@@ -509,7 +465,7 @@ mod tests {
         assert!(!ui.config.use_system_theme);
 
         ui.next_theme();
-        let current_light = ui.theme.name;
+        let current_light = *ui.theme.name;
         assert_eq!(ui.config.last_light, Some(current_light));
 
         ui.toggle_mode();

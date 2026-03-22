@@ -1,9 +1,8 @@
 use crate::{
     config::{Config, KeyMaps},
-    core::{ApplicationError, ApplicationMode, Autosave, Storage},
-    enums::FocusArea,
+    core::{ApplicationError, ApplicationMode, Autosave, FocusArea, Storage},
     events::EventHandler,
-    state::{ApplicationResult, ApplicationState, UIState},
+    state::{ApplicationResult, ApplicationState, Session, UIState},
     ui::Renderer,
 };
 use ratatui::{
@@ -39,12 +38,15 @@ impl Application {
         let storage_data = Storage::load(None, &config.storage).unwrap_or_default();
         let (keymaps, keymaps_error) = Self::load_keymaps();
 
+        let mut ui: UIState = UIState::new(config.ui.clone());
+        storage_data.session.apply_to(&mut ui);
+
         let mut app = Self {
             data: ApplicationState::new(storage_data.todos),
-            ui: UIState::from(storage_data.ui_session.clone(), &config.ui),
+            ui,
             autosave: Autosave::from(&config.storage),
             config,
-            mode: ApplicationMode::Browsing,
+            mode: ApplicationMode::Navigation,
             running: true,
             renderer: Renderer,
             keymaps,
@@ -52,7 +54,7 @@ impl Application {
             ticks_count: 0,
         };
 
-        app.sync_ui(storage_data.ui_session.last_selected_id);
+        app.sync_ui(storage_data.session.last_selected_id);
         if let Some(e) = config_error {
             log::warn!("Application: Config loaded with errors: {}", e);
             app.ui.show_result_popup(Err(e));
@@ -106,8 +108,14 @@ impl Application {
 
     /// Rendering application using Renderer
     pub fn render(&mut self, frame: &mut Frame) {
-        self.renderer
-            .render(frame, &mut self.data, &self.ui, self.mode, &self.autosave);
+        self.renderer.render(
+            frame,
+            &mut self.data,
+            &self.ui,
+            self.mode,
+            &self.autosave,
+            &self.keymaps,
+        );
     }
 
     /// Tick function (for notification and autosave)
@@ -157,13 +165,11 @@ impl Application {
     }
 
     pub fn save_all(&mut self) -> ApplicationResult<()> {
-        let current_id = self.data.selected_id(
-            &self.data.todos,
-            &self.ui.current_filter,
-            &self.ui.search_query(),
-        );
+        let current_id =
+            self.data
+                .selected_id(&self.data.todos, &self.ui.filter, &self.ui.search_query());
 
-        let session = self.ui.to_session(current_id);
+        let session = Session::from_state(&self.ui, current_id);
         Storage::save(&self.data.todos, session, None, &self.config.storage)?;
 
         self.data.mark_saved();
@@ -175,7 +181,7 @@ impl Application {
         let query: &str = self.ui.search_query();
         let filtered_ids: Vec<uuid::Uuid> = self
             .ui
-            .current_filter
+            .filter
             .apply(&self.data.todos, query)
             .iter()
             .map(|t| t.id)
@@ -201,7 +207,7 @@ impl Application {
 
         log::trace!(
             "UI Sync: Filter: {:?}, Query: '{}', Visible IDs: {}, Selected: {:?}",
-            self.ui.current_filter,
+            self.ui.filter,
             query,
             filtered_ids.len(),
             self.data.select_state.selected()
@@ -210,10 +216,15 @@ impl Application {
 
     /// Restoring base mode (after form exit)
     pub fn restore_base_mode(&mut self) {
-        self.mode = match self.ui.focus_area {
-            FocusArea::LeftPanel => ApplicationMode::Browsing,
-            FocusArea::MainContent => ApplicationMode::List,
+        self.mode = match *self.ui.focused {
+            FocusArea::Sidebar => ApplicationMode::Navigation,
+            FocusArea::Main => ApplicationMode::List,
         };
+        log::debug!(
+            "Mode restored to {:?} based on focus {:?}",
+            self.mode,
+            *self.ui.focused
+        );
     }
 
     /// Helper function to load config
@@ -238,7 +249,7 @@ impl Default for Application {
         Self {
             data: ApplicationState::default(),
             ui: UIState::default(),
-            mode: ApplicationMode::Browsing,
+            mode: ApplicationMode::Navigation,
             running: true,
             renderer: Renderer,
             autosave: Autosave::new(false),
@@ -273,7 +284,7 @@ mod tests {
                 app.autosave.reset_timer();
             }
 
-            let session = app.ui.to_session(None);
+            let session = Session::from_state(&app.ui, None);
             if has_changes && app.autosave.should_save(has_changes) {
                 if Storage::save(&app.data.todos, session, path, &app.config.storage).is_ok() {
                     app.data.mark_saved();
@@ -374,7 +385,7 @@ mod tests {
         app.data.todos.push(Todo::new("Done", "", None));
         app.data.todos[1].completed = true;
 
-        app.ui.current_filter = Filter::Completed;
+        app.ui.filter.set(Filter::Completed);
         app.data.select_state.select(Some(1));
 
         app.sync_ui(None);
@@ -413,7 +424,7 @@ mod tests {
         app.data.todos.push(Todo::new("Initial", "", None));
         let _ = Storage::save(
             &app.data.todos,
-            UIState::default().to_session(None),
+            Session::default(),
             Some(&path),
             &app.config.storage,
         );

@@ -1,6 +1,6 @@
 use crate::{
-    core::ApplicationError,
-    models::{Filter, Priority, Sort, Todo},
+    core::Sort,
+    models::{Filter, Priority, Todo},
     ui::Notification,
 };
 use chrono::Local;
@@ -27,9 +27,6 @@ pub struct ApplicationState {
 
     pub last_selected_id: Option<Uuid>,
 }
-
-/// Service response (data or TodoError/StorageError)
-pub type ApplicationResult<T> = Result<T, ApplicationError>;
 
 impl ApplicationState {
     pub fn new(mut todos: Vec<Todo>) -> Self {

@@ -10,7 +10,7 @@ fn main() -> color_eyre::Result<()> {
                 let _ = std::fs::create_dir_all(parent);
             }
 
-            todo_tui::core::logger::init_logger(&log_path, config.log.level);
+            todo_tui::core::init_logger(&log_path, config.log.level);
         }
     }
 

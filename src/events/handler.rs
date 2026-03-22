@@ -2,11 +2,15 @@ use crate::{
     Application,
     app::ApplicationController,
     config::KeyMaps,
-    core::{Action, ApplicationMode, Autosave},
-    enums::{FocusArea, WidgetResponse},
-    models::{Filter, Todo, TodoDetails},
-    traits::{Input, ModalAction, ModalResult},
-    ui::{Form, Popup, is_terminal_small},
+    core::{Action, ApplicationMode, Autosave, FocusArea, Selectable},
+    models::{Filter, TodoDetails, TodoEditor},
+    ui::{
+        Form, Popup, WidgetResponse, is_terminal_small,
+        widgets::{
+            input::Input,
+            modal::{ModalAction, ModalResult},
+        },
+    },
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
@@ -110,12 +114,16 @@ impl EventHandler {
         match form.handle_key(&event) {
             WidgetResponse::Submit => {
                 let (id, title, desc, priority) = form.data();
+                let editor: TodoEditor = TodoEditor {
+                    title,
+                    description: desc,
+                    priority: Selectable::new(priority),
+                };
+
                 if let Some(task_id) = id {
-                    log::info!("Form submitted: updating task '{}' ({})", title, task_id);
-                    let updated = Todo::from_id(task_id, title, desc, Some(priority));
-                    ctrl.dispatch_update(task_id, updated);
+                    ctrl.dispatch_update(task_id, editor);
                 } else {
-                    ctrl.dispatch_append(title, desc, Some(priority));
+                    ctrl.dispatch_append(editor.title, editor.description, Some(*editor.priority));
                 }
 
                 ctrl.ui.task_form = None;
@@ -145,12 +153,12 @@ impl EventHandler {
         match input.handle_key(&event.code) {
             WidgetResponse::Submit => {
                 *mode = ApplicationMode::List;
-                ctrl.ui.focus_area = FocusArea::MainContent;
+                ctrl.ui.focused.set(FocusArea::Main);
             }
             WidgetResponse::Cancel => {
                 ctrl.ui.search_input = None;
-                *mode = ApplicationMode::Browsing;
-                ctrl.ui.focus_area = FocusArea::LeftPanel;
+                *mode = ApplicationMode::Navigation;
+                ctrl.ui.focused.set(FocusArea::Sidebar);
             }
             WidgetResponse::Continue => {
                 ctrl.state.select_state.select(Some(0));
@@ -168,7 +176,7 @@ impl EventHandler {
         running: &mut bool,
     ) {
         ctrl.ui.request_redraw();
-        let focus: FocusArea = ctrl.ui.focus_area;
+        let focus: FocusArea = *ctrl.ui.focused;
 
         match action {
             Action::Quit => {
@@ -187,7 +195,7 @@ impl EventHandler {
             }
             Action::ToggleAutosave => autosave.toggle_enabled(),
             Action::ShowHelp => {
-                let help_lines = mode.hotkeys(&ctrl.ui.theme, &ctrl.ui.focus_area);
+                let help_lines = ctrl.keymaps.hotkeys_info(&ctrl.ui.theme.palette());
                 ctrl.ui.show_modal(
                     Popup::help(help_lines).with_scroll(ctrl.ui.hotkeys_scroll.clone()),
                     ModalAction::None,
@@ -207,28 +215,28 @@ impl EventHandler {
             }
 
             Action::MoveLeft => {
-                ctrl.ui.focus_area = FocusArea::LeftPanel;
-                *mode = ApplicationMode::Browsing;
+                ctrl.ui.focused.set(FocusArea::Sidebar);
+                *mode = ApplicationMode::Navigation;
             }
             Action::MoveRight => {
-                ctrl.ui.focus_area = FocusArea::MainContent;
+                ctrl.ui.focused.set(FocusArea::Main);
                 *mode = ApplicationMode::List;
             }
-            Action::MoveUp => match ctrl.ui.focus_area {
-                FocusArea::LeftPanel => {
+            Action::MoveUp => match *ctrl.ui.focused {
+                FocusArea::Sidebar => {
                     ctrl.ui.prev_tab_filter();
                     ctrl.stabilize(None);
                 }
-                FocusArea::MainContent => {
+                FocusArea::Main => {
                     ctrl.dispatch_move_selection(-1);
                 }
             },
-            Action::MoveDown => match ctrl.ui.focus_area {
-                FocusArea::LeftPanel => {
+            Action::MoveDown => match *ctrl.ui.focused {
+                FocusArea::Sidebar => {
                     ctrl.ui.next_tab_filter();
                     ctrl.stabilize(None);
                 }
-                FocusArea::MainContent => {
+                FocusArea::Main => {
                     ctrl.dispatch_move_selection(1);
                 }
             },
@@ -239,7 +247,7 @@ impl EventHandler {
             | Action::FilterCompleted
             | Action::FilterHigh
             | Action::FilterToday
-                if focus == FocusArea::LeftPanel =>
+                if focus == FocusArea::Sidebar =>
             {
                 match action {
                     Action::FilterAll => ctrl.ui.change_filter(Filter::All),
@@ -260,7 +268,7 @@ impl EventHandler {
             | Action::Sort
             | Action::SortReverse
             | Action::ClearAll
-                if focus == FocusArea::MainContent =>
+                if focus == FocusArea::Main =>
             {
                 match action {
                     Action::Update => {
@@ -282,11 +290,11 @@ impl EventHandler {
                         }
                     }
                     Action::Sort => {
-                        ctrl.state.sort.parameter = ctrl.state.sort.parameter.next();
+                        ctrl.state.sort.parameter.next();
                         ctrl.dispatch_sorting();
                     }
                     Action::SortReverse => {
-                        ctrl.state.sort.order = ctrl.state.sort.order.next();
+                        ctrl.state.sort.order.next();
                         ctrl.dispatch_sorting();
                     }
                     Action::Details => {
@@ -309,8 +317,8 @@ impl EventHandler {
                     _ => {}
                 }
             }
-            Action::MoveTaskDown if focus == FocusArea::MainContent => ctrl.dispatch_move_tasks(1),
-            Action::MoveTaskUp if focus == FocusArea::MainContent => ctrl.dispatch_move_tasks(-1),
+            Action::MoveTaskDown if focus == FocusArea::Main => ctrl.dispatch_move_tasks(1),
+            Action::MoveTaskUp if focus == FocusArea::Main => ctrl.dispatch_move_tasks(-1),
 
             _ => log::trace!("Action {:?} ignored in focus {:?}", action, focus),
         }
@@ -323,9 +331,9 @@ mod tests {
     use super::*;
     use crate::{
         config::{Config, StorageConfig},
-        core::Storage,
-        models::{SortBy, SortOrder},
-        state::{ApplicationState, UIState},
+        core::{SortBy, SortOrder, Storage},
+        models::Todo,
+        state::{ApplicationState, Session, UIState},
     };
     use ratatui::crossterm::event::KeyModifiers;
     use std::path::{Path, PathBuf};
@@ -407,10 +415,10 @@ mod tests {
             if result == ModalResult::Confirmed && modal_action_type == ModalAction::UnsavedExit {
                 let current_id = ctrl.state.selected_id(
                     &ctrl.state.todos,
-                    &ctrl.ui.current_filter,
+                    &ctrl.ui.filter,
                     &ctrl.ui.search_query(),
                 );
-                let session = ctrl.ui.to_session(current_id);
+                let session = Session::from_state(ctrl.ui, current_id);
 
                 match Storage::save(&ctrl.state.todos, session, Some(path), config) {
                     Ok(string) => ctrl.ui.show_result_popup(Ok(string)),
@@ -430,7 +438,7 @@ mod tests {
         let event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
         EventHandler::handle_key(&mut app, event);
 
-        assert_eq!(app.mode, ApplicationMode::Browsing);
+        assert_eq!(app.mode, ApplicationMode::Navigation);
         assert!(app.ui.task_form.is_none());
         assert!(app.running);
     }
@@ -476,7 +484,7 @@ mod tests {
 
         EventHandler::handle_key(&mut app, key_event(KeyCode::Char('a')));
 
-        assert_eq!(app.mode, ApplicationMode::Browsing);
+        assert_eq!(app.mode, ApplicationMode::Navigation);
         assert!(app.ui.task_form.is_none());
         assert!(app.ui.modal.is_some());
     }
@@ -493,7 +501,7 @@ mod tests {
     #[test]
     fn should_handle_sort_keys() {
         let mut app = setup_application();
-        app.ui.focus_area = FocusArea::MainContent;
+        app.ui.focused.value = FocusArea::Main;
 
         assert_eq!(app.data.sort.parameter, SortBy::Priority);
         assert_eq!(app.data.sort.order, SortOrder::Desc);
@@ -530,30 +538,30 @@ mod tests {
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::execute_action(Action::MoveRight, &mut ctrl, mode, autosave, running);
 
-        assert_eq!(ctrl.ui.focus_area, FocusArea::MainContent);
+        assert_eq!(ctrl.ui.focused, FocusArea::Main);
         assert_eq!(*mode, ApplicationMode::List);
 
         EventHandler::execute_action(Action::MoveLeft, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.focus_area, FocusArea::LeftPanel);
-        assert_eq!(*mode, ApplicationMode::Browsing);
+        assert_eq!(ctrl.ui.focused, FocusArea::Sidebar);
+        assert_eq!(*mode, ApplicationMode::Navigation);
     }
 
     #[test]
     fn should_test_delegation_to_left_panel() {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
-        ui.focus_area = FocusArea::LeftPanel;
-        ui.current_filter = Filter::All;
+        ui.focused.set(FocusArea::Sidebar);
+        ui.filter.set(Filter::All);
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::execute_action(Action::MoveDown, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::Active);
+        assert_eq!(ctrl.ui.filter, Filter::Active);
 
         EventHandler::execute_action(Action::MoveDown, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::Completed);
+        assert_eq!(ctrl.ui.filter, Filter::Completed);
 
         EventHandler::execute_action(Action::MoveUp, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::Active);
+        assert_eq!(ctrl.ui.filter, Filter::Active);
     }
 
     #[test]
@@ -564,7 +572,7 @@ mod tests {
         state.todos.push(Todo::new("T1", "", None));
         state.todos.push(Todo::new("T2", "", None));
         state.select_state.select(Some(0));
-        ui.focus_area = FocusArea::MainContent;
+        ui.focused.set(FocusArea::Main);
         *mode = ApplicationMode::List;
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
@@ -656,7 +664,7 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
 
-        ui.focus_area = FocusArea::MainContent;
+        ui.focused.set(FocusArea::Main);
         state.todos.push(Todo::new("T1", "", None));
         state.todos.push(Todo::new("T2", "", None));
         state.todos.push(Todo::new("T3", "", None));
@@ -676,7 +684,7 @@ mod tests {
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
         state.todos.push(Todo::new("T1", "", None));
         state.select_state.select(Some(0));
-        ui.focus_area = FocusArea::MainContent;
+        ui.focused.set(FocusArea::Main);
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         let initial_status = ctrl.state.todos[0].completed;
@@ -692,7 +700,7 @@ mod tests {
 
         state.todos.push(Todo::new("Edit Me", "Desc", None));
         state.select_state.select(Some(0));
-        ui.focus_area = FocusArea::MainContent;
+        ui.focused.set(FocusArea::Main);
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::execute_action(Action::Update, &mut ctrl, mode, autosave, running);
@@ -722,7 +730,7 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
 
-        ui.focus_area = FocusArea::MainContent;
+        ui.focused.set(FocusArea::Main);
         state.todos.push(Todo::new("To Delete", "", None));
         state.select_state.select(Some(0));
 
@@ -738,7 +746,7 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
 
-        ui.focus_area = FocusArea::MainContent;
+        ui.focused.set(FocusArea::Main);
         state.todos.push(Todo::new("Task 1", "", None));
         state.todos.push(Todo::new("Task 2", "", None));
         state.select_state.select(Some(0));
@@ -844,7 +852,7 @@ mod tests {
         EventHandler::handle_search_mode(key_event(KeyCode::Enter), &mut ctrl, &mut mode);
 
         assert_eq!(mode, ApplicationMode::List);
-        assert_eq!(ctrl.ui.focus_area, FocusArea::MainContent);
+        assert_eq!(ctrl.ui.focused, FocusArea::Main);
         assert!(ctrl.ui.search_input.is_some(),);
     }
 
@@ -858,8 +866,8 @@ mod tests {
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::handle_search_mode(key_event(KeyCode::Esc), &mut ctrl, &mut mode);
 
-        assert_eq!(mode, ApplicationMode::Browsing);
-        assert_eq!(ctrl.ui.focus_area, FocusArea::LeftPanel);
+        assert_eq!(mode, ApplicationMode::Navigation);
+        assert_eq!(ctrl.ui.focused, FocusArea::Sidebar);
         assert!(ctrl.ui.search_input.is_none(),);
     }
 
@@ -902,13 +910,13 @@ mod tests {
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
 
         EventHandler::execute_action(Action::MoveDown, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::Active);
+        assert_eq!(ctrl.ui.filter, Filter::Active);
 
         EventHandler::execute_action(Action::MoveDown, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::Completed);
+        assert_eq!(ctrl.ui.filter, Filter::Completed);
 
         EventHandler::execute_action(Action::MoveUp, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::Active);
+        assert_eq!(ctrl.ui.filter, Filter::Active);
     }
 
     #[test]
@@ -918,13 +926,13 @@ mod tests {
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
 
         EventHandler::execute_action(Action::FilterCompleted, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::Completed);
+        assert_eq!(ctrl.ui.filter, Filter::Completed);
 
         EventHandler::execute_action(Action::FilterToday, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::Today);
+        assert_eq!(ctrl.ui.filter, Filter::Today);
 
         EventHandler::execute_action(Action::FilterAll, &mut ctrl, mode, autosave, running);
-        assert_eq!(ctrl.ui.current_filter, Filter::All);
+        assert_eq!(ctrl.ui.filter, Filter::All);
     }
 
     #[test]
@@ -946,8 +954,8 @@ mod tests {
     #[test]
     fn should_ignore_unrelated_keys_in_left_panel() {
         let mut app = setup_application();
-        app.ui.current_filter = Filter::All;
+        app.ui.filter.set(Filter::All);
         EventHandler::handle_key(&mut app, key_event(KeyCode::Char('x')));
-        assert_eq!(app.ui.current_filter, Filter::All);
+        assert_eq!(app.ui.filter, Filter::All);
     }
 }
