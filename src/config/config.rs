@@ -10,24 +10,13 @@ use std::{
 };
 
 /// Main application config
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct Config {
     pub ui: UIConfig,
     pub storage: StorageConfig,
     pub log: LogConfig,
     pub behavior: BehaviorConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            ui: UIConfig::default(),
-            storage: StorageConfig::default(),
-            behavior: BehaviorConfig::default(),
-            log: LogConfig::default(),
-        }
-    }
 }
 
 impl Config {

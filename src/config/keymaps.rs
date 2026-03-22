@@ -1,11 +1,19 @@
-use crate::core::{Action, ApplicationError, StorageError};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crate::{
+    core::{Action, ApplicationError, StorageError},
+    theme::ThemePalette,
+};
+use ratatui::{
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    style::{Style, Stylize},
+    text::{Line, Span},
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
+use strum::IntoEnumIterator;
 
 /// Keymaps that are being saved on the disk
 #[derive(Serialize, Deserialize)]
@@ -162,6 +170,40 @@ impl KeyMaps {
         s
     }
 
+    /// Get key string based on action
+    pub fn key(&self, action: Action) -> String {
+        let mut keys: Vec<String> = self
+            .mappings
+            .iter()
+            .filter(|&(_, mapped_action)| *mapped_action == action)
+            .map(|(&(code, mods), _)| format!("<{}>", Self::stringify_key(code, mods)))
+            .collect();
+
+        keys.sort();
+        keys.join(" | ")
+    }
+
+    /// Get first assigned key (if there are more than 1 option)
+    pub fn first_assigned(&self, action: Action) -> String {
+        let mut keys: Vec<(KeyCode, KeyModifiers)> = self
+            .mappings
+            .iter()
+            .filter(|&(_, mapped_action)| *mapped_action == action)
+            .map(|(&key, _)| key)
+            .collect();
+
+        keys.sort_by_key(|(code, _)| match code {
+            KeyCode::Char(_) => 0,
+            _ => 1,
+        });
+
+        if let Some(&(code, mods)) = keys.first() {
+            format!("<{}>", Self::stringify_key(code, mods))
+        } else {
+            String::new()
+        }
+    }
+
     /// Check whether is a process kill key (Ctrl+C)
     pub fn is_kill_process(e: &KeyEvent) -> bool {
         let killed = e.code == KeyCode::Char('c') && e.modifiers.contains(KeyModifiers::CONTROL);
@@ -179,6 +221,80 @@ impl KeyMaps {
         }
 
         self.is(e, Action::Quit)
+    }
+
+    /// Generate hotkeys for help popup
+    pub fn hotkeys_info(&self, palette: &ThemePalette) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+        let all_actions: Vec<Action> = Action::iter().collect();
+        let categories: [&str; 5] = ["Navigation", "Actions", "Filters", "UI", "System"];
+
+        for cat in categories {
+            let cat_actions: Vec<Action> = all_actions
+                .iter()
+                .filter(|a| a.info().1 == cat)
+                .cloned()
+                .collect();
+
+            if cat_actions.is_empty() {
+                continue;
+            }
+
+            self.add_section(&mut lines, cat, palette);
+
+            for action in cat_actions {
+                let (desc, _) = action.info();
+                let keys = self.key(action);
+
+                if !keys.is_empty() {
+                    self.add_command(&mut lines, keys, desc, palette);
+                }
+            }
+        }
+
+        lines
+    }
+
+    /// Adds hotkey command
+    fn add_command(
+        &self,
+        lines: &mut Vec<Line<'static>>,
+        key: String,
+        desc: &'static str,
+        palette: &ThemePalette,
+    ) {
+        let key_col_width: usize = 20;
+        let key_str: String = format!("{:>width$}", key, width = key_col_width);
+
+        lines.push(Line::from(vec![
+            Span::styled(key_str, Style::default().fg(palette.info).bold()),
+            Span::styled(" │ ", Style::default().fg(palette.muted)),
+            Span::styled(desc, Style::default().fg(palette.fg)),
+        ]));
+    }
+
+    /// Add hotkeys section
+    fn add_section(
+        &self,
+        lines: &mut Vec<Line<'static>>,
+        title: &'static str,
+        palette: &ThemePalette,
+    ) {
+        if !lines.is_empty() {
+            lines.push(Line::from(""));
+        }
+
+        lines.push(
+            Line::from(vec![
+                Span::styled("── ", Style::default().fg(palette.accent)),
+                Span::styled(
+                    title.to_uppercase(),
+                    Style::default().fg(palette.accent).bold(),
+                ),
+                Span::styled(" ──", Style::default().fg(palette.accent)),
+            ])
+            .centered(),
+        );
     }
 }
 
@@ -237,6 +353,8 @@ impl Default for KeyMaps {
 /// Unit-tests for keymaps
 #[cfg(test)]
 mod tests {
+    use crate::theme::ThemeName;
+
     use super::*;
     use tempdir::TempDir;
 
@@ -353,5 +471,35 @@ mod tests {
 
         let key_other = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
         assert!(!keymap.is_exit(&key_other));
+    }
+
+    #[test]
+    fn should_test_hotkeys_alignment_consistency() {
+        let keymap: KeyMaps = KeyMaps::default();
+        let palette = ThemeName::GruvboxDark.palette();
+        let lines = keymap.hotkeys_info(&palette);
+
+        for line in lines {
+            let spans: Vec<_> = line.spans.iter().collect();
+            if spans.len() >= 3 && spans[1].content.contains('│') {
+                assert_eq!(spans[0].content.len(), 20, "Key column width must be 20");
+            }
+        }
+    }
+
+    #[test]
+    fn should_add_section_spacing() {
+        let keymap: KeyMaps = KeyMaps::default();
+        let palette = ThemeName::GruvboxDark.palette();
+        let lines = keymap.hotkeys_info(&palette);
+
+        let empty_lines = lines
+            .iter()
+            .filter(|l| l.spans.is_empty() || (l.spans.len() == 1 && l.spans[0].content.is_empty()))
+            .count();
+        assert!(
+            empty_lines >= 2,
+            "Sections should be separated by empty lines"
+        );
     }
 }
