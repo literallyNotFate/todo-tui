@@ -395,7 +395,7 @@ mod tests {
 
         ui.close_modal();
 
-        ui.show_result_popup(Err(StorageError::JSONError("Some error".to_string()).into()));
+        ui.show_result_popup(Err(StorageError::JSON("Some error".to_string()).into()));
         assert!(ui.modal.is_some());
     }
 

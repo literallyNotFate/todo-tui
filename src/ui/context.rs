@@ -215,7 +215,11 @@ impl<'a, 'b> RenderContext<'a, 'b> {
     /// Truncates text if too long (for notifications/summary)
     pub fn truncate(text: &str, max_width: usize) -> String {
         let char_count = text.chars().count();
-        if char_count > max_width && max_width > 0 {
+        if max_width == 0 {
+            return String::new();
+        }
+
+        if char_count > max_width {
             let truncated: String = text.chars().take(max_width.saturating_sub(1)).collect();
             format!("{}…", truncated)
         } else {

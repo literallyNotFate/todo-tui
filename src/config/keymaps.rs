@@ -1,5 +1,5 @@
 use crate::{
-    core::{Action, ApplicationError, StorageError},
+    core::{Action, ApplicationError, KeyMapError, StorageError},
     theme::ThemePalette,
 };
 use ratatui::{
@@ -16,9 +16,18 @@ use std::{
 use strum::IntoEnumIterator;
 
 /// Keymaps that are being saved on the disk
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 struct KeyMapsDisk {
-    actions: HashMap<Action, Vec<String>>,
+    #[serde(default)]
+    navigation: HashMap<Action, Vec<String>>,
+    #[serde(default)]
+    tasks: HashMap<Action, Vec<String>>,
+    #[serde(default)]
+    filters: HashMap<Action, Vec<String>>,
+    #[serde(default)]
+    ui: HashMap<Action, Vec<String>>,
+    #[serde(default)]
+    system: HashMap<Action, Vec<String>>,
 }
 
 /// Keymaps for todo-tui application
@@ -58,17 +67,40 @@ impl KeyMaps {
             return Ok(Self::default());
         }
 
-        let content = fs::read_to_string(&p).map_err(|e| StorageError::IOError(e.to_string()))?;
+        let content = fs::read_to_string(&p).map_err(|e| StorageError::IO(e.to_string()))?;
         let disk_map: KeyMapsDisk =
-            toml::from_str(&content).map_err(|e| StorageError::TOMLError(e.to_string()))?;
+            toml::from_str(&content).map_err(|e| StorageError::TOML(e.to_string()))?;
 
         let mut mappings = HashMap::new();
-        for (action, keys) in disk_map.actions {
-            for key_str in keys {
-                let parsed = Self::parse(&key_str);
-                mappings.insert(parsed, action);
-            }
-        }
+
+        let mut process_section =
+            |map: HashMap<Action, Vec<String>>| -> Result<(), ApplicationError> {
+                for (action, keys) in map {
+                    for key_str in keys {
+                        let parsed = Self::parse(&key_str);
+
+                        if let Some(existing_action) = mappings.get(&parsed) {
+                            if *existing_action != action {
+                                return Err(KeyMapError::DuplicateKey {
+                                    key: key_str,
+                                    first_action: format!("{:?}", existing_action),
+                                    second_action: format!("{:?}", action),
+                                }
+                                .into());
+                            }
+                        }
+
+                        mappings.insert(parsed, action);
+                    }
+                }
+                Ok(())
+            };
+
+        process_section(disk_map.navigation)?;
+        process_section(disk_map.tasks)?;
+        process_section(disk_map.filters)?;
+        process_section(disk_map.ui)?;
+        process_section(disk_map.system)?;
 
         Ok(Self { mappings })
     }
@@ -80,25 +112,31 @@ impl KeyMaps {
             None => Self::get_keymap_path(),
         };
 
-        let mut disk_actions: HashMap<Action, Vec<String>> = HashMap::new();
+        let mut disk_map: KeyMapsDisk = KeyMapsDisk::default();
 
         for (&(code, mods), &action) in &self.mappings {
             let key_str = Self::stringify_key(code, mods);
-            disk_actions.entry(action).or_default().push(key_str);
+            let (_, category) = action.info();
+
+            let target_map = match category {
+                "Navigation" => &mut disk_map.navigation,
+                "Actions" => &mut disk_map.tasks,
+                "Filters" => &mut disk_map.filters,
+                "UI" => &mut disk_map.ui,
+                _ => &mut disk_map.system,
+            };
+
+            target_map.entry(action).or_default().push(key_str);
         }
 
-        let disk_map = KeyMapsDisk {
-            actions: disk_actions,
-        };
-
-        let content = toml::to_string_pretty(&disk_map)
-            .map_err(|e| StorageError::TOMLError(e.to_string()))?;
+        let content =
+            toml::to_string_pretty(&disk_map).map_err(|e| StorageError::TOML(e.to_string()))?;
 
         if let Some(parent) = p.parent() {
             fs::create_dir_all(parent).ok();
         }
 
-        fs::write(p, content).map_err(|e| StorageError::IOError(e.to_string()))?;
+        fs::write(p, content).map_err(|e| StorageError::IO(e.to_string()))?;
         Ok(())
     }
 
@@ -402,27 +440,64 @@ mod tests {
     }
 
     #[test]
-    fn should_save_and_load_keymaps_from_disk() {
-        let temp_dir = TempDir::new("keymap_test").unwrap();
-        let path = temp_dir.path().join("keymaps.toml");
+    fn should_save_with_proper_sections() {
+        let temp_dir = TempDir::new("keymap_sections_test").unwrap();
+        let path = temp_dir.path().join("sections.toml");
 
         let mut mappings = HashMap::new();
+        mappings.insert((KeyCode::Up, KeyModifiers::empty()), Action::MoveUp);
         mappings.insert((KeyCode::Char('q'), KeyModifiers::empty()), Action::Quit);
-        mappings.insert((KeyCode::Char('s'), KeyModifiers::CONTROL), Action::Save);
 
         let keymaps = KeyMaps { mappings };
-        keymaps.save(Some(&path)).expect("Should save keymaps");
+        keymaps.save(Some(&path)).expect("Should save");
 
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains("quit"));
-        assert!(content.contains("ctrl+s"));
 
-        let loaded = KeyMaps::load(Some(&path)).expect("Should load keymaps");
-        let event_q = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::empty());
-        let event_save = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL);
+        assert!(
+            content.contains("[navigation]"),
+            "Should have navigation section"
+        );
+        assert!(content.contains("[system]"), "Should have system section");
+        assert!(content.contains("move_up = [\"up\"]"));
+    }
 
-        assert_eq!(loaded.action(&event_q), Some(Action::Quit));
-        assert_eq!(loaded.action(&event_save), Some(Action::Save));
+    #[test]
+    fn should_handle_incomplete_toml_gracefully() {
+        let temp_dir = TempDir::new("keymap_incomplete").unwrap();
+        let path = temp_dir.path().join("partial.toml");
+
+        let toml_content = r#"
+            [navigation]
+            move_up = ["k"]
+        "#;
+        std::fs::write(&path, toml_content).unwrap();
+
+        let loaded = KeyMaps::load(Some(&path)).expect("Should load partial config");
+
+        let event_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::empty());
+        assert_eq!(loaded.action(&event_k), Some(Action::MoveUp));
+    }
+
+    #[test]
+    fn should_fail_on_duplicate_keys_in_toml() {
+        let temp_dir = TempDir::new("keymap_error_test").unwrap();
+        let path = temp_dir.path().join("error_keymaps.toml");
+
+        let toml_content = r#"
+            [tasks]
+            add = ["a"]
+            remove = ["a"]
+        "#;
+        std::fs::write(&path, toml_content).unwrap();
+
+        let result = KeyMaps::load(Some(&path));
+
+        match result {
+            Err(ApplicationError::KeyMap(KeyMapError::DuplicateKey { key, .. })) => {
+                assert_eq!(key, "a");
+            }
+            _ => panic!("Should have returned DuplicateKey error, got {:?}", result),
+        }
     }
 
     #[test]

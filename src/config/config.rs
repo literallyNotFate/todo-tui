@@ -41,9 +41,9 @@ impl Config {
         }
 
         let content: String =
-            fs::read_to_string(&p).map_err(|e| StorageError::IOError(e.to_string()))?;
+            fs::read_to_string(&p).map_err(|e| StorageError::IO(e.to_string()))?;
         let config: Self =
-            toml::from_str::<Self>(&content).map_err(|e| StorageError::TOMLError(e.to_string()))?;
+            toml::from_str::<Self>(&content).map_err(|e| StorageError::TOML(e.to_string()))?;
         Ok(config)
     }
 
@@ -56,13 +56,13 @@ impl Config {
 
         if let Some(parent) = p.parent() {
             if !parent.exists() {
-                fs::create_dir_all(parent).map_err(|e| StorageError::IOError(e.to_string()))?;
+                fs::create_dir_all(parent).map_err(|e| StorageError::IO(e.to_string()))?;
             }
         }
 
         let content: String =
-            toml::to_string_pretty(self).map_err(|e| StorageError::TOMLError(e.to_string()))?;
-        fs::write(&p, content).map_err(|e| StorageError::IOError(e.to_string()))?;
+            toml::to_string_pretty(self).map_err(|e| StorageError::TOML(e.to_string()))?;
+        fs::write(&p, content).map_err(|e| StorageError::IO(e.to_string()))?;
         Ok(())
     }
 
@@ -147,7 +147,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::TOMLError(..)))
+            Err(ApplicationError::Storage(StorageError::TOML(..)))
         ));
     }
 

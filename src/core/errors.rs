@@ -1,12 +1,16 @@
 use thiserror::Error;
 
-/// Errors in application (storage - refers to save/load, todo - state methods)
+/// Errors in application (storage - refers to save/load, todo - state methods, keymap - keymap configuration)
 #[derive(Error, Debug, PartialEq)]
 pub enum ApplicationError {
-    #[error("{0}")]
-    Todo(TodoError),
-    #[error("{0}")]
-    Storage(StorageError),
+    #[error(transparent)]
+    Todo(#[from] TodoError),
+
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error(transparent)]
+    KeyMap(#[from] KeyMapError),
 }
 
 /// Errors related to todo operations only
@@ -29,45 +33,28 @@ pub enum TodoError {
 pub enum StorageError {
     #[error("Requested path was not found!")]
     PathNotFound,
-    #[error("Cannot read/write to file: {0}")]
-    IOError(String),
-    #[error("Cannot read/write to JSON: {0}")]
-    JSONError(String),
-    #[error("Cannot read/write to TOML: {0}")]
-    TOMLError(String),
+    #[error("IO error: {0}")]
+    IO(String),
+    #[error("JSON error: {0}")]
+    JSON(String),
+    #[error("TOML error: {0}")]
+    TOML(String),
     #[error("Failed to determine home or config directory")]
-    EnvironmentError,
+    Environment,
 }
 
-/// Casting
-impl From<std::io::Error> for StorageError {
-    fn from(err: std::io::Error) -> Self {
-        StorageError::IOError(err.to_string())
-    }
-}
-
-impl From<serde_json::Error> for StorageError {
-    fn from(err: serde_json::Error) -> Self {
-        StorageError::JSONError(err.to_string())
-    }
-}
-
-impl From<toml::de::Error> for StorageError {
-    fn from(err: toml::de::Error) -> Self {
-        StorageError::TOMLError(err.to_string())
-    }
-}
-
-impl From<TodoError> for ApplicationError {
-    fn from(err: TodoError) -> Self {
-        ApplicationError::Todo(err)
-    }
-}
-
-impl From<StorageError> for ApplicationError {
-    fn from(err: StorageError) -> Self {
-        ApplicationError::Storage(err)
-    }
+#[derive(Error, Debug, PartialEq)]
+pub enum KeyMapError {
+    #[error("Key conflict: '{key}' assigned to '{first_action}' and '{second_action}'")]
+    DuplicateKey {
+        key: String,
+        first_action: String,
+        second_action: String,
+    },
+    #[error("Unknown action: {0}")]
+    UnknownAction(String),
+    #[error("Invalid key format: '{0}'")]
+    InvalidKeyFormat(String),
 }
 
 /// Unit-tests for application state errors (testing messages)
@@ -126,33 +113,59 @@ mod tests {
 
     #[test]
     fn should_return_text_for_io_error() {
-        let error = StorageError::IOError("some error".to_string());
+        let error = StorageError::IO("some error".to_string());
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Cannot read/write to file: some error");
+        assert_eq!(s, "IO error: some error");
     }
 
     #[test]
     fn should_return_text_for_json_error() {
-        let error = StorageError::JSONError("some error".to_string());
+        let error = StorageError::JSON("some error".to_string());
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Cannot read/write to JSON: some error");
+        assert_eq!(s, "JSON error: some error");
     }
 
     #[test]
     fn should_return_text_for_toml_error() {
-        let error = StorageError::TOMLError("some error".to_string());
+        let error = StorageError::TOML("some error".to_string());
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Cannot read/write to TOML: some error");
+        assert_eq!(s, "TOML error: some error");
     }
 
     #[test]
     fn should_return_text_for_environment_error() {
-        let error = StorageError::EnvironmentError;
+        let error = StorageError::Environment;
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
         assert_eq!(s, "Failed to determine home or config directory");
+    }
+
+    #[test]
+    fn should_return_text_for_duplicate_key_error() {
+        let error = KeyMapError::DuplicateKey {
+            key: "ctrl+s".to_string(),
+            first_action: "Save".to_string(),
+            second_action: "Quit".to_string(),
+        };
+
+        let s = format!("{}", error);
+        assert_eq!(s, "Key conflict: 'ctrl+s' assigned to 'Save' and 'Quit'");
+    }
+
+    #[test]
+    fn should_return_text_for_unknown_action_error() {
+        let error = KeyMapError::UnknownAction("super_punch".to_string());
+        let s = format!("{}", error);
+        assert_eq!(s, "Unknown action: super_punch");
+    }
+
+    #[test]
+    fn should_return_text_for_invalid_key_format_error() {
+        let error = KeyMapError::InvalidKeyFormat("ctrl-alt-del-extra".to_string());
+        let s = format!("{}", error);
+        assert_eq!(s, "Invalid key format: 'ctrl-alt-del-extra'");
     }
 }

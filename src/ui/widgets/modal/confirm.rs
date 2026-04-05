@@ -260,13 +260,13 @@ mod tests {
         let mut confirm: Confirm = Confirm::new("Test");
         confirm.select = ConfirmOption::Yes;
         assert_eq!(
-            confirm.handle_action(None, KeyCode::Enter),
+            confirm.handle_action(Some(Action::Complete), KeyCode::Enter),
             Some(ModalResult::Confirmed)
         );
 
         confirm.select = ConfirmOption::Cancel;
         assert_eq!(
-            confirm.handle_action(None, KeyCode::Enter),
+            confirm.handle_action(Some(Action::Quit), KeyCode::Enter),
             Some(ModalResult::Cancelled)
         );
     }

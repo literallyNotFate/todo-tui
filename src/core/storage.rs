@@ -53,7 +53,7 @@ impl Storage {
 
         log::debug!("Starting atomic save of todos and UI session to {:?}", p);
         if let Some(parent) = p.parent() {
-            fs::create_dir_all(parent).map_err(|e| StorageError::IOError(e.to_string()))?;
+            fs::create_dir_all(parent).map_err(|e| StorageError::IO(e.to_string()))?;
         }
 
         let mut temp_path: PathBuf = p.clone();
@@ -62,21 +62,20 @@ impl Storage {
         let data: TasksStateData = TasksStateData::new(todos.to_vec(), session);
 
         let result = (|| -> Result<(), StorageError> {
-            let file =
-                File::create(&temp_path).map_err(|e| StorageError::IOError(e.to_string()))?;
+            let file = File::create(&temp_path).map_err(|e| StorageError::IO(e.to_string()))?;
             let mut writer = BufWriter::new(file);
 
             serde_json::to_writer_pretty(&mut writer, &data)
-                .map_err(|e| StorageError::JSONError(e.to_string()))?;
+                .map_err(|e| StorageError::JSON(e.to_string()))?;
 
             writer
                 .flush()
-                .map_err(|e| StorageError::IOError(e.to_string()))?;
+                .map_err(|e| StorageError::IO(e.to_string()))?;
 
             writer
                 .get_ref()
                 .sync_all()
-                .map_err(|e| StorageError::IOError(e.to_string()))?;
+                .map_err(|e| StorageError::IO(e.to_string()))?;
 
             Ok(())
         })();
@@ -103,7 +102,7 @@ impl Storage {
 
         fs::rename(&temp_path, &p).map_err(|err| {
             log::error!("Atomic rename failed: {}", err);
-            StorageError::IOError(err.to_string())
+            StorageError::IO(err.to_string())
         })?;
 
         Ok("Data was saved".into())
@@ -151,9 +150,9 @@ impl Storage {
 
     /// Helper function to load from path (not to duplicate code)
     fn load_from_path(p: &Path) -> ApplicationResult<TasksStateData> {
-        let file = File::open(p).map_err(|err| StorageError::IOError(err.to_string()))?;
-        let storage = serde_json::from_reader(file)
-            .map_err(|err| StorageError::JSONError(err.to_string()))?;
+        let file = File::open(p).map_err(|err| StorageError::IO(err.to_string()))?;
+        let storage =
+            serde_json::from_reader(file).map_err(|err| StorageError::JSON(err.to_string()))?;
         Ok(storage)
     }
 }
@@ -410,7 +409,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::JSONError(..)))
+            Err(ApplicationError::Storage(StorageError::JSON(..)))
         ));
     }
 
@@ -434,7 +433,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::IOError(..)))
+            Err(ApplicationError::Storage(StorageError::IO(..)))
         ));
     }
 }

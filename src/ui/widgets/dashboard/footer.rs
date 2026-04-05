@@ -146,7 +146,7 @@ mod tests {
         let ui = UIState::default();
         let keymaps = KeyMaps::default();
         let mut autosave = Autosave::new(true);
-        let theme_name = "GruvboxDark";
+        let theme_name = "Gruvbox Dark";
 
         let ctx = RenderContext::mock(&ui, &keymaps);
 
