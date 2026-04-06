@@ -1,4 +1,4 @@
-use crate::{core::Selectable, theme::ThemePalette};
+use crate::theme::{ThemePalette, ThemeRegistry, registry::ThemeID};
 use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
@@ -257,28 +257,45 @@ impl ThemeName {
     }
 }
 
-/// A theme configuration wrapper providing convenient access to theme colors
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Main theme interface for the UI
+/// Has registry that manages all available theme palettes
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Theme {
-    pub name: Selectable<ThemeName>,
+    pub registry: ThemeRegistry,
 }
 
 impl Theme {
-    /// Create a new theme with the given name
-    pub fn new(name: ThemeName) -> Self {
+    /// Create a new theme with the given ID
+    pub fn new(initial: ThemeID) -> Self {
         Self {
-            name: Selectable::new(name),
+            registry: ThemeRegistry::load(initial),
         }
     }
 
-    /// Gets name of a theme
-    pub fn name(&self) -> ThemeName {
-        *self.name
+    /// Returns the color palette for the current theme (automatically chooses between Builtin and Custom)
+    pub fn palette(&self) -> ThemePalette {
+        let id = self.theme_id();
+        self.registry.get_palette(id)
     }
 
-    /// Returns the color palette for the current theme
-    pub fn palette(&self) -> ThemePalette {
-        self.name.palette()
+    /// Returns the currently selected theme ID
+    pub fn theme_id(&self) -> &ThemeID {
+        self.registry.current_id()
+    }
+
+    /// Returns the theme name for displaying in UI
+    pub fn name(&self) -> String {
+        self.theme_id().to_string()
+    }
+
+    /// Switch to the next theme wrapper (through registry)
+    pub fn next(&mut self) {
+        self.registry.next();
+    }
+
+    /// Switch to the prev theme wrapper (through registry)
+    pub fn prev(&mut self) {
+        self.registry.prev();
     }
 
     /// Check if this is a light theme
@@ -290,27 +307,23 @@ impl Theme {
     pub fn is_dark(&self) -> bool {
         self.palette().is_dark()
     }
-
-    /// Switch to the next theme
-    pub fn next(&mut self) {
-        self.name.next();
-    }
-
-    /// Switch to the prev theme
-    pub fn prev(&mut self) {
-        self.name.prev();
-    }
 }
 
 impl From<ThemeName> for Theme {
     fn from(name: ThemeName) -> Self {
-        Self::new(name)
+        Self::new(ThemeID::Builtin(name))
+    }
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self::new(ThemeID::Builtin(ThemeName::default()))
     }
 }
 
 impl std::fmt::Display for Theme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
+        write!(f, "{}", self.theme_id())
     }
 }
 
@@ -321,73 +334,83 @@ mod tests {
     use strum::IntoEnumIterator;
 
     #[test]
-    fn should_check_if_all_themes_have_palettes() {
-        for theme in ThemeName::iter() {
-            let palette = theme.palette();
+    fn should_check_if_all_builtin_themes_have_palettes() {
+        for theme_name in ThemeName::iter() {
+            let palette = theme_name.palette();
             assert_ne!(palette.fg, palette.bg);
         }
     }
 
     #[test]
     fn should_test_theme_cycling_next() {
-        let mut theme = Theme::new(ThemeName::GruvboxDark);
-        let original = theme.name.value;
-        let count = ThemeName::iter().count();
+        let mut theme = Theme::new(ThemeID::Builtin(ThemeName::GruvboxDark));
+        let original_id = theme.theme_id().clone();
+        let count = theme.registry.all_ids.len();
 
         for _ in 0..count {
             theme.next();
         }
 
-        assert_eq!(theme.name, original);
+        assert_eq!(theme.theme_id(), &original_id);
     }
 
     #[test]
     fn should_test_theme_cycling_prev() {
-        let mut theme = Theme::new(ThemeName::GruvboxDark);
-        let count = ThemeName::iter().count();
+        let mut theme = Theme::new(ThemeID::Builtin(ThemeName::GruvboxDark));
+        let original_id = ThemeID::Builtin(ThemeName::GruvboxDark);
+        let count = theme.registry.all_ids.len();
 
         theme.prev();
-        assert_ne!(theme.name, ThemeName::GruvboxDark);
+        assert_ne!(theme.theme_id(), &original_id);
 
         theme.next();
-        assert_eq!(theme.name, ThemeName::GruvboxDark);
+        assert_eq!(theme.theme_id(), &original_id);
 
         for _ in 0..count {
             theme.prev();
         }
-        assert_eq!(theme.name, ThemeName::GruvboxDark);
+        assert_eq!(theme.theme_id(), &original_id);
     }
 
     #[test]
-    fn should_verify_specific_transition() {
-        let mut theme = Theme::new(ThemeName::GruvboxDark);
-        theme.next();
-        assert_eq!(theme.name, ThemeName::CatppuccinMocha);
-    }
-
-    #[test]
-    fn should_test_light_dark_detection_for_themes() {
+    fn should_test_light_dark_detection() {
         assert!(ThemeName::GruvboxDark.palette().is_dark());
-        assert!(ThemeName::CatppuccinMocha.palette().is_dark());
-        assert!(ThemeName::TokyoNight.palette().is_dark());
+        assert!(!ThemeName::GruvboxLight.palette().is_dark());
+
+        let dark_theme: Theme = Theme::new(ThemeID::Builtin(ThemeName::GruvboxDark));
+        assert!(dark_theme.is_dark());
+
+        let light_theme: Theme = Theme::new(ThemeID::Builtin(ThemeName::GruvboxLight));
+        assert!(!light_theme.is_dark());
     }
 
     #[test]
-    fn should_test_to_string_for_theme() {
-        assert_eq!(ThemeName::GruvboxDark.to_string(), "Gruvbox Dark");
+    fn should_test_to_string_for_theme_id() {
+        let id = ThemeID::Builtin(ThemeName::GruvboxDark);
+        assert_eq!(id.to_string(), "Gruvbox Dark");
+
+        let custom_id = ThemeID::Custom("my-cool-theme".to_string());
+        assert_eq!(custom_id.to_string(), "my-cool-theme");
+    }
+
+    #[test]
+    fn should_test_theme_initialization_from_id() {
+        let id = ThemeID::Builtin(ThemeName::KanagawaWave);
+        let theme = Theme::new(id.clone());
+        assert_eq!(theme.theme_id(), &id);
+    }
+
+    #[test]
+    fn should_verify_registry_integrity() {
+        let theme = Theme::default();
+        let builtin_count = ThemeName::iter().count();
+        assert!(theme.registry.all_ids.len() >= builtin_count);
+        assert!(theme.registry.current_index < theme.registry.all_ids.len());
+    }
+
+    #[test]
+    fn should_handle_custom_theme_display_names() {
         assert_eq!(ThemeName::TokyoNight.to_string(), "Tokyo Night");
         assert_eq!(ThemeName::CatppuccinMocha.to_string(), "Catppuccin Mocha");
-    }
-
-    #[test]
-    fn should_test_theme_display_trait() {
-        assert_eq!(format!("{}", ThemeName::GruvboxDark), "Gruvbox Dark");
-        assert_eq!(format!("{}", ThemeName::TokyoNight), "Tokyo Night");
-    }
-
-    #[test]
-    fn should_test_theme_from_name() {
-        let theme: Theme = ThemeName::KanagawaWave.into();
-        assert_eq!(theme.name, ThemeName::KanagawaWave);
     }
 }

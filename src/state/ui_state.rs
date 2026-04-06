@@ -3,7 +3,7 @@ use crate::{
     core::{FocusArea, Selectable},
     models::Filter,
     state::{ActiveModal, AdaptiveScroll, ApplicationResult, ApplicationState, Session},
-    theme::{Theme, ThemeName},
+    theme::{Theme, ThemeID, ThemeName},
     ui::{
         Confirm, Form, Notification, Popup, TextInput,
         widgets::{
@@ -35,17 +35,27 @@ pub struct UIState {
 
 impl UIState {
     pub fn new(mut config: UIConfig) -> Self {
-        config.last_dark.get_or_insert(ThemeName::GruvboxDark);
-        config.last_light.get_or_insert(ThemeName::GruvboxLight);
+        config
+            .last_dark
+            .get_or_insert(ThemeID::Builtin(ThemeName::GruvboxDark));
+        config
+            .last_light
+            .get_or_insert(ThemeID::Builtin(ThemeName::GruvboxLight));
 
-        let mut ui = Self {
-            theme: Theme::new(config.theme),
+        let theme: Theme = Theme::new(config.theme.clone());
+
+        Self {
+            filter: Selectable::default(),
+            focused: Selectable::default(),
+            modal: None,
+            task_form: None,
+            search_input: None,
+            desc_scroll: AdaptiveScroll::default(),
+            hotkeys_scroll: AdaptiveScroll::default(),
+            theme,
             config,
-            ..Self::default()
-        };
-
-        ui.refresh_theme();
-        ui
+            should_redraw: true,
+        }
     }
 
     /// Apply UI state from loaded session
@@ -162,23 +172,28 @@ impl UIState {
     /// Toggle dark/light theme mode
     pub fn toggle_mode(&mut self) {
         self.config.use_system_theme = false;
+        let current_id: ThemeID = self.theme.theme_id().clone();
 
-        let current_name: ThemeName = self.theme.name();
         if self.theme.is_dark() {
-            self.config.last_dark = Some(current_name);
+            self.config.last_dark = Some(current_id);
         } else {
-            self.config.last_light = Some(current_name);
+            self.config.last_light = Some(current_id);
         }
 
         let target = if self.theme.is_dark() {
-            self.config.last_light.unwrap_or(ThemeName::GruvboxLight)
+            self.config
+                .last_light
+                .clone()
+                .unwrap_or(ThemeID::Builtin(ThemeName::GruvboxLight))
         } else {
-            self.config.last_dark.unwrap_or(ThemeName::GruvboxDark)
+            self.config
+                .last_dark
+                .clone()
+                .unwrap_or(ThemeID::Builtin(ThemeName::GruvboxDark))
         };
 
-        log::info!("Manual theme mode toggle. New theme: {}", target);
-        self.theme.name.set(target);
-        self.config.theme = target;
+        log::info!("Manual mode toggle. Target: {}", target);
+        self.apply_theme_id(target);
     }
 
     /// Next theme wrapper
@@ -196,7 +211,9 @@ impl UIState {
         if self.config.use_system_theme {
             self.apply_system_theme();
         } else {
-            self.theme = Theme::new(self.config.theme);
+            if self.theme.theme_id() != &self.config.theme {
+                self.apply_theme_id(self.config.theme.clone());
+            }
         }
     }
 
@@ -210,15 +227,16 @@ impl UIState {
             self.theme.prev();
         }
 
-        let new_name: ThemeName = self.theme.name();
-        self.config.theme = new_name;
-        log::info!("Theme changed to: {}", new_name);
+        let new_id: ThemeID = self.theme.theme_id().clone();
+        self.config.theme = new_id.clone();
 
         if self.theme.is_dark() {
-            self.config.last_dark = Some(new_name);
+            self.config.last_dark = Some(new_id);
         } else {
-            self.config.last_light = Some(new_name);
+            self.config.last_light = Some(new_id);
         }
+
+        self.request_redraw();
     }
 
     /// Applies theme based on system preferences
@@ -227,25 +245,31 @@ impl UIState {
             .map(|m| m == dark_light::Mode::Dark)
             .unwrap_or(true);
 
-        let target_theme = if is_dark {
-            self.config.last_dark.unwrap_or(ThemeName::GruvboxDark)
+        let target = if is_dark {
+            self.config.last_dark.clone().unwrap()
         } else {
-            self.config.last_light.unwrap_or(ThemeName::GruvboxLight)
+            self.config.last_light.clone().unwrap()
         };
 
-        if self.config.theme == target_theme {
+        if self.config.theme == target {
             return false;
         }
 
-        log::info!(
-            "System theme change detected! Switching to {:?}",
-            target_theme
-        );
-
-        self.theme = Theme::new(target_theme);
-        self.config.theme = target_theme;
-
+        log::info!("System theme change detected: {}", target);
+        self.apply_theme_id(target);
         true
+    }
+
+    /// Helper function to change theme by ID
+    fn apply_theme_id(&mut self, id: ThemeID) {
+        if let Some(index) = self.theme.registry.all_ids.iter().position(|x| x == &id) {
+            self.theme.registry.current_index = index;
+        } else {
+            self.theme = Theme::new(id.clone());
+        }
+
+        self.config.theme = id;
+        self.request_redraw();
     }
 
     /// Next filter tab (sidebar)
@@ -454,40 +478,45 @@ mod tests {
     #[test]
     fn should_handle_theme_mode_switching_with_memory() {
         let mut config = UIConfig::default();
-        config.last_dark = Some(ThemeName::KanagawaWave);
-        config.last_light = Some(ThemeName::KanagawaLotus);
+        let dark = ThemeID::Builtin(ThemeName::KanagawaWave);
+        let light = ThemeID::Builtin(ThemeName::KanagawaLotus);
+
+        config.last_dark = Some(dark.clone());
+        config.last_light = Some(light.clone());
+        config.theme = dark.clone();
 
         let mut ui = UIState::new(config);
-        ui.theme = Theme::new(ThemeName::KanagawaWave);
 
         ui.toggle_mode();
-        assert_eq!(ui.theme.name, ThemeName::KanagawaLotus);
+        assert_eq!(ui.theme.theme_id(), &light);
         assert!(!ui.config.use_system_theme);
 
         ui.next_theme();
-        let current_light = *ui.theme.name;
-        assert_eq!(ui.config.last_light, Some(current_light));
+        let current_light_id = ui.theme.theme_id().clone();
+        assert_eq!(ui.config.last_light, Some(current_light_id.clone()));
 
         ui.toggle_mode();
-        assert_eq!(ui.theme.name, ThemeName::KanagawaWave);
+        assert_eq!(ui.theme.theme_id(), &dark);
 
         ui.toggle_mode();
-        assert_eq!(ui.theme.name, current_light);
+        assert_eq!(ui.theme.theme_id(), &current_light_id);
     }
 
     #[test]
     fn should_apply_system_theme() {
         let mut config = UIConfig::default();
         config.use_system_theme = true;
-        config.last_dark = Some(ThemeName::GruvboxDark);
-        config.last_light = Some(ThemeName::GruvboxLight);
+        let dark = ThemeID::Builtin(ThemeName::GruvboxDark);
+        let light = ThemeID::Builtin(ThemeName::GruvboxLight);
+
+        config.last_dark = Some(dark.clone());
+        config.last_light = Some(light.clone());
 
         let mut ui = UIState::new(config);
         ui.apply_system_theme();
 
-        let is_one_of_ours =
-            ui.theme.name == ThemeName::GruvboxDark || ui.theme.name == ThemeName::GruvboxLight;
-        assert!(is_one_of_ours);
+        let current = ui.theme.theme_id();
+        assert!(current == &dark || current == &light);
     }
 
     #[test]

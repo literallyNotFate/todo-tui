@@ -6,7 +6,7 @@ pub use keymaps::KeyMaps;
 
 use crate::{
     common::{is_default, is_default_dark, is_default_light},
-    theme::ThemeName,
+    theme::{ThemeID, ThemeName},
 };
 use serde::{Deserialize, Serialize};
 use simplelog::LevelFilter;
@@ -90,13 +90,13 @@ impl StorageConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct UIConfig {
-    pub theme: ThemeName,
+    pub theme: ThemeID,
     pub use_system_theme: bool,
 
     #[serde(skip_serializing_if = "is_default_dark")]
-    pub last_dark: Option<ThemeName>,
+    pub last_dark: Option<ThemeID>,
     #[serde(skip_serializing_if = "is_default_light")]
-    pub last_light: Option<ThemeName>,
+    pub last_light: Option<ThemeID>,
 
     pub show_sidebar: bool,
 
@@ -131,10 +131,10 @@ pub struct SymbolsConfig {
 impl Default for UIConfig {
     fn default() -> Self {
         Self {
-            theme: ThemeName::default(),
+            theme: ThemeID::Builtin(ThemeName::default()),
             use_system_theme: true,
-            last_dark: Some(ThemeName::default()),
-            last_light: Some(ThemeName::GruvboxLight),
+            last_dark: Some(ThemeID::Builtin(ThemeName::default())),
+            last_light: Some(ThemeID::Builtin(ThemeName::GruvboxLight)),
             show_sidebar: true,
             border_type: BorderTypeConfig::default(),
             symbols: SymbolsConfig::default(),

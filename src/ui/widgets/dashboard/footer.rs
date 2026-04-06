@@ -25,7 +25,7 @@ impl<'a> FooterWidget<'a> {
     pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
         use ratatui::widgets::{Block, Paragraph};
 
-        let theme: Theme = ctx.theme;
+        let theme: &Theme = &ctx.theme;
         let palette: ThemePalette = theme.palette();
         let chunks: std::rc::Rc<[Rect]> = self.layout(area);
 

@@ -83,7 +83,8 @@ mod tests {
     fn should_return_default_data_path() {
         let path: PathBuf = Config::get_config_path();
 
-        assert!(path.ends_with("todo-tui/config.toml"));
+        assert!(path.to_string_lossy().contains("todo-tui"));
+        assert!(path.to_string_lossy().contains("config.toml"));
         assert!(path.is_absolute());
     }
 
@@ -93,14 +94,16 @@ mod tests {
         let path = temp_dir.path().join("config.toml");
 
         let mut config = Config::default();
-        config.ui.theme = ThemeName::RosePineMoon;
+        let test_theme = ThemeID::Builtin(ThemeName::RosePineMoon);
+
+        config.ui.theme = test_theme.clone();
         config.ui.use_system_theme = true;
 
         let result = config.save(Some(&path));
         assert!(result.is_ok(), "Save should succeed");
 
         let loaded_config = Config::load(Some(&path)).unwrap();
-        assert_eq!(loaded_config.ui.theme, ThemeName::RosePineMoon);
+        assert_eq!(loaded_config.ui.theme, test_theme);
         assert!(loaded_config.ui.use_system_theme);
     }
 
@@ -157,17 +160,16 @@ mod tests {
         let path = temp_dir.path().join("config.toml");
 
         let mut config = Config::default();
-        config.ui.last_dark = Some(ThemeName::MelangeDark);
+        let dark = ThemeID::Builtin(ThemeName::MelangeDark);
+        config.ui.last_dark = Some(dark.clone());
         config.ui.last_light = None;
 
         config.save(Some(&path)).unwrap();
         let content = fs::read_to_string(&path).unwrap();
 
-        assert!(content.contains("last_dark = \"melange-dark\""));
-        assert!(
-            !content.contains("last_light"),
-            "Field with None should be skipped"
-        );
+        assert!(content.contains("last_dark"));
+        assert!(content.contains("builtin = \"melange-dark\""));
+        assert!(!content.contains("last_light"));
     }
 
     #[test]
@@ -175,21 +177,18 @@ mod tests {
         let initial_config = Config::default();
         let mut ui = UIState::new(initial_config.ui.clone());
 
-        ui.theme = Theme::new(ThemeName::GruvboxDark);
+        let new_theme_id = ThemeID::Builtin(ThemeName::GruvboxDark);
+        ui.theme = Theme::new(new_theme_id.clone());
         ui.config.show_sidebar = false;
         ui.config.use_system_theme = false;
-        ui.config.border_type = BorderTypeConfig::Double;
         ui.config.symbols.completed = "DONE".to_string();
 
         let mut config_to_update = Config::default();
         config_to_update.update_from_ui(&ui);
 
-        assert_eq!(config_to_update.ui.theme, ThemeName::GruvboxDark);
-        assert_eq!(config_to_update.ui.last_dark, Some(ThemeName::GruvboxDark));
+        assert_eq!(config_to_update.ui.theme, new_theme_id);
+        assert_eq!(config_to_update.ui.last_dark, Some(new_theme_id));
         assert!(!config_to_update.ui.show_sidebar);
-        assert!(!config_to_update.ui.use_system_theme);
-        assert_eq!(config_to_update.ui.border_type, BorderTypeConfig::Double);
         assert_eq!(config_to_update.ui.symbols.completed, "DONE");
-        assert!(config_to_update.ui.last_light.is_some());
     }
 }

@@ -39,7 +39,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
 
         Self {
             frame: Some(frame),
-            theme: ui.theme,
+            theme: ui.theme.clone(),
             mode,
             keymaps,
             config: &ui.config,
@@ -55,7 +55,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
     pub fn mock(ui: &'a UIState, keymaps: &'a KeyMaps) -> Self {
         Self {
             frame: None,
-            theme: ui.theme,
+            theme: ui.theme.clone(),
             mode: ApplicationMode::Navigation,
             keymaps,
             config: &ui.config,
