@@ -16,7 +16,12 @@ impl Storage {
     /// Get default data path to save/load from
     pub fn get_data_path() -> ApplicationResult<PathBuf> {
         let path: ApplicationResult<PathBuf> = dirs::data_dir()
-            .ok_or(StorageError::PathNotFound.into())
+            .ok_or(
+                StorageError::Environment {
+                    context: "data".to_string(),
+                }
+                .into(),
+            )
             .map(|dir| dir.join("todo-tui").join("todos.json"));
 
         if let Ok(ref p) = path {
@@ -29,7 +34,12 @@ impl Storage {
     /// Get default logging path
     pub fn get_log_path() -> ApplicationResult<PathBuf> {
         let path: ApplicationResult<PathBuf> = dirs::data_dir()
-            .ok_or(StorageError::PathNotFound.into())
+            .ok_or(
+                StorageError::Environment {
+                    context: "log".to_string(),
+                }
+                .into(),
+            )
             .map(|dir| dir.join("todo-tui").join("todo-tui.log"));
 
         if let Ok(ref p) = path {
@@ -53,7 +63,10 @@ impl Storage {
 
         log::debug!("Starting atomic save of todos and UI session to {:?}", p);
         if let Some(parent) = p.parent() {
-            fs::create_dir_all(parent).map_err(|e| StorageError::IO(e.to_string()))?;
+            fs::create_dir_all(parent).map_err(|e| StorageError::IO {
+                path: p.clone(),
+                src: e.to_string(),
+            })?;
         }
 
         let mut temp_path: PathBuf = p.clone();
@@ -62,20 +75,26 @@ impl Storage {
         let data: TasksStateData = TasksStateData::new(todos.to_vec(), session);
 
         let result = (|| -> Result<(), StorageError> {
-            let file = File::create(&temp_path).map_err(|e| StorageError::IO(e.to_string()))?;
+            let file = File::create(&temp_path).map_err(|e| StorageError::IO {
+                path: p.clone(),
+                src: e.to_string(),
+            })?;
             let mut writer = BufWriter::new(file);
 
-            serde_json::to_writer_pretty(&mut writer, &data)
-                .map_err(|e| StorageError::JSON(e.to_string()))?;
+            serde_json::to_writer_pretty(&mut writer, &data).map_err(|e| StorageError::JSON {
+                path: p.clone(),
+                src: e.to_string(),
+            })?;
 
-            writer
-                .flush()
-                .map_err(|e| StorageError::IO(e.to_string()))?;
+            writer.flush().map_err(|e| StorageError::IO {
+                path: p.clone(),
+                src: e.to_string(),
+            })?;
 
-            writer
-                .get_ref()
-                .sync_all()
-                .map_err(|e| StorageError::IO(e.to_string()))?;
+            writer.get_ref().sync_all().map_err(|e| StorageError::IO {
+                path: p.clone(),
+                src: e.to_string(),
+            })?;
 
             Ok(())
         })();
@@ -102,7 +121,10 @@ impl Storage {
 
         fs::rename(&temp_path, &p).map_err(|err| {
             log::error!("Atomic rename failed: {}", err);
-            StorageError::IO(err.to_string())
+            StorageError::IO {
+                path: p,
+                src: err.to_string(),
+            }
         })?;
 
         Ok("Data was saved".into())
@@ -150,9 +172,14 @@ impl Storage {
 
     /// Helper function to load from path (not to duplicate code)
     fn load_from_path(p: &Path) -> ApplicationResult<TasksStateData> {
-        let file = File::open(p).map_err(|err| StorageError::IO(err.to_string()))?;
-        let storage =
-            serde_json::from_reader(file).map_err(|err| StorageError::JSON(err.to_string()))?;
+        let file = File::open(p).map_err(|err| StorageError::IO {
+            path: p.to_owned(),
+            src: err.to_string(),
+        })?;
+        let storage = serde_json::from_reader(file).map_err(|err| StorageError::JSON {
+            path: p.to_owned(),
+            src: err.to_string(),
+        })?;
         Ok(storage)
     }
 }
@@ -409,8 +436,12 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::JSON(..)))
+            Err(ApplicationError::Storage(StorageError::JSON { .. }))
         ));
+
+        if let Err(ApplicationError::Storage(StorageError::JSON { path: err_path, .. })) = result {
+            assert_eq!(err_path, path);
+        }
     }
 
     #[test]
@@ -433,7 +464,11 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::IO(..)))
+            Err(ApplicationError::Storage(StorageError::IO { .. }))
         ));
+
+        if let Err(ApplicationError::Storage(StorageError::IO { path: err_path, .. })) = result {
+            assert_eq!(err_path, path);
+        }
     }
 }

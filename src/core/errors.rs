@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use thiserror::Error;
 
 /// Errors in application (storage - refers to save/load, todo - state methods, keymap - keymap configuration)
@@ -31,16 +32,20 @@ pub enum TodoError {
 /// Errors related to storage operations only
 #[derive(Error, Debug, PartialEq)]
 pub enum StorageError {
-    #[error("Requested path was not found!")]
-    PathNotFound,
-    #[error("IO error: {0}")]
-    IO(String),
-    #[error("JSON error: {0}")]
-    JSON(String),
-    #[error("TOML error: {0}")]
-    TOML(String),
-    #[error("Failed to determine home or config directory")]
-    Environment,
+    #[error("Requested path was not found: {path}")]
+    PathNotFound { path: PathBuf },
+
+    #[error("IO error at {path}: {src}")]
+    IO { path: PathBuf, src: String },
+
+    #[error("Failed to parse JSON at {path}: {src}")]
+    JSON { path: PathBuf, src: String },
+
+    #[error("Failed to parse TOML at {path}: {src}")]
+    TOML { path: PathBuf, src: String },
+
+    #[error("Failed to determine {context} directory: check your OS environment variables")]
+    Environment { context: String },
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -105,42 +110,74 @@ mod tests {
 
     #[test]
     fn should_return_text_for_path_not_found() {
-        let error = StorageError::PathNotFound;
+        let path = PathBuf::from("/test/path");
+        let error = StorageError::PathNotFound { path: path.clone() };
+
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Requested path was not found!");
+
+        assert_eq!(s, "Requested path was not found: /test/path");
     }
 
     #[test]
     fn should_return_text_for_io_error() {
-        let error = StorageError::IO("some error".to_string());
+        let path = PathBuf::from("config.toml");
+        let error = StorageError::IO {
+            path: path.clone(),
+            src: "permission denied".to_string(),
+        };
+
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "IO error: some error");
+
+        assert_eq!(s, "IO error at config.toml: permission denied");
     }
 
     #[test]
     fn should_return_text_for_json_error() {
-        let error = StorageError::JSON("some error".to_string());
+        let path = PathBuf::from("data.json");
+        let error = StorageError::JSON {
+            path: path.clone(),
+            src: "unexpected end of file".to_string(),
+        };
+
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "JSON error: some error");
+
+        assert_eq!(
+            s,
+            "Failed to parse JSON at data.json: unexpected end of file"
+        );
     }
 
     #[test]
     fn should_return_text_for_toml_error() {
-        let error = StorageError::TOML("some error".to_string());
+        let path = PathBuf::from("theme.toml");
+        let error = StorageError::TOML {
+            path: path.clone(),
+            src: "invalid color format".to_string(),
+        };
+
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "TOML error: some error");
+
+        assert_eq!(
+            s,
+            "Failed to parse TOML at theme.toml: invalid color format"
+        );
     }
 
     #[test]
     fn should_return_text_for_environment_error() {
-        let error = StorageError::Environment;
+        let error = StorageError::Environment {
+            context: "config".to_string(),
+        };
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
-        assert_eq!(s, "Failed to determine home or config directory");
+        assert_eq!(
+            s,
+            "Failed to determine config directory: check your OS environment variables"
+        );
     }
 
     #[test]

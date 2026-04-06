@@ -55,7 +55,9 @@ impl PaletteDisk {
     pub fn themes_dir() -> Result<PathBuf, StorageError> {
         dirs::home_dir()
             .map(|d| d.join(".config").join("todo-tui").join("themes"))
-            .ok_or(StorageError::Environment)
+            .ok_or(StorageError::Environment {
+                context: "themes".to_string(),
+            })
     }
 
     /// Scans themes directory and tries to load every .toml file
@@ -93,10 +95,15 @@ impl PaletteDisk {
 
     /// Helper method to load only one file theme (.toml)
     fn load_single_theme(path: &PathBuf) -> Result<(String, ThemePalette), StorageError> {
-        let content = fs::read_to_string(path).map_err(|e| StorageError::IO(e.to_string()))?;
+        let content: String = fs::read_to_string(path).map_err(|e| StorageError::IO {
+            path: path.to_owned(),
+            src: e.to_string(),
+        })?;
 
-        let disk_theme: ThemeDisk =
-            toml::from_str(&content).map_err(|e| StorageError::TOML(e.to_string()))?;
+        let disk_theme: ThemeDisk = toml::from_str(&content).map_err(|e| StorageError::TOML {
+            path: path.to_owned(),
+            src: e.to_string(),
+        })?;
 
         Ok((disk_theme.name, ThemePalette::from(disk_theme.palette)))
     }

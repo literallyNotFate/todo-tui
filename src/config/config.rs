@@ -40,10 +40,14 @@ impl Config {
             return Ok(Self::default());
         }
 
-        let content: String =
-            fs::read_to_string(&p).map_err(|e| StorageError::IO(e.to_string()))?;
-        let config: Self =
-            toml::from_str::<Self>(&content).map_err(|e| StorageError::TOML(e.to_string()))?;
+        let content: String = fs::read_to_string(&p).map_err(|e| StorageError::IO {
+            path: p.clone(),
+            src: e.to_string(),
+        })?;
+        let config: Self = toml::from_str::<Self>(&content).map_err(|e| StorageError::TOML {
+            path: p,
+            src: e.to_string(),
+        })?;
         Ok(config)
     }
 
@@ -56,13 +60,22 @@ impl Config {
 
         if let Some(parent) = p.parent() {
             if !parent.exists() {
-                fs::create_dir_all(parent).map_err(|e| StorageError::IO(e.to_string()))?;
+                fs::create_dir_all(parent).map_err(|e| StorageError::IO {
+                    path: parent.to_path_buf(),
+                    src: e.to_string(),
+                })?;
             }
         }
 
-        let content: String =
-            toml::to_string_pretty(self).map_err(|e| StorageError::TOML(e.to_string()))?;
-        fs::write(&p, content).map_err(|e| StorageError::IO(e.to_string()))?;
+        let content: String = toml::to_string_pretty(self).map_err(|e| StorageError::TOML {
+            path: p.clone(),
+            src: e.to_string(),
+        })?;
+
+        fs::write(&p, content).map_err(|e| StorageError::IO {
+            path: p,
+            src: e.to_string(),
+        })?;
         Ok(())
     }
 
@@ -150,8 +163,12 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::TOML(..)))
+            Err(ApplicationError::Storage(StorageError::TOML { .. }))
         ));
+
+        if let Err(ApplicationError::Storage(StorageError::TOML { path: err_path, .. })) = result {
+            assert_eq!(err_path, path);
+        }
     }
 
     #[test]

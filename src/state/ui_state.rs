@@ -353,7 +353,10 @@ mod tests {
         models::{Priority, Todo},
         ui::Popup,
     };
-    use std::time::{Duration, Instant};
+    use std::{
+        path::PathBuf,
+        time::{Duration, Instant},
+    };
 
     #[test]
     fn should_navigate_through_filters() {
@@ -418,9 +421,13 @@ mod tests {
         assert_eq!(ui.modal.as_ref().unwrap().action, ModalAction::None);
 
         ui.close_modal();
+        let error: StorageError = StorageError::JSON {
+            path: PathBuf::default(),
+            src: "Some error".to_string(),
+        };
 
-        ui.show_result_popup(Err(StorageError::JSON("Some error".to_string()).into()));
-        assert!(ui.modal.is_some());
+        ui.show_result_popup(Err(error.into()));
+        assert!(ui.modal.is_some(),);
     }
 
     #[test]

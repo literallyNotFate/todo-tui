@@ -67,9 +67,15 @@ impl KeyMaps {
             return Ok(Self::default());
         }
 
-        let content = fs::read_to_string(&p).map_err(|e| StorageError::IO(e.to_string()))?;
-        let disk_map: KeyMapsDisk =
-            toml::from_str(&content).map_err(|e| StorageError::TOML(e.to_string()))?;
+        let content: String = fs::read_to_string(&p).map_err(|e| StorageError::IO {
+            path: p.clone(),
+            src: e.to_string(),
+        })?;
+
+        let disk_map: KeyMapsDisk = toml::from_str(&content).map_err(|e| StorageError::TOML {
+            path: p,
+            src: e.to_string(),
+        })?;
 
         let mut mappings = HashMap::new();
 
@@ -129,14 +135,20 @@ impl KeyMaps {
             target_map.entry(action).or_default().push(key_str);
         }
 
-        let content =
-            toml::to_string_pretty(&disk_map).map_err(|e| StorageError::TOML(e.to_string()))?;
+        let content: String =
+            toml::to_string_pretty(&disk_map).map_err(|e| StorageError::TOML {
+                path: p.clone(),
+                src: e.to_string(),
+            })?;
 
         if let Some(parent) = p.parent() {
             fs::create_dir_all(parent).ok();
         }
 
-        fs::write(p, content).map_err(|e| StorageError::IO(e.to_string()))?;
+        fs::write(p.clone(), content).map_err(|e| StorageError::IO {
+            path: p,
+            src: e.to_string(),
+        })?;
         Ok(())
     }
 
