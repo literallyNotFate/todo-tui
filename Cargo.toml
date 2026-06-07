@@ -1,7 +1,12 @@
 [package]
-name = "todo-tui"
+name = "toodles"
 version = "0.1.0"
 edition = "2024"
+description = "A functional Todoist-like task managing application for the terminal"
+homepage = "https://github.com/literallyNotFate/toodles"
+repository = "https://github.com/literallyNotFate/toodles"
+keywords = ["task", "tui", "ratatui", "cli", "task-manager"]
+categories = ["command-line-utilities", "productivity"]
 
 [dependencies]
 ratatui = {version = "0.29.0", features = ["all-widgets"]}

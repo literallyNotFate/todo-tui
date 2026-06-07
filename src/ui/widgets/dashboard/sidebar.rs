@@ -1,6 +1,6 @@
 use crate::{
     core::FocusArea,
-    models::{Filter, Priority, Todo},
+    models::{Filter, Priority, Task},
     state::UIState,
     theme::ThemePalette,
     ui::RenderContext,
@@ -17,12 +17,12 @@ use strum::IntoEnumIterator;
 /// Sidebar widget
 pub struct SidebarWidget<'a> {
     ui: &'a UIState,
-    todos: &'a [Todo],
+    tasks: &'a [Task],
 }
 
 impl<'a> SidebarWidget<'a> {
-    pub fn new(ui: &'a UIState, todos: &'a [Todo]) -> Self {
-        Self { ui, todos }
+    pub fn new(ui: &'a UIState, tasks: &'a [Task]) -> Self {
+        Self { ui, tasks }
     }
 
     /// Sidebar rendering
@@ -73,13 +73,13 @@ impl<'a> SidebarWidget<'a> {
         let chart_block: Block = ctx.block("Priority Chart", None).bg(palette.bg2);
         let chart_inner_area: Rect = chart_block.inner(sidebar_layout[4]);
         let chart_text: Vec<Line> =
-            self.priority_chart_text(self.todos, &palette, chart_inner_area.width, is_dimmed);
+            self.priority_chart_text(self.tasks, &palette, chart_inner_area.width, is_dimmed);
 
         ctx.render_widget(chart_block, sidebar_layout[4]);
         ctx.render_widget(Paragraph::new(chart_text), chart_inner_area);
     }
 
-    /// Construct a list based on filtered todo values
+    /// Construct a list based on filtered task values
     fn construct_list(
         &self,
         query: &str,
@@ -91,7 +91,7 @@ impl<'a> SidebarWidget<'a> {
 
         let items: Vec<ListItem> = Filter::iter()
             .map(|tab| {
-                let count = tab.count(self.todos, query);
+                let count = tab.count(self.tasks, query);
                 let text = format!(" {} ({})", tab.to_string(), count);
 
                 let style = if tab == self.ui.filter.value {
@@ -131,8 +131,8 @@ impl<'a> SidebarWidget<'a> {
         let max_title_width = (width as usize).saturating_sub(12);
         let color = |c: Color| if is_dimmed { palette.muted } else { c };
 
-        let focus_text = if let Some(todo) = self
-            .todos
+        let focus_text = if let Some(task) = self
+            .tasks
             .iter()
             .find(|t| !t.completed && t.priority == Priority::High)
         {
@@ -142,15 +142,15 @@ impl<'a> SidebarWidget<'a> {
                     Style::default().fg(color(palette.accent)).bold(),
                 ),
                 Span::styled(
-                    RenderContext::truncate(&todo.title, max_title_width),
+                    RenderContext::truncate(&task.title, max_title_width),
                     Style::default().fg(if is_dimmed { palette.muted } else { palette.fg }),
                 ),
             ])
-        } else if let Some(todo) = self.todos.iter().find(|t| !t.completed) {
+        } else if let Some(task) = self.tasks.iter().find(|t| !t.completed) {
             Line::from(vec![
                 Span::styled(" ◆ Next: ", Style::default().fg(color(palette.secondary))),
                 Span::styled(
-                    RenderContext::truncate(&todo.title, max_title_width),
+                    RenderContext::truncate(&task.title, max_title_width),
                     Style::default().fg(palette.muted),
                 ),
             ])
@@ -167,8 +167,8 @@ impl<'a> SidebarWidget<'a> {
     /// Get progress text
     fn progress_text(&self, palette: &ThemePalette, is_dimmed: bool) -> Vec<Line<'static>> {
         let (total, completed): (usize, usize) = (
-            self.todos.len(),
-            self.todos.iter().filter(|t| t.completed).count(),
+            self.tasks.len(),
+            self.tasks.iter().filter(|t| t.completed).count(),
         );
 
         let percent: u8 = if total > 0 {
@@ -252,13 +252,13 @@ impl<'a> SidebarWidget<'a> {
     /// Get priority horizontal chart
     fn priority_chart_text(
         &self,
-        todos: &[Todo],
+        tasks: &[Task],
         palette: &ThemePalette,
         width: u16,
         is_dimmed: bool,
     ) -> Vec<Line<'static>> {
         let (mut high, mut med, mut low) = (0, 0, 0);
-        for t in todos {
+        for t in tasks {
             match t.priority {
                 Priority::High => high += 1,
                 Priority::Medium => med += 1,
@@ -337,20 +337,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_generate_progress_with_todos() {
-        let todos = vec![
-            Todo {
+    fn should_generate_progress_with_tasks() {
+        let tasks = vec![
+            Task {
                 completed: true,
                 ..Default::default()
             },
-            Todo {
+            Task {
                 completed: false,
                 ..Default::default()
             },
         ];
 
         let ui = UIState::default();
-        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
+        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks);
 
         let summary: Vec<Line> = sidebar.progress_text(&ui.theme.palette(), false);
         let line_text: String = summary[1].to_string();
@@ -361,11 +361,11 @@ mod tests {
     }
 
     #[test]
-    fn should_generate_progress_with_empty_todos() {
-        let todos: Vec<Todo> = vec![];
+    fn should_generate_progress_with_empty_tasks() {
+        let tasks: Vec<Task> = vec![];
 
         let ui = UIState::default();
-        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
+        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks);
 
         let summary: Vec<Line> = sidebar.progress_text(&ui.theme.palette(), false);
         assert!(summary[1].to_string().contains("0%"));
@@ -374,11 +374,11 @@ mod tests {
 
     #[test]
     fn should_construct_list_with_highlighting() {
-        let todos = vec![];
+        let tasks = vec![];
 
         let mut ui = UIState::default();
         ui.filter.value = Filter::All;
-        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &todos);
+        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks);
 
         let list: List = sidebar.construct_list("", true, &ui.theme.palette(), false);
         assert_eq!(list.len(), Filter::iter().len());
@@ -386,14 +386,14 @@ mod tests {
 
     #[test]
     fn should_prioritize_high_priority_focus_task() {
-        let todos = vec![
-            Todo {
+        let tasks = vec![
+            Task {
                 title: "Normal Task".to_string(),
                 priority: Priority::Low,
                 completed: false,
                 ..Default::default()
             },
-            Todo {
+            Task {
                 title: "Urgent Task".to_string(),
                 priority: Priority::High,
                 completed: false,
@@ -402,7 +402,7 @@ mod tests {
         ];
 
         let ui = UIState::default();
-        let sidebar = SidebarWidget::new(&ui, &todos);
+        let sidebar = SidebarWidget::new(&ui, &tasks);
         let summary = sidebar.focus_text(50, &ui.theme.palette(), false);
 
         let focus_text = summary[1].to_string();
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn should_show_next_task_if_no_high_priority() {
-        let todos = vec![Todo {
+        let tasks = vec![Task {
             title: "Only Task".to_string(),
             priority: Priority::Low,
             completed: false,
@@ -421,7 +421,7 @@ mod tests {
         }];
 
         let ui = UIState::default();
-        let sidebar = SidebarWidget::new(&ui, &todos);
+        let sidebar = SidebarWidget::new(&ui, &tasks);
         let summary = sidebar.focus_text(50, &ui.theme.palette(), false);
 
         let focus_text = summary[1].to_string();
@@ -432,26 +432,26 @@ mod tests {
     #[test]
     fn should_test_priority_chart_math() {
         let ui = UIState::default();
-        let todos = vec![
-            Todo {
+        let tasks = vec![
+            Task {
                 title: "H".to_string(),
                 priority: Priority::High,
                 completed: false,
                 ..Default::default()
             },
-            Todo {
+            Task {
                 title: "M".to_string(),
                 priority: Priority::Medium,
                 completed: false,
                 ..Default::default()
             },
-            Todo {
+            Task {
                 title: "L".to_string(),
                 priority: Priority::Low,
                 completed: false,
                 ..Default::default()
             },
-            Todo {
+            Task {
                 title: "L2".to_string(),
                 priority: Priority::Low,
                 completed: false,
@@ -459,8 +459,8 @@ mod tests {
             },
         ];
 
-        let sidebar = SidebarWidget::new(&ui, &todos);
-        let lines = sidebar.priority_chart_text(&todos, &ui.theme.palette(), 40, false);
+        let sidebar = SidebarWidget::new(&ui, &tasks);
+        let lines = sidebar.priority_chart_text(&tasks, &ui.theme.palette(), 40, false);
 
         let high_line = lines[1].to_string();
         let low_line = lines[3].to_string();

@@ -51,10 +51,10 @@ impl From<ThemePaletteDisk> for ThemePalette {
 pub struct PaletteDisk;
 
 impl PaletteDisk {
-    /// Returns directory with custom themes: ~/.config/todo-tui/themes
+    /// Returns directory with custom themes: ~/.config/toodles/themes
     pub fn themes_dir() -> Result<PathBuf, StorageError> {
         dirs::home_dir()
-            .map(|d| d.join(".config").join("todo-tui").join("themes"))
+            .map(|d| d.join(".config").join("toodles").join("themes"))
             .ok_or(StorageError::Environment {
                 context: "themes".to_string(),
             })
@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn should_load_single_theme_from_toml() {
-        let temp_dir: TempDir = TempDir::new("todo-tui_themes").unwrap();
+        let temp_dir: TempDir = TempDir::new("toodles_themes").unwrap();
         let path: PathBuf = temp_dir.path().join("my_theme.toml");
 
         let toml_content: &str = r##"
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn should_return_error_on_invalid_toml() {
-        let temp_dir: TempDir = TempDir::new("todo-tui_themes").unwrap();
+        let temp_dir: TempDir = TempDir::new("toodles_themes").unwrap();
         let path: PathBuf = temp_dir.path().join("broken.toml");
 
         fs::write(&path, "not a toml content").unwrap();

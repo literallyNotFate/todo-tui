@@ -129,7 +129,7 @@ mod tests {
     use crate::{
         config::{KeyMaps, StorageConfig},
         core::Storage,
-        models::Todo,
+        models::Task,
         state::{Session, UIState},
     };
     use std::time::Duration;
@@ -168,7 +168,7 @@ mod tests {
         let keymaps = KeyMaps::default();
         let mut autosave = Autosave::new(true);
 
-        state.todos.push(Todo::new("Test", "", None));
+        state.tasks.push(Task::new("Test", "", None));
         state.mark_as_dirty();
         autosave.reset_timer();
 
@@ -187,7 +187,7 @@ mod tests {
         let keymaps = KeyMaps::default();
         let mut autosave = Autosave::new(true);
 
-        state.todos.push(Todo::new("Test", "", None));
+        state.tasks.push(Task::new("Test", "", None));
         state.mark_as_dirty();
 
         autosave.interval = Duration::from_millis(0);
@@ -203,19 +203,19 @@ mod tests {
 
     #[test]
     fn should_render_only_saved_status_when_no_changes() {
-        let temp_dir = TempDir::new("todo_test").unwrap();
-        let path = temp_dir.path().join("todos.json");
+        let temp_dir = TempDir::new("task_test").unwrap();
+        let path = temp_dir.path().join("tasks.json");
 
         let mut state = ApplicationState::default();
         let ui = UIState::default();
         let keymaps = KeyMaps::default();
         let autosave = Autosave::new(true);
 
-        state.todos.clear();
+        state.tasks.clear();
         let session = Session::from_state(&ui, None);
 
         let _ = Storage::save(
-            &state.todos,
+            &state.tasks,
             session,
             Some(&path),
             &StorageConfig::default(),

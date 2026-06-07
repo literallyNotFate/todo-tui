@@ -1,6 +1,6 @@
 use crate::{
     core::{Action, ApplicationMode, FocusArea, Sort},
-    models::Todo,
+    models::Task,
     state::{AdaptiveScroll, UIState},
     theme::ThemePalette,
     ui::{FeedbackKind, FeedbackWidget, RenderContext, scrollable, widgets::input::Input},
@@ -15,16 +15,16 @@ use ratatui::{
 /// List widget for tasks
 pub struct ListTasks<'a> {
     ui: &'a UIState,
-    todos: Vec<&'a Todo>,
+    tasks: Vec<&'a Task>,
     query: &'a str,
     sort: &'a Sort,
 }
 
 impl<'a> ListTasks<'a> {
-    pub fn new(ui: &'a UIState, todos: Vec<&'a Todo>, query: &'a str, sort: &'a Sort) -> Self {
+    pub fn new(ui: &'a UIState, tasks: Vec<&'a Task>, query: &'a str, sort: &'a Sort) -> Self {
         Self {
             ui,
-            todos,
+            tasks,
             sort,
             query,
         }
@@ -50,7 +50,7 @@ impl<'a> ListTasks<'a> {
             .title(format!(" Tasks: ({}) ", ctx.filter()).bold())
             .title_top(
                 Line::styled(
-                    " todo-tui ",
+                    " toodles ",
                     Style::default()
                         .fg(ctx.focused_color(palette.fg, focus_area))
                         .bold(),
@@ -88,7 +88,7 @@ impl<'a> ListTasks<'a> {
         let inner_tasks_area: Rect = main_block.inner(tasks_area);
         ctx.render_widget(main_block, tasks_area);
 
-        if !self.todos.is_empty() {
+        if !self.tasks.is_empty() {
             self.build_table(ctx, inner_tasks_area, select_state, is_focused);
         } else {
             FeedbackWidget::new(FeedbackKind::NoResults(self.query.to_string()))
@@ -118,9 +118,9 @@ impl<'a> ListTasks<'a> {
             .constraints([Constraint::Length(2), Constraint::Min(0)])
             .areas(area);
 
-        let rows = self.todos.iter().map(|todo| {
-            let priority_color = todo.priority.palette(&palette);
-            let (icon, icon_color) = if todo.completed {
+        let rows = self.tasks.iter().map(|task| {
+            let priority_color = task.priority.palette(&palette);
+            let (icon, icon_color) = if task.completed {
                 (
                     ctx.config.symbols.completed.clone(),
                     ctx.focused_color(palette.success, focus_area),
@@ -132,7 +132,7 @@ impl<'a> ListTasks<'a> {
                 )
             };
 
-            let truncated_title = RenderContext::truncate(&todo.title, title_column_width);
+            let truncated_title = RenderContext::truncate(&task.title, title_column_width);
             let title_content = if !self.query.is_empty() {
                 self.highlight_search(&truncated_title, self.query, &palette, ctx.is_dimmed)
             } else {
@@ -140,19 +140,19 @@ impl<'a> ListTasks<'a> {
             };
 
             let display_date: String =
-                if todo.created_at.date_naive() == chrono::Local::now().date_naive() {
+                if task.created_at.date_naive() == chrono::Local::now().date_naive() {
                     let format_str: &str = if ctx.config.use_24h {
                         "%H:%M"
                     } else {
                         "%I:%M %p"
                     };
 
-                    todo.created_at
+                    task.created_at
                         .with_timezone(&chrono::Local)
                         .format(format_str)
                         .to_string()
                 } else {
-                    todo.created_at
+                    task.created_at
                         .with_timezone(&chrono::Local)
                         .format("%d %b")
                         .to_string()
@@ -162,7 +162,7 @@ impl<'a> ListTasks<'a> {
                 Cell::from(icon).style(Style::default().fg(icon_color)),
                 Cell::from(title_content)
                     .style(Style::default().fg(ctx.focused_color(palette.fg, focus_area))),
-                Cell::from(Line::from(todo.priority.to_string()).centered())
+                Cell::from(Line::from(task.priority.to_string()).centered())
                     .style(Style::default().fg(ctx.focused_color(priority_color, focus_area))),
                 Cell::from(Line::from(display_date).centered())
                     .style(Style::default().fg(palette.muted)),
@@ -182,7 +182,7 @@ impl<'a> ListTasks<'a> {
         let current_selected = select_state.selected().unwrap_or(0);
         let temp_scroll = AdaptiveScroll::default();
         temp_scroll.current.set(current_selected as u16);
-        let dummy_content = vec![Line::from(""); self.todos.len()];
+        let dummy_content = vec![Line::from(""); self.tasks.len()];
 
         scrollable(
             ctx,

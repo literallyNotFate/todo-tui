@@ -3,7 +3,7 @@ use crate::{
     app::ApplicationController,
     config::KeyMaps,
     core::{Action, ApplicationMode, Autosave, FocusArea, Selectable},
-    models::{Filter, TodoDetails, TodoEditor},
+    models::{Filter, TaskDetails, TaskEditor},
     ui::{
         Form, Popup, WidgetResponse, is_terminal_small,
         widgets::{
@@ -114,7 +114,7 @@ impl EventHandler {
         match form.handle_key(&event) {
             WidgetResponse::Submit => {
                 let (id, title, desc, priority) = form.data();
-                let editor: TodoEditor = TodoEditor {
+                let editor: TaskEditor = TaskEditor {
                     title,
                     description: desc,
                     priority: Selectable::new(priority),
@@ -304,7 +304,7 @@ impl EventHandler {
                                 ctrl.ui.show_modal(
                                     Popup::details(
                                         " Details ".into(),
-                                        TodoDetails::from(task, &ctrl.config.ui),
+                                        TaskDetails::from(task, &ctrl.config.ui),
                                     )
                                     .close_on(KeyCode::Tab)
                                     .with_scroll(ctrl.ui.desc_scroll.clone()),
@@ -332,7 +332,7 @@ mod tests {
     use crate::{
         config::{Config, StorageConfig},
         core::{SortBy, SortOrder, Storage},
-        models::Todo,
+        models::Task,
         state::{ApplicationState, Session, UIState},
     };
     use ratatui::crossterm::event::KeyModifiers;
@@ -414,13 +414,13 @@ mod tests {
 
             if result == ModalResult::Confirmed && modal_action_type == ModalAction::UnsavedExit {
                 let current_id = ctrl.state.selected_id(
-                    &ctrl.state.todos,
+                    &ctrl.state.tasks,
                     &ctrl.ui.filter,
                     &ctrl.ui.search_query(),
                 );
                 let session = Session::from_state(ctrl.ui, current_id);
 
-                match Storage::save(&ctrl.state.todos, session, Some(path), config) {
+                match Storage::save(&ctrl.state.tasks, session, Some(path), config) {
                     Ok(string) => ctrl.ui.show_result_popup(Ok(string)),
                     Err(e) => ctrl.ui.show_result_popup(Err(e)),
                 }
@@ -457,7 +457,7 @@ mod tests {
     #[test]
     fn should_open_unsaved_confirm_on_exit_if_changes_exist() {
         let mut app = setup_application();
-        app.data.todos.push(Todo::new("Changes", "", None));
+        app.data.tasks.push(Task::new("Changes", "", None));
         EventHandler::handle_key(&mut app, key_event(KeyCode::Char('q')));
 
         assert!(app.running, "App should not close yet");
@@ -569,8 +569,8 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
 
-        state.todos.push(Todo::new("T1", "", None));
-        state.todos.push(Todo::new("T2", "", None));
+        state.tasks.push(Task::new("T1", "", None));
+        state.tasks.push(Task::new("T2", "", None));
         state.select_state.select(Some(0));
         ui.focused.set(FocusArea::Main);
         *mode = ApplicationMode::List;
@@ -585,14 +585,14 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, _, _, running) = ctx.components();
 
-        state.todos.push(Todo::new("To be deleted", "", None));
+        state.tasks.push(Task::new("To be deleted", "", None));
         state.select_state.select(Some(0));
 
         ui.remove_confirm();
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::handle_modal(key_event(KeyCode::Char('y')), &mut ctrl, running);
 
-        assert_eq!(ctrl.state.todos.len(), 0);
+        assert_eq!(ctrl.state.tasks.len(), 0);
         assert!(ctrl.ui.modal.is_none());
         assert!(*running, "App should be running still");
     }
@@ -601,20 +601,20 @@ mod tests {
     fn should_cancel_clear_all_tasks() {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, _, _, running) = ctx.components();
-        state.todos.push(Todo::new("Keep me", "", None));
+        state.tasks.push(Task::new("Keep me", "", None));
 
         ui.clear_confirm();
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::handle_modal(key_event(KeyCode::Esc), &mut ctrl, running);
 
-        assert_eq!(ctrl.state.todos.len(), 1);
+        assert_eq!(ctrl.state.tasks.len(), 1);
         assert!(ctrl.ui.modal.is_none());
     }
 
     #[test]
     fn should_save_and_exit_on_unsaved_exit_confirm() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
 
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, _, _, running) = ctx.components();
@@ -665,9 +665,9 @@ mod tests {
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
 
         ui.focused.set(FocusArea::Main);
-        state.todos.push(Todo::new("T1", "", None));
-        state.todos.push(Todo::new("T2", "", None));
-        state.todos.push(Todo::new("T3", "", None));
+        state.tasks.push(Task::new("T1", "", None));
+        state.tasks.push(Task::new("T2", "", None));
+        state.tasks.push(Task::new("T3", "", None));
         state.select_state.select(Some(0));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
@@ -682,15 +682,15 @@ mod tests {
     fn should_toggle_task_on_enter() {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
-        state.todos.push(Todo::new("T1", "", None));
+        state.tasks.push(Task::new("T1", "", None));
         state.select_state.select(Some(0));
         ui.focused.set(FocusArea::Main);
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
-        let initial_status = ctrl.state.todos[0].completed;
+        let initial_status = ctrl.state.tasks[0].completed;
 
         EventHandler::execute_action(Action::Complete, &mut ctrl, mode, autosave, running);
-        assert_ne!(ctrl.state.todos[0].completed, initial_status);
+        assert_ne!(ctrl.state.tasks[0].completed, initial_status);
     }
 
     #[test]
@@ -698,7 +698,7 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
 
-        state.todos.push(Todo::new("Edit Me", "Desc", None));
+        state.tasks.push(Task::new("Edit Me", "Desc", None));
         state.select_state.select(Some(0));
         ui.focused.set(FocusArea::Main);
 
@@ -731,7 +731,7 @@ mod tests {
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
 
         ui.focused.set(FocusArea::Main);
-        state.todos.push(Todo::new("To Delete", "", None));
+        state.tasks.push(Task::new("To Delete", "", None));
         state.select_state.select(Some(0));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
@@ -747,14 +747,14 @@ mod tests {
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
 
         ui.focused.set(FocusArea::Main);
-        state.todos.push(Todo::new("Task 1", "", None));
-        state.todos.push(Todo::new("Task 2", "", None));
+        state.tasks.push(Task::new("Task 1", "", None));
+        state.tasks.push(Task::new("Task 2", "", None));
         state.select_state.select(Some(0));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::execute_action(Action::MoveTaskDown, &mut ctrl, mode, autosave, running);
 
-        assert_eq!(ctrl.state.todos[1].title, "Task 1");
+        assert_eq!(ctrl.state.tasks[1].title, "Task 1");
     }
 
     #[test]
@@ -783,8 +783,8 @@ mod tests {
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::handle_form_mode(key_event(KeyCode::Enter), &mut ctrl, &mut mode);
 
-        assert_eq!(ctrl.state.todos.len(), 1);
-        assert_eq!(ctrl.state.todos[0].title, "New Task");
+        assert_eq!(ctrl.state.tasks.len(), 1);
+        assert_eq!(ctrl.state.tasks[0].title, "New Task");
         assert!(ctrl.ui.task_form.is_none());
         assert_eq!(mode, ApplicationMode::List,);
     }
@@ -795,11 +795,11 @@ mod tests {
         let (state, ui, config, keymaps, _, _, _) = ctx.components();
         let mut mode = ApplicationMode::Form;
 
-        let task = Todo::new("Old Title", "", None);
+        let task = Task::new("Old Title", "", None);
         let task_id = task.id;
-        state.todos.push(task);
+        state.tasks.push(task);
 
-        let mut form = Form::from(&state.todos[0]);
+        let mut form = Form::from(&state.tasks[0]);
         form.set_value("title", "Updated Title");
         form.focused = 3;
         ui.task_form = Some(form);
@@ -807,9 +807,9 @@ mod tests {
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::handle_form_mode(key_event(KeyCode::Enter), &mut ctrl, &mut mode);
 
-        assert_eq!(ctrl.state.todos.len(), 1);
-        assert_eq!(ctrl.state.todos[0].title, "Updated Title");
-        assert_eq!(ctrl.state.todos[0].id, task_id);
+        assert_eq!(ctrl.state.tasks.len(), 1);
+        assert_eq!(ctrl.state.tasks[0].title, "Updated Title");
+        assert_eq!(ctrl.state.tasks[0].id, task_id);
     }
 
     #[test]
@@ -822,7 +822,7 @@ mod tests {
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::handle_form_mode(key_event(KeyCode::Esc), &mut ctrl, &mut mode);
 
-        assert_eq!(ctrl.state.todos.len(), 0);
+        assert_eq!(ctrl.state.tasks.len(), 0);
         assert!(ctrl.ui.task_form.is_none());
         assert_eq!(mode, ApplicationMode::List);
     }
@@ -876,8 +876,8 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, _, _, _) = ctx.components();
 
-        state.todos.push(Todo::new("Apple", "", None));
-        state.todos.push(Todo::new("Banana", "", None));
+        state.tasks.push(Task::new("Apple", "", None));
+        state.tasks.push(Task::new("Banana", "", None));
         state.select_state.select(Some(1));
         ui.show_search();
 
@@ -895,7 +895,7 @@ mod tests {
         ui.show_search();
 
         let mut mode = ApplicationMode::Search;
-        state.todos.clear();
+        state.tasks.clear();
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::handle_search_mode(key_event(KeyCode::Char('x')), &mut ctrl, &mut mode);
@@ -939,7 +939,7 @@ mod tests {
     fn should_test_focus_stabilization_on_filter_change() {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, mode, autosave, running) = ctx.components();
-        state.todos.push(Todo::new("T", "", None));
+        state.tasks.push(Task::new("T", "", None));
         state.select_state.select(Some(10));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);

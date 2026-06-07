@@ -160,7 +160,7 @@ impl UIState {
             .unwrap_or("")
     }
 
-    /// Return id of a todo based on TableState selection
+    /// Return id of a task based on TableState selection
     pub fn selected_id(&self, state: &ApplicationState) -> Option<Uuid> {
         let index: usize = state.select_state.selected()?;
         state
@@ -349,8 +349,8 @@ impl UIState {
 mod tests {
     use super::*;
     use crate::{
-        core::{StorageError, TodoError},
-        models::{Priority, Todo},
+        core::{StorageError, TaskError},
+        models::{Priority, Task},
         ui::Popup,
     };
     use std::{
@@ -438,7 +438,7 @@ mod tests {
         ui.push_notification(&mut state, Ok("Success message".to_string()));
         assert!(state.notification.is_some());
 
-        let error_res: ApplicationResult<String> = Err(TodoError::EmptyTitle.into());
+        let error_res: ApplicationResult<String> = Err(TaskError::EmptyTitle.into());
         ui.push_notification(&mut state, error_res);
         assert!(state.notification.is_some());
     }
@@ -448,12 +448,12 @@ mod tests {
         let ui = UIState::default();
         let mut state = ApplicationState::default();
 
-        let todos: Vec<Todo> = vec![
-            Todo::new("Task 1", "", None),
-            Todo::new("Task 2", "", Some(Priority::Medium)),
+        let tasks: Vec<Task> = vec![
+            Task::new("Task 1", "", None),
+            Task::new("Task 2", "", Some(Priority::Medium)),
         ];
-        let last_id: Uuid = todos[1].id;
-        state.todos = todos;
+        let last_id: Uuid = tasks[1].id;
+        state.tasks = tasks;
         state.select_state.select(Some(1));
 
         let expected_id: Uuid = ui.selected_id(&state).unwrap();

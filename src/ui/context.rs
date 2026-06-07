@@ -135,7 +135,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
         self.focus
     }
 
-    /// Returns current filter name for todos
+    /// Returns current filter name for tasks
     pub fn filter(&self) -> String {
         self.filter.to_string()
     }

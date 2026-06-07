@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 use thiserror::Error;
 
-/// Errors in application (storage - refers to save/load, todo - state methods, keymap - keymap configuration)
+/// Errors in application (storage - refers to save/load, task - state methods, keymap - keymap configuration)
 #[derive(Error, Debug, PartialEq)]
 pub enum ApplicationError {
     #[error(transparent)]
-    Todo(#[from] TodoError),
+    Task(#[from] TaskError),
 
     #[error(transparent)]
     Storage(#[from] StorageError),
@@ -14,9 +14,9 @@ pub enum ApplicationError {
     KeyMap(#[from] KeyMapError),
 }
 
-/// Errors related to todo operations only
+/// Errors related to task operations only
 #[derive(Error, Debug, PartialEq)]
-pub enum TodoError {
+pub enum TaskError {
     #[error("No task was selected!")]
     TaskNotSelected,
     #[error("Task was not found by the provided id!")]
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn should_return_text_for_task_not_selected_error() {
-        let error = TodoError::TaskNotSelected;
+        let error = TaskError::TaskNotSelected;
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
         assert_eq!(s, "No task was selected!");
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn should_return_text_for_task_not_found_error() {
-        let error = TodoError::TaskNotFound;
+        let error = TaskError::TaskNotFound;
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
         assert_eq!(s, "Task was not found by the provided id!");
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn should_return_text_for_empty_title_error() {
-        let error = TodoError::EmptyTitle;
+        let error = TaskError::EmptyTitle;
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
         assert_eq!(s, "Task title cannot be empty!");
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn should_return_text_for_list_empty_error() {
-        let error = TodoError::ListEmpty;
+        let error = TaskError::ListEmpty;
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
         assert_eq!(s, "Cannot clear the tasks! The list is already empty!");
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn should_return_text_for_move_forbidden_error() {
-        let error = TodoError::MoveForbidden;
+        let error = TaskError::MoveForbidden;
         let mut s = String::new();
         write!(&mut s, "{}", error).unwrap();
         assert_eq!(s, "Cannot move the tasks!");

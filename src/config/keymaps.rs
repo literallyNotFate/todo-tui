@@ -30,7 +30,7 @@ struct KeyMapsDisk {
     system: HashMap<Action, Vec<String>>,
 }
 
-/// Keymaps for todo-tui application
+/// Keymaps for toodles application
 #[derive(Clone, Debug)]
 pub struct KeyMaps {
     pub mappings: HashMap<(KeyCode, KeyModifiers), Action>,
@@ -40,7 +40,7 @@ impl KeyMaps {
     /// Get default keymap path to save/load from
     pub fn get_keymap_path() -> PathBuf {
         if let Some(home) = dirs::home_dir() {
-            return home.join(".config").join("todo-tui").join("keymaps.toml");
+            return home.join(".config").join("toodles").join("keymaps.toml");
         }
 
         PathBuf::from("keymaps.toml")
@@ -412,7 +412,7 @@ mod tests {
     fn should_return_default_data_path() {
         let path: PathBuf = KeyMaps::get_keymap_path();
 
-        assert!(path.ends_with("todo-tui/keymaps.toml"));
+        assert!(path.ends_with("toodles/keymaps.toml"));
         assert!(path.is_absolute());
     }
 

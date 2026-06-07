@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use uuid::Uuid;
 
-/// Main todo entity with unique id
+/// Main task entity with unique id
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct Todo {
+pub struct Task {
     pub id: Uuid,
     pub title: String,
     pub description: String,
@@ -21,8 +21,8 @@ pub struct Todo {
     pub title_lower: String,
 }
 
-impl Todo {
-    /// Create new todo object
+impl Task {
+    /// Create new task object
     pub fn new(
         title: impl Into<String>,
         description: impl Into<String>,
@@ -45,7 +45,7 @@ impl Todo {
     }
 
     /// Update task using editor model from form
-    pub fn update_from_editor(&mut self, editor: TodoEditor) {
+    pub fn update_from_editor(&mut self, editor: TaskEditor) {
         self.title = editor.title;
         self.description = editor.description;
         self.priority = *editor.priority;
@@ -81,7 +81,7 @@ impl Todo {
         format!("{} {}{} ago", count, unit, s)
     }
 
-    /// Checks whether specific todo matches current filter conditions (for filter)
+    /// Checks whether specific task matches current filter conditions (for filter)
     pub fn matches_filter(&self, filter: &Filter, today: &NaiveDate) -> bool {
         match filter {
             Filter::All => true,
@@ -93,8 +93,8 @@ impl Todo {
     }
 }
 
-/// Implementing hash for todo excluding time fields (created_at/updated_at) for performance
-impl Hash for Todo {
+/// Implementing hash for task excluding time fields (created_at/updated_at) for performance
+impl Hash for Task {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
         self.title.hash(state);
@@ -104,9 +104,9 @@ impl Hash for Todo {
     }
 }
 
-/// Todo details to be shown
+/// Task details to be shown
 #[derive(Debug, Clone)]
-pub struct TodoDetails {
+pub struct TaskDetails {
     pub id_short: String,
     pub title: String,
     pub completed: bool,
@@ -115,20 +115,20 @@ pub struct TodoDetails {
     pub updated_at: String,
 }
 
-/// Implementation of initializing todo details from todo with UIConfig (date format)
-impl TodoDetails {
-    pub fn from(todo: &Todo, config: &UIConfig) -> Self {
+/// Implementation of initializing task details from task with UIConfig (date format)
+impl TaskDetails {
+    pub fn from(task: &Task, config: &UIConfig) -> Self {
         let time_fmt: &str = if config.use_24h { "%H:%M" } else { "%I:%M %p" };
         let full_fmt: String = format!("{}, {}", config.date_format, time_fmt);
         let fmt = |dt: DateTime<Utc>| dt.with_timezone(&Local).format(&full_fmt).to_string();
 
         Self {
-            id_short: todo.id.to_string()[..8].to_string(),
-            title: todo.title.clone(),
-            completed: todo.completed,
-            description: todo.description.clone(),
-            created_at: fmt(todo.created_at),
-            updated_at: fmt(todo.updated_at),
+            id_short: task.id.to_string()[..8].to_string(),
+            title: task.title.clone(),
+            completed: task.completed,
+            description: task.description.clone(),
+            created_at: fmt(task.created_at),
+            updated_at: fmt(task.updated_at),
         }
     }
 }
@@ -168,29 +168,29 @@ impl Priority {
 }
 
 /// Model for updating task
-pub struct TodoEditor {
+pub struct TaskEditor {
     pub title: String,
     pub description: String,
     pub priority: Selectable<Priority>,
 }
 
-impl TodoEditor {
-    pub fn from_todo(todo: &Todo) -> Self {
+impl TaskEditor {
+    pub fn from_task(task: &Task) -> Self {
         Self {
-            title: todo.title.clone(),
-            description: todo.description.clone(),
-            priority: Selectable::new(todo.priority),
+            title: task.title.clone(),
+            description: task.description.clone(),
+            priority: Selectable::new(task.priority),
         }
     }
 
-    pub fn save(self, todo: &mut Todo) {
-        todo.title = self.title;
-        todo.description = self.description;
-        todo.priority = *self.priority;
+    pub fn save(self, task: &mut Task) {
+        task.title = self.title;
+        task.description = self.description;
+        task.priority = *self.priority;
     }
 }
 
-/// Unit-tests for todo model + priority (basic methods)
+/// Unit-tests for task model + priority (basic methods)
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,109 +198,109 @@ mod tests {
     use chrono::{Days, Duration, Months};
 
     #[test]
-    fn should_create_todo_item() {
-        let todo: Todo = Todo::new("Test", "Test", None);
+    fn should_create_task_item() {
+        let task: Task = Task::new("Test", "Test", None);
 
-        assert_eq!(todo.title, "Test");
-        assert_eq!(todo.description, "Test");
-        assert_eq!(todo.priority, Priority::Low);
-        assert!(!todo.completed);
+        assert_eq!(task.title, "Test");
+        assert_eq!(task.description, "Test");
+        assert_eq!(task.priority, Priority::Low);
+        assert!(!task.completed);
     }
 
     #[test]
-    fn should_generate_unique_id_for_todos() {
+    fn should_generate_unique_id_for_tasks() {
         let title: &str = "Test Task";
         let desc: &str = "Description";
 
-        let todo1 = Todo::new(title, desc, None);
-        let todo2 = Todo::new(title, desc, None);
+        let task1 = Task::new(title, desc, None);
+        let task2 = Task::new(title, desc, None);
 
-        assert!(!todo1.id.is_nil(), "UUID should not be nil");
-        assert_ne!(todo1.id, todo2.id, "each todo must have a unique UUID");
+        assert!(!task1.id.is_nil(), "UUID should not be nil");
+        assert_ne!(task1.id, task2.id, "each task must have a unique UUID");
 
         assert_eq!(
-            todo1.id.get_version(),
+            task1.id.get_version(),
             Some(uuid::Version::Random),
             "UUID should be version 4"
         );
     }
 
     #[test]
-    fn should_update_todo_fields_using_editor() {
-        let mut todo: Todo = Todo::new("Test", "Test", None);
-        todo.completed = true;
+    fn should_update_task_fields_using_editor() {
+        let mut task: Task = Task::new("Test", "Test", None);
+        task.completed = true;
 
-        assert_eq!(todo.title, "Test");
-        assert_eq!(todo.description, "Test");
-        assert_eq!(todo.priority, Priority::Low);
-        assert!(todo.completed);
+        assert_eq!(task.title, "Test");
+        assert_eq!(task.description, "Test");
+        assert_eq!(task.priority, Priority::Low);
+        assert!(task.completed);
 
-        let editor: TodoEditor = TodoEditor {
+        let editor: TaskEditor = TaskEditor {
             title: "Edit".into(),
             description: "Edit".into(),
             priority: Selectable::new(Priority::High),
         };
-        todo.update_from_editor(editor);
+        task.update_from_editor(editor);
 
-        assert_eq!(todo.title, "Edit");
-        assert_eq!(todo.description, "Edit");
-        assert_eq!(todo.priority, Priority::High);
-        assert!(todo.completed);
+        assert_eq!(task.title, "Edit");
+        assert_eq!(task.description, "Edit");
+        assert_eq!(task.priority, Priority::High);
+        assert!(task.completed);
     }
 
     #[test]
     fn should_toggle_completed() {
-        let mut todo: Todo = Todo::new("Test", "Test", Some(Priority::Medium));
-        assert_eq!(todo.priority, Priority::Medium);
+        let mut task: Task = Task::new("Test", "Test", Some(Priority::Medium));
+        assert_eq!(task.priority, Priority::Medium);
 
-        todo.toggle_completed();
-        assert!(todo.completed);
+        task.toggle_completed();
+        assert!(task.completed);
 
-        todo.toggle_completed();
-        assert!(!todo.completed);
+        task.toggle_completed();
+        assert!(!task.completed);
     }
 
     #[test]
     fn should_return_created_at_string() {
-        let mut todo: Todo = Todo::new("Test", "Test", None);
-        assert_eq!(todo.time_ago(), "just now".to_string());
+        let mut task: Task = Task::new("Test", "Test", None);
+        assert_eq!(task.time_ago(), "just now".to_string());
 
-        todo.created_at = Utc::now().checked_sub_days(Days::new(2)).unwrap();
-        assert_eq!(todo.time_ago(), "2 days ago".to_string());
+        task.created_at = Utc::now().checked_sub_days(Days::new(2)).unwrap();
+        assert_eq!(task.time_ago(), "2 days ago".to_string());
 
-        todo.created_at = Utc::now().checked_sub_days(Days::new(7)).unwrap();
-        assert_eq!(todo.time_ago(), "1 week ago".to_string());
+        task.created_at = Utc::now().checked_sub_days(Days::new(7)).unwrap();
+        assert_eq!(task.time_ago(), "1 week ago".to_string());
 
-        todo.created_at = Utc::now().checked_sub_months(Months::new(3)).unwrap();
-        assert_eq!(todo.time_ago(), "3 months ago");
+        task.created_at = Utc::now().checked_sub_months(Months::new(3)).unwrap();
+        assert_eq!(task.time_ago(), "3 months ago");
 
-        todo.created_at = Utc::now().checked_sub_days(Days::new(365)).unwrap();
-        assert_eq!(todo.time_ago(), "1 year ago");
+        task.created_at = Utc::now().checked_sub_days(Days::new(365)).unwrap();
+        assert_eq!(task.time_ago(), "1 year ago");
     }
 
     #[test]
-    fn should_test_todo_filter_matching() {
+    fn should_test_task_filter_matching() {
         let today: NaiveDate = Local::now().date_naive();
-        let mut todo = Todo::new("Test", "Desc", Some(Priority::High));
+        let mut task = Task::new("Test", "Desc", Some(Priority::High));
 
-        assert!(todo.matches_filter(&Filter::HighPriority, &today));
+        assert!(task.matches_filter(&Filter::HighPriority, &today));
 
-        assert!(todo.matches_filter(&Filter::Active, &today));
-        todo.completed = true;
-        assert!(todo.matches_filter(&Filter::Completed, &today));
-        assert!(!todo.matches_filter(&Filter::Active, &today));
+        assert!(task.matches_filter(&Filter::Active, &today));
+        task.completed = true;
+        assert!(task.matches_filter(&Filter::Completed, &today));
+        assert!(!task.matches_filter(&Filter::Active, &today));
 
-        assert!(todo.matches_filter(&Filter::Today, &today));
+        assert!(task.matches_filter(&Filter::Today, &today));
 
-        todo.created_at = Utc::now() - Duration::days(1);
-        assert!(!todo.matches_filter(&Filter::Today, &today));
+        task.created_at = Utc::now() - Duration::days(1);
+        assert!(!task.matches_filter(&Filter::Today, &today));
     }
 
     #[test]
-    fn should_create_todo_details_from_todo() {
-        let todo = Todo::new("Task 1", "Desc 1", None);
+    fn should_create_task_details_from_task() {
+        let task = Task::new("Task 1", "Desc 1", None);
         let config = UIConfig::default();
-        let details = TodoDetails::from(&todo, &config);
+        let details = TaskDetails::from(&task, &config);
 
         assert_eq!(details.title, "Task 1");
         assert_eq!(details.description, "Desc 1");

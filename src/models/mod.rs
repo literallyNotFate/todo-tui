@@ -1,5 +1,5 @@
 pub mod filter;
-pub mod todo;
+pub mod task;
 
 pub use filter::Filter;
-pub use todo::{Priority, Todo, TodoDetails, TodoEditor};
+pub use task::{Priority, Task, TaskDetails, TaskEditor};

@@ -1,6 +1,6 @@
 use crate::{
     core::ApplicationMode,
-    models::Todo,
+    models::Task,
     state::{ApplicationState, UIState},
     ui::{FeedbackKind, FeedbackWidget, RenderContext, widgets::dashboard::list::ListTasks},
 };
@@ -27,7 +27,7 @@ impl<'a> ContentWidget<'a> {
             }
             _ => {
                 let query: &str = &self.ui.search_query();
-                let filtered: Vec<&Todo> = self.ui.filter.value.apply(&self.state.todos, query);
+                let filtered: Vec<&Task> = self.ui.filter.value.apply(&self.state.tasks, query);
 
                 if filtered.is_empty() && query.is_empty() {
                     FeedbackWidget::new(FeedbackKind::EmptyList).render(ctx, area);

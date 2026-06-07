@@ -42,7 +42,7 @@ impl Application {
         storage_data.session.apply_to(&mut ui);
 
         let mut app = Self {
-            data: ApplicationState::new(storage_data.todos),
+            data: ApplicationState::new(storage_data.tasks),
             ui,
             autosave: Autosave::from(&config.storage),
             config,
@@ -167,10 +167,10 @@ impl Application {
     pub fn save_all(&mut self) -> ApplicationResult<()> {
         let current_id =
             self.data
-                .selected_id(&self.data.todos, &self.ui.filter, &self.ui.search_query());
+                .selected_id(&self.data.tasks, &self.ui.filter, &self.ui.search_query());
 
         let session = Session::from_state(&self.ui, current_id);
-        Storage::save(&self.data.todos, session, None, &self.config.storage)?;
+        Storage::save(&self.data.tasks, session, None, &self.config.storage)?;
 
         self.data.mark_saved();
         Ok(())
@@ -182,7 +182,7 @@ impl Application {
         let filtered_ids: Vec<uuid::Uuid> = self
             .ui
             .filter
-            .apply(&self.data.todos, query)
+            .apply(&self.data.tasks, query)
             .iter()
             .map(|t| t.id)
             .collect();
@@ -266,7 +266,7 @@ impl Default for Application {
 mod tests {
     use super::*;
     use crate::{
-        models::{Filter, Todo},
+        models::{Filter, Task},
         ui::Notification,
     };
     use std::{
@@ -286,7 +286,7 @@ mod tests {
 
             let session = Session::from_state(&app.ui, None);
             if has_changes && app.autosave.should_save(has_changes) {
-                if Storage::save(&app.data.todos, session, path, &app.config.storage).is_ok() {
+                if Storage::save(&app.data.tasks, session, path, &app.config.storage).is_ok() {
                     app.data.mark_saved();
                     app.autosave.reset_timer();
                 }
@@ -301,7 +301,7 @@ mod tests {
         let app = Application::default();
 
         assert!(app.running, "running should be true by default");
-        assert_eq!(app.data.todos.len(), 0, "todos should be empty");
+        assert_eq!(app.data.tasks.len(), 0, "tasks should be empty");
         assert!(
             app.data.notification.is_none(),
             "notification should be none"
@@ -330,7 +330,7 @@ mod tests {
     fn should_select_none_if_empty_with_sync_ui() {
         let mut app = Application::default();
         app.data.select_state.select(Some(5));
-        app.data.todos.clear();
+        app.data.tasks.clear();
 
         app.sync_ui(None);
 
@@ -345,12 +345,12 @@ mod tests {
     fn should_adjust_out_of_bounds_index_with_sync_ui() {
         let mut app = Application::default();
 
-        app.data.todos.push(Todo::new("1", "", None));
-        app.data.todos.push(Todo::new("2", "", None));
-        app.data.todos.push(Todo::new("3", "", None));
+        app.data.tasks.push(Task::new("1", "", None));
+        app.data.tasks.push(Task::new("2", "", None));
+        app.data.tasks.push(Task::new("3", "", None));
 
         app.data.select_state.select(Some(2));
-        app.data.todos.truncate(1);
+        app.data.tasks.truncate(1);
 
         app.sync_ui(None);
 
@@ -365,7 +365,7 @@ mod tests {
     fn should_initialize_selection_with_sync_ui() {
         let mut app = Application::default();
 
-        app.data.todos.push(Todo::new("Task", "", None));
+        app.data.tasks.push(Task::new("Task", "", None));
         app.data.select_state.select(None);
 
         app.sync_ui(None);
@@ -381,9 +381,9 @@ mod tests {
     fn should_adjust_selection_on_filter_change_with_sync_ui() {
         let mut app = Application::default();
 
-        app.data.todos.push(Todo::new("Active", "", None));
-        app.data.todos.push(Todo::new("Done", "", None));
-        app.data.todos[1].completed = true;
+        app.data.tasks.push(Task::new("Active", "", None));
+        app.data.tasks.push(Task::new("Done", "", None));
+        app.data.tasks[1].completed = true;
 
         app.ui.filter.set(Filter::Completed);
         app.data.select_state.select(Some(1));
@@ -395,15 +395,15 @@ mod tests {
 
     #[test]
     fn should_reset_timer_on_first_change_transition() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
 
         let mut app = Application::default();
         app.autosave.enabled = true;
         app.autosave.interval = Duration::from_secs(30);
         app.autosave.last_tick_had_changes = false;
 
-        app.data.todos.push(Todo::new("Task", "", None));
+        app.data.tasks.push(Task::new("Task", "", None));
         app.data.mark_as_dirty();
 
         let time_before = app.autosave.time_until_next_save();
@@ -415,15 +415,15 @@ mod tests {
 
     #[test]
     fn should_reset_flow_after_undo() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
 
         let mut app = Application::default();
         app.autosave.enabled = true;
 
-        app.data.todos.push(Todo::new("Initial", "", None));
+        app.data.tasks.push(Task::new("Initial", "", None));
         let _ = Storage::save(
-            &app.data.todos,
+            &app.data.tasks,
             Session::default(),
             Some(&path),
             &app.config.storage,
@@ -431,12 +431,12 @@ mod tests {
         app.data.mark_saved();
         assert!(!app.data.any_unsaved_changes());
 
-        app.data.todos.push(Todo::new("Change", "", None));
+        app.data.tasks.push(Task::new("Change", "", None));
         app.data.mark_as_dirty();
         mock_tick(&mut app, Some(&path));
         assert!(app.autosave.last_tick_had_changes);
 
-        app.data.todos.pop();
+        app.data.tasks.pop();
         app.data.mark_as_dirty();
 
         assert!(
@@ -450,7 +450,7 @@ mod tests {
             "Flag should reset when data is clean"
         );
 
-        app.data.todos.push(Todo::new("New change", "", None));
+        app.data.tasks.push(Task::new("New change", "", None));
         app.data.mark_as_dirty();
         mock_tick(&mut app, Some(&path));
 
@@ -459,15 +459,15 @@ mod tests {
 
     #[test]
     fn should_go_autosave_full_cycle() {
-        let temp_dir = TempDir::new("todo_test").unwrap();
-        let path = temp_dir.path().join("todos.json");
+        let temp_dir = TempDir::new("task_test").unwrap();
+        let path = temp_dir.path().join("tasks.json");
 
         let mut app = Application::default();
         app.autosave.enabled = true;
         app.autosave.interval = Duration::from_millis(20);
         app.autosave.debounce = Duration::from_millis(20);
 
-        app.data.todos.push(Todo::new("Test Task", "", None));
+        app.data.tasks.push(Task::new("Test Task", "", None));
         app.data.mark_as_dirty();
 
         mock_tick(&mut app, Some(&path));
@@ -487,14 +487,14 @@ mod tests {
 
     #[test]
     fn should_do_nothing_if_autosave_disabled() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
 
         let mut app = Application::default();
         app.autosave.enabled = false;
         app.autosave.interval = Duration::from_millis(0);
 
-        app.data.todos.push(Todo::new("Hidden Task", "", None));
+        app.data.tasks.push(Task::new("Hidden Task", "", None));
         app.data.mark_as_dirty();
 
         sleep(Duration::from_millis(5));

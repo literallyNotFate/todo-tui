@@ -1,5 +1,5 @@
 fn main() -> color_eyre::Result<()> {
-    use todo_tui::{Application, core::Storage};
+    use toodles::{Application, core::Storage};
 
     color_eyre::install()?;
     let (config, config_error) = Application::load_config();
@@ -10,7 +10,7 @@ fn main() -> color_eyre::Result<()> {
                 let _ = std::fs::create_dir_all(parent);
             }
 
-            todo_tui::core::init_logger(&log_path, config.log.level);
+            toodles::core::init_logger(&log_path, config.log.level);
         }
     }
 

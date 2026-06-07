@@ -1,4 +1,4 @@
-use crate::{core::Selectable, models::Todo};
+use crate::{core::Selectable, models::Task};
 use std::cmp::Ordering;
 use strum::{Display, EnumIter};
 
@@ -38,7 +38,7 @@ impl Sort {
         }
     }
 
-    pub fn compare(&self, a: &Todo, b: &Todo) -> Ordering {
+    pub fn compare(&self, a: &Task, b: &Task) -> Ordering {
         let cmp: Ordering = match *self.parameter {
             SortBy::Title => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
             SortBy::Priority => {
@@ -71,8 +71,8 @@ mod tests {
     use chrono::{Duration, Utc};
     use uuid::Uuid;
 
-    fn todo(title: &str, priority: Priority, seconds_ago: i64) -> Todo {
-        Todo {
+    fn task(title: &str, priority: Priority, seconds_ago: i64) -> Task {
+        Task {
             id: Uuid::new_v4(),
             title: title.to_string(),
             title_lower: title.to_lowercase(),
@@ -104,8 +104,8 @@ mod tests {
     #[test]
     fn should_compare_priority_desc() {
         let sort = Sort::new(SortBy::Priority, SortOrder::Desc);
-        let high = todo("High", Priority::High, 0);
-        let low = todo("Low", Priority::Low, 0);
+        let high = task("High", Priority::High, 0);
+        let low = task("Low", Priority::Low, 0);
 
         assert_eq!(sort.compare(&high, &low), Ordering::Less);
     }
@@ -113,8 +113,8 @@ mod tests {
     #[test]
     fn should_compare_title_case_insensitive() {
         let sort = Sort::new(SortBy::Title, SortOrder::Asc);
-        let a = todo("apple", Priority::Low, 0);
-        let b = todo("Banana", Priority::Low, 0);
+        let a = task("apple", Priority::Low, 0);
+        let b = task("Banana", Priority::Low, 0);
 
         assert_eq!(sort.compare(&a, &b), Ordering::Less);
     }
@@ -123,8 +123,8 @@ mod tests {
     fn should_stabilize_priority_sorting() {
         let sort = Sort::new(SortBy::Priority, SortOrder::Asc);
 
-        let old_task = todo("Old", Priority::Medium, 10);
-        let new_task = todo("New", Priority::Medium, 0);
+        let old_task = task("Old", Priority::Medium, 10);
+        let new_task = task("New", Priority::Medium, 0);
 
         assert_eq!(sort.compare(&old_task, &new_task), Ordering::Less);
     }

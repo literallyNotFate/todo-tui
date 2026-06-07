@@ -1,6 +1,6 @@
 use crate::{
     core::Sort,
-    models::{Filter, Priority, Todo},
+    models::{Filter, Priority, Task},
     ui::Notification,
 };
 use chrono::Local;
@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// Application state (related to data only)
 #[derive(Debug, Default)]
 pub struct ApplicationState {
-    pub todos: Vec<Todo>,
+    pub tasks: Vec<Task>,
     pub select_state: TableState,
     pub sort: Sort,
 
@@ -29,30 +29,30 @@ pub struct ApplicationState {
 }
 
 impl ApplicationState {
-    pub fn new(mut todos: Vec<Todo>) -> Self {
-        for todo in &mut todos {
-            todo.title_lower = todo.title.to_lowercase();
+    pub fn new(mut tasks: Vec<Task>) -> Self {
+        for task in &mut tasks {
+            task.title_lower = task.title.to_lowercase();
         }
 
         let mut state: Self = Self {
-            todos,
+            tasks: tasks,
             ..Self::default()
         };
 
         state.mark_saved();
-        if let Some(last) = state.todos.last() {
-            state.select_state.select(Some(state.todos.len() - 1));
+        if let Some(last) = state.tasks.last() {
+            state.select_state.select(Some(state.tasks.len() - 1));
             state.last_selected_id = Some(last.id);
         }
 
-        log::debug!("ApplicationState initialized. Tasks: {}", state.todos.len());
+        log::debug!("ApplicationState initialized. Tasks: {}", state.tasks.len());
         state
     }
 
     /// Create default state (for testing usually)
     pub fn default() -> Self {
         Self {
-            todos: Vec::new(),
+            tasks: Vec::new(),
             select_state: TableState::default(),
             notification: None,
             sort: Sort::default(),
@@ -68,7 +68,7 @@ impl ApplicationState {
     pub(crate) fn hash_state(&self) -> u64 {
         if self.needs_rehash.get() {
             let mut hasher: DefaultHasher = DefaultHasher::new();
-            self.todos.hash(&mut hasher);
+            self.tasks.hash(&mut hasher);
 
             let new_hash: u64 = hasher.finish();
             let old_hash: u64 = self.current_hash.get();
@@ -139,18 +139,18 @@ impl ApplicationState {
     }
 
     /// Return filtered tasks based on active filter selection
-    pub(crate) fn filter(&self, filter: &Filter) -> impl Iterator<Item = (usize, &Todo)> {
+    pub(crate) fn filter(&self, filter: &Filter) -> impl Iterator<Item = (usize, &Task)> {
         let today = Local::now().date_naive();
 
-        self.todos
+        self.tasks
             .iter()
             .enumerate()
-            .filter(move |(_, todo)| match filter {
+            .filter(move |(_, task)| match filter {
                 Filter::All => true,
-                Filter::Active => !todo.completed,
-                Filter::Completed => todo.completed,
-                Filter::HighPriority => todo.priority == Priority::High,
-                Filter::Today => todo.created_at.with_timezone(&Local).date_naive() == today,
+                Filter::Active => !task.completed,
+                Filter::Completed => task.completed,
+                Filter::HighPriority => task.priority == Priority::High,
+                Filter::Today => task.created_at.with_timezone(&Local).date_naive() == today,
             })
     }
 
@@ -162,7 +162,7 @@ impl ApplicationState {
             delta
         );
 
-        let filtered: Vec<&Todo> = filter.apply(&self.todos, query);
+        let filtered: Vec<&Task> = filter.apply(&self.tasks, query);
         let current_index: usize = self.select_state.selected()?;
 
         let target_index: usize = if delta > 0 {
@@ -182,8 +182,8 @@ impl ApplicationState {
         let current_id: Uuid = filtered[current_index].id;
         let target_id: Uuid = filtered[target_index].id;
 
-        let index_a: usize = self.todos.iter().position(|t| t.id == current_id)?;
-        let index_b: usize = self.todos.iter().position(|t| t.id == target_id)?;
+        let index_a: usize = self.tasks.iter().position(|t| t.id == current_id)?;
+        let index_b: usize = self.tasks.iter().position(|t| t.id == target_id)?;
 
         log::trace!(
             "Resolved global indices for swap: {} <-> {}",
@@ -193,7 +193,7 @@ impl ApplicationState {
         Some((index_a, index_b))
     }
 
-    /// Helper function to select from visible amount of todos
+    /// Helper function to select from visible amount of tasks
     pub fn clamp_selection(&mut self, visible_count: usize) {
         if visible_count == 0 {
             self.select_state.select(None);
@@ -210,26 +210,26 @@ impl ApplicationState {
         self.select_state.select(Some(new_idx));
     }
 
-    /// Return currently selected todo
+    /// Return currently selected task
     pub fn selected<'a>(
         &self,
-        todos: &'a [Todo],
+        tasks: &'a [Task],
         filter: &Filter,
         query: &str,
-    ) -> Option<&'a Todo> {
-        let filtered = filter.apply(todos, query);
+    ) -> Option<&'a Task> {
+        let filtered = filter.apply(tasks, query);
         let index = self.select_state.selected()?;
         filtered.get(index).copied()
     }
 
-    /// Return id of current selected todo
-    pub fn selected_id(&self, todos: &[Todo], filter: &Filter, query: &str) -> Option<Uuid> {
-        self.selected(todos, filter, query).map(|t| t.id)
+    /// Return id of current selected task
+    pub fn selected_id(&self, tasks: &[Task], filter: &Filter, query: &str) -> Option<Uuid> {
+        self.selected(tasks, filter, query).map(|t| t.id)
     }
 
-    /// Return todo of a given id
-    pub fn find_by_id(&self, id: Uuid) -> Option<&Todo> {
-        self.todos.iter().find(|t| t.id == id)
+    /// Return task of a given id
+    pub fn find_by_id(&self, id: Uuid) -> Option<&Task> {
+        self.tasks.iter().find(|t| t.id == id)
     }
 
     /// Sync focus with current state
@@ -270,7 +270,7 @@ mod tests {
         state.is_unsaved_cache.set(false);
         assert!(!state.any_unsaved_changes());
 
-        state.todos.push(Todo::new("Task", "", None));
+        state.tasks.push(Task::new("Task", "", None));
         state.mark_as_dirty();
 
         assert!(
@@ -282,7 +282,7 @@ mod tests {
         state.is_unsaved_cache.set(false);
         assert!(!state.any_unsaved_changes());
 
-        state.todos[0].title = "Changed".to_string();
+        state.tasks[0].title = "Changed".to_string();
         state.mark_as_dirty();
 
         assert!(
@@ -290,7 +290,7 @@ mod tests {
             "Hash should be changed after field edit"
         );
 
-        state.todos[0].title = "Task".to_string();
+        state.tasks[0].title = "Task".to_string();
         state.mark_as_dirty();
         assert!(
             !state.any_unsaved_changes(),
@@ -301,10 +301,10 @@ mod tests {
     #[test]
     fn should_return_swap_indices_for_move() {
         let mut state = ApplicationState::default();
-        state.todos = vec![
-            Todo::new("Task 1", "", Some(Priority::High)),
-            Todo::new("Task 2", "", Some(Priority::Low)),
-            Todo::new("Task 3", "", Some(Priority::High)),
+        state.tasks = vec![
+            Task::new("Task 1", "", Some(Priority::High)),
+            Task::new("Task 2", "", Some(Priority::Low)),
+            Task::new("Task 3", "", Some(Priority::High)),
         ];
 
         let filter: Filter = Filter::HighPriority;
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn should_test_swap_indices_boundaries() {
         let mut state = ApplicationState::default();
-        state.todos = vec![Todo::new("1", "", None)];
+        state.tasks = vec![Task::new("1", "", None)];
         state.select_state.select(Some(0));
 
         let up = state.swap_indices(&Filter::All, "", -1);
@@ -330,31 +330,31 @@ mod tests {
     }
 
     #[test]
-    fn should_return_currently_selected_todo() {
+    fn should_return_currently_selected_task() {
         let mut state = ApplicationState::default();
-        state.todos = vec![
-            Todo::new("A", "", Some(Priority::Low)),
-            Todo::new("B", "", Some(Priority::Low)),
+        state.tasks = vec![
+            Task::new("A", "", Some(Priority::Low)),
+            Task::new("B", "", Some(Priority::Low)),
         ];
 
         state.select_state.select(Some(1));
-        let id: Uuid = state.todos[1].id;
-        let selected: Option<&Todo> = state.selected(&state.todos, &Filter::All, "");
-        let selected_id: Option<Uuid> = state.selected_id(&state.todos, &Filter::All, "");
+        let id: Uuid = state.tasks[1].id;
+        let selected: Option<&Task> = state.selected(&state.tasks, &Filter::All, "");
+        let selected_id: Option<Uuid> = state.selected_id(&state.tasks, &Filter::All, "");
 
         assert_eq!(selected.unwrap().title, "B");
         assert_eq!(selected_id.unwrap(), id);
     }
 
     #[test]
-    fn should_return_todo_by_id() {
+    fn should_return_task_by_id() {
         let mut state = ApplicationState::default();
-        state.todos = vec![
-            Todo::new("A", "", Some(Priority::Low)),
-            Todo::new("B", "", Some(Priority::Low)),
+        state.tasks = vec![
+            Task::new("A", "", Some(Priority::Low)),
+            Task::new("B", "", Some(Priority::Low)),
         ];
-        let id_to_find: Uuid = state.todos[1].id;
-        let selected: Option<&Todo> = state.find_by_id(id_to_find);
+        let id_to_find: Uuid = state.tasks[1].id;
+        let selected: Option<&Task> = state.find_by_id(id_to_find);
 
         assert_eq!(selected.unwrap().title, "B");
         assert_eq!(selected.unwrap().id, id_to_find);

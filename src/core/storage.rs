@@ -1,7 +1,7 @@
 use crate::{
     config::StorageConfig,
     core::StorageError,
-    models::Todo,
+    models::Task,
     state::{ApplicationResult, Session, TasksStateData},
 };
 use std::{
@@ -10,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Storage structure for all task fs operations
 pub struct Storage;
 
 impl Storage {
@@ -22,7 +23,7 @@ impl Storage {
                 }
                 .into(),
             )
-            .map(|dir| dir.join("todo-tui").join("todos.json"));
+            .map(|dir| dir.join("toodles").join("tasks.json"));
 
         if let Ok(ref p) = path {
             log::debug!("Data path resolved to: {:?}", p);
@@ -40,7 +41,7 @@ impl Storage {
                 }
                 .into(),
             )
-            .map(|dir| dir.join("todo-tui").join("todo-tui.log"));
+            .map(|dir| dir.join("toodles").join("toodles.log"));
 
         if let Ok(ref p) = path {
             log::debug!("Log path resolved to: {:?}", p);
@@ -49,9 +50,9 @@ impl Storage {
         path
     }
 
-    /// Save todos and UI Session to user path/default path
+    /// Save tasks and UI Session to user path/default path
     pub fn save(
-        todos: &[Todo],
+        tasks: &[Task],
         session: Session,
         path: Option<&Path>,
         config: &StorageConfig,
@@ -61,7 +62,7 @@ impl Storage {
             None => Self::get_data_path()?,
         };
 
-        log::debug!("Starting atomic save of todos and UI session to {:?}", p);
+        log::debug!("Starting atomic save of tasks and UI session to {:?}", p);
         if let Some(parent) = p.parent() {
             fs::create_dir_all(parent).map_err(|e| StorageError::IO {
                 path: p.clone(),
@@ -72,7 +73,7 @@ impl Storage {
         let mut temp_path: PathBuf = p.clone();
         temp_path.set_extension("tmp");
 
-        let data: TasksStateData = TasksStateData::new(todos.to_vec(), session);
+        let data: TasksStateData = TasksStateData::new(tasks.to_vec(), session);
 
         let result = (|| -> Result<(), StorageError> {
             let file = File::create(&temp_path).map_err(|e| StorageError::IO {
@@ -114,7 +115,7 @@ impl Storage {
 
         log::info!(
             "Successfully prepared storage data: {} tasks, filter: {:?}, focus: {:?}",
-            data.todos.len(),
+            data.tasks.len(),
             data.session.last_filter,
             data.session.last_focus
         );
@@ -130,7 +131,7 @@ impl Storage {
         Ok("Data was saved".into())
     }
 
-    /// Load todos and UI Session from a user path/default path
+    /// Load tasks and UI Session from a user path/default path
     pub fn load(path: Option<&Path>, config: &StorageConfig) -> ApplicationResult<TasksStateData> {
         let p: PathBuf = match path {
             Some(p) => p.to_path_buf(),
@@ -142,7 +143,7 @@ impl Storage {
                 Ok(data) => {
                     log::info!(
                         "Loaded {} tasks and session memory from {:?}",
-                        data.todos.len(),
+                        data.tasks.len(),
                         p
                     );
                     return Ok(data);
@@ -204,35 +205,35 @@ mod tests {
 
     #[test]
     fn should_save_and_load_data_successfully() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(true);
 
-        let todos = vec![Todo::new("Task 1", "", None), Todo::new("Task 2", "", None)];
+        let tasks = vec![Task::new("Task 1", "", None), Task::new("Task 2", "", None)];
         let session = Session::default();
 
         let result: ApplicationResult<String> =
-            Storage::save(&todos, session, Some(&path), &config);
+            Storage::save(&tasks, session, Some(&path), &config);
         assert!(result.is_ok());
 
         let loaded_data: TasksStateData = Storage::load(Some(&path), &config).unwrap();
 
-        assert_eq!(loaded_data.todos.len(), 2);
-        assert_eq!(loaded_data.todos[0].title, "Task 1");
-        assert_eq!(loaded_data.todos[1].title, "Task 2");
+        assert_eq!(loaded_data.tasks.len(), 2);
+        assert_eq!(loaded_data.tasks[0].title, "Task 1");
+        assert_eq!(loaded_data.tasks[1].title, "Task 2");
         assert_eq!(loaded_data.session.last_filter, Filter::All);
         assert_eq!(loaded_data.session.last_focus, FocusArea::Sidebar);
     }
 
     #[test]
     fn should_create_backup_on_save() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(true);
         let backup_path: PathBuf = path.with_extension("json.bak");
 
         Storage::save(
-            &vec![Todo::new("V1", "", None)],
+            &vec![Task::new("V1", "", None)],
             Session::default(),
             Some(&path),
             &config,
@@ -244,7 +245,7 @@ mod tests {
         );
 
         Storage::save(
-            &vec![Todo::new("V2", "", None)],
+            &vec![Task::new("V2", "", None)],
             Session::default(),
             Some(&path),
             &config,
@@ -255,34 +256,34 @@ mod tests {
         assert!(backup_path.exists());
 
         let backup_data = Storage::load(Some(&backup_path), &config).unwrap();
-        assert_eq!(backup_data.todos[0].title, "V1");
+        assert_eq!(backup_data.tasks[0].title, "V1");
     }
 
     #[test]
     fn should_restore_from_backup_if_main_file_is_missing() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(true);
         let backup_path: PathBuf = path.with_extension("json.bak");
 
-        let todos = vec![Todo::new("Backup Task", "", None)];
-        Storage::save(&todos, Session::default(), Some(&backup_path), &config).unwrap();
+        let tasks = vec![Task::new("Backup Task", "", None)];
+        Storage::save(&tasks, Session::default(), Some(&backup_path), &config).unwrap();
 
         assert!(!path.exists());
 
         let loaded = Storage::load(Some(&path), &config).expect("Should fallback to backup");
-        assert_eq!(loaded.todos[0].title, "Backup Task");
+        assert_eq!(loaded.tasks[0].title, "Backup Task");
     }
 
     #[test]
     fn should_handle_corrupted_main_file_with_backup_fallback() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(true);
         let backup_path: PathBuf = path.with_extension("json.bak");
 
         Storage::save(
-            &vec![Todo::new("Good Data", "", None)],
+            &vec![Task::new("Good Data", "", None)],
             Session::default(),
             Some(&backup_path),
             &config,
@@ -292,13 +293,13 @@ mod tests {
         fs::write(&path, "invalid json data").unwrap();
 
         let loaded = Storage::load(Some(&path), &config).unwrap();
-        assert_eq!(loaded.todos[0].title, "Good Data");
+        assert_eq!(loaded.tasks[0].title, "Good Data");
     }
 
     #[test]
     fn should_not_restore_if_backup_disabled() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(false);
 
         fs::write(&path, "{ corrupted }").unwrap();
@@ -312,13 +313,13 @@ mod tests {
 
     #[test]
     fn should_clean_up_temp_file_on_error() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let temp_path: PathBuf = path.with_extension("tmp");
         let config: StorageConfig = setup_config(true);
 
         Storage::save(
-            &vec![Todo::new("Test", "", None)],
+            &vec![Task::new("Test", "", None)],
             Session::default(),
             Some(&path),
             &config,
@@ -332,39 +333,39 @@ mod tests {
     }
 
     #[test]
-    fn should_create_new_state_empty_todos() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+    fn should_create_new_state_empty_tasks() {
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(true);
 
         assert!(!path.exists());
 
         let state = Storage::load(Some(&path), &config).unwrap();
-        assert!(state.todos.is_empty());
+        assert!(state.tasks.is_empty());
 
         let session = Session::from_state(&UIState::default(), None);
-        let result = Storage::save(&state.todos, session, Some(&path), &config);
+        let result = Storage::save(&state.tasks, session, Some(&path), &config);
         assert!(result.is_ok());
         assert!(path.exists());
 
         let content = fs::read_to_string(&path).unwrap();
         let decoded: TasksStateData = serde_json::from_str(&content).unwrap();
 
-        assert!(decoded.todos.is_empty(), "Todos should be an empty list");
+        assert!(decoded.tasks.is_empty(), "tasks should be an empty list");
         assert!(decoded.session.last_selected_id.is_none());
     }
 
     #[test]
-    fn should_create_new_state_with_saved_todos_and_session() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+    fn should_create_new_state_with_saved_tasks_and_session() {
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(true);
 
-        let task = Todo::new("Test Title", "Test Desc", Some(Priority::High));
+        let task = Task::new("Test Title", "Test Desc", Some(Priority::High));
         let task_id = task.id;
 
         let storage_data = TasksStateData {
-            todos: vec![task],
+            tasks: vec![task],
             session: Session {
                 last_selected_id: Some(task_id),
                 ..Session::default()
@@ -376,15 +377,15 @@ mod tests {
 
         let loaded_state = Storage::load(Some(&path), &config).unwrap();
 
-        assert_eq!(loaded_state.todos.len(), 1);
-        assert_eq!(loaded_state.todos[0].id, task_id);
+        assert_eq!(loaded_state.tasks.len(), 1);
+        assert_eq!(loaded_state.tasks[0].id, task_id);
         assert_eq!(loaded_state.session.last_selected_id, Some(task_id));
     }
 
     #[test]
     fn should_create_new_state_default_if_path_not_found() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("non_existent_dir").join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("non_existent_dir").join("tasks.json");
         let config: StorageConfig = setup_config(false);
 
         assert!(!path.exists());
@@ -392,10 +393,10 @@ mod tests {
         let result: ApplicationResult<TasksStateData> = Storage::load(Some(&path), &config);
         assert!(result.is_ok());
 
-        let todos = result.unwrap().todos;
-        let state: ApplicationState = ApplicationState::new(todos);
+        let tasks = result.unwrap().tasks;
+        let state: ApplicationState = ApplicationState::new(tasks);
 
-        assert!(state.todos.is_empty());
+        assert!(state.tasks.is_empty());
         assert_eq!(state.select_state.selected(), None);
     }
 
@@ -405,14 +406,14 @@ mod tests {
         assert!(path_result.is_ok());
 
         let path: PathBuf = path_result.unwrap();
-        assert!(path.ends_with("todo-tui/todos.json") || path.ends_with("todo-tui\\todos.json"));
+        assert!(path.ends_with("toodles/tasks.json") || path.ends_with("toodles\\tasks.json"));
         assert!(path.is_absolute());
     }
 
     #[test]
     fn should_create_directory_on_save_if_missing() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("a").join("b").join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("a").join("b").join("tasks.json");
         let config: StorageConfig = setup_config(false);
         assert!(!path.parent().unwrap().exists());
 
@@ -426,8 +427,8 @@ mod tests {
 
     #[test]
     fn should_invoke_jsonerror_on_load_if_json_not_valid() {
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(false);
 
         fs::write(&path, "invalid json {").unwrap();
@@ -449,17 +450,17 @@ mod tests {
     fn should_invoke_ioerror_on_save_when_no_write_permission() {
         use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
-        let temp_dir: TempDir = TempDir::new("todo_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("todos.json");
+        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
+        let path: PathBuf = temp_dir.path().join("tasks.json");
         let config: StorageConfig = setup_config(false);
 
         let mut perms: Permissions = fs::metadata(temp_dir.path()).unwrap().permissions();
         perms.set_mode(0o444);
         fs::set_permissions(temp_dir.path(), perms).unwrap();
 
-        let todos = vec![Todo::new("Test", "", None)];
+        let tasks = vec![Task::new("Test", "", None)];
         let result: ApplicationResult<String> =
-            Storage::save(&todos, Session::default(), Some(&path), &config);
+            Storage::save(&tasks, Session::default(), Some(&path), &config);
 
         assert!(result.is_err());
         assert!(matches!(

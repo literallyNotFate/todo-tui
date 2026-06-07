@@ -23,7 +23,7 @@ impl Config {
     /// Get default config path to save/load from
     pub fn get_config_path() -> PathBuf {
         if let Some(home) = dirs::home_dir() {
-            return home.join(".config").join("todo-tui").join("config.toml");
+            return home.join(".config").join("toodles").join("config.toml");
         }
 
         PathBuf::from("config.toml")
@@ -96,7 +96,7 @@ mod tests {
     fn should_return_default_data_path() {
         let path: PathBuf = Config::get_config_path();
 
-        assert!(path.to_string_lossy().contains("todo-tui"));
+        assert!(path.to_string_lossy().contains("toodles"));
         assert!(path.to_string_lossy().contains("config.toml"));
         assert!(path.is_absolute());
     }

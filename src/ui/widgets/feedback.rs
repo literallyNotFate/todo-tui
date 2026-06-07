@@ -26,9 +26,7 @@ impl FeedbackWidget {
     pub fn new(kind: FeedbackKind) -> Self {
         Self { kind }
     }
-}
 
-impl FeedbackWidget {
     /// Feedback rendering
     pub fn render(self, ctx: &mut RenderContext, area: Rect) {
         let result_area: Rect = center(area, 50, 50);
@@ -61,7 +59,7 @@ impl FeedbackWidget {
             .title(" Tasks ")
             .bg(palette.bg)
             .title_top(
-                Line::styled(" todo-tui ", Style::default().fg(ctx.color(palette.fg)))
+                Line::styled(" toodles ", Style::default().fg(ctx.color(palette.fg)))
                     .right_aligned(),
             )
             .title_bottom(hotkeys)

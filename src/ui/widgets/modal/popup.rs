@@ -1,6 +1,6 @@
 use crate::{
     core::Action,
-    models::TodoDetails,
+    models::TaskDetails,
     state::AdaptiveScroll,
     theme::ThemePalette,
     ui::{
@@ -19,7 +19,7 @@ use ratatui::{
 #[derive(Debug, Clone)]
 pub enum PopupContent {
     Message(String),
-    Task(TodoDetails),
+    Task(TaskDetails),
     Help(Vec<Line<'static>>),
 }
 
@@ -81,7 +81,7 @@ impl Popup {
     }
 
     /// Creating task details popup template
-    pub fn details(title: String, details: TodoDetails) -> Self {
+    pub fn details(title: String, details: TaskDetails) -> Self {
         Self {
             title,
             content: PopupContent::Task(details),
@@ -395,7 +395,7 @@ impl Modal for Popup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::UIConfig, models::Todo, theme::ThemeName};
+    use crate::{config::UIConfig, models::Task, theme::ThemeName};
 
     fn create_helper_frame() -> Rect {
         Rect::new(0, 0, 100, 100)
@@ -436,8 +436,8 @@ mod tests {
 
     #[test]
     fn should_create_task_details_popup() {
-        let todo = Todo::new("Task 1", "Desc 1", None);
-        let details = TodoDetails::from(&todo, &UIConfig::default());
+        let task = Task::new("Task 1", "Desc 1", None);
+        let details = TaskDetails::from(&task, &UIConfig::default());
         let popup: Popup = Popup::details("Test".to_string(), details);
 
         assert_eq!(popup.kind, PopupKind::Info);
@@ -489,9 +489,9 @@ mod tests {
 
     #[test]
     fn should_handle_scroll_input() {
-        let todo = Todo::new("T", "D", None);
+        let task = Task::new("T", "D", None);
         let config = UIConfig::default();
-        let details = TodoDetails::from(&todo, &config);
+        let details = TaskDetails::from(&task, &config);
         let mut popup = Popup::details("Test".to_string(), details);
 
         assert_eq!(popup.scroll.current.get(), 0);

@@ -1,4 +1,4 @@
-use super::Todo;
+use super::Task;
 use serde::{Deserialize, Serialize};
 
 /// Selected filter enum
@@ -16,16 +16,16 @@ pub enum Filter {
 }
 
 impl Filter {
-    pub fn count(&self, todos: &[Todo], query: &str) -> usize {
-        self.apply(todos, query).len()
+    pub fn count(&self, tasks: &[Task], query: &str) -> usize {
+        self.apply(tasks, query).len()
     }
 
-    pub fn apply<'a>(&self, todos: &'a [Todo], query: &str) -> Vec<&'a Todo> {
+    pub fn apply<'a>(&self, tasks: &'a [Task], query: &str) -> Vec<&'a Task> {
         let query_lower: String = query.to_lowercase().trim().to_string();
         let is_empty: bool = query_lower.is_empty();
         let today = chrono::Local::now().date_naive();
 
-        todos
+        tasks
             .iter()
             .filter(|t| {
                 if !t.matches_filter(self, &today) {
@@ -41,21 +41,21 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::todo::Priority;
+    use crate::models::task::Priority;
     use chrono::{Duration, Utc};
 
-    fn setup_test_todos() -> Vec<Todo> {
+    fn setup_test_tasks() -> Vec<Task> {
         vec![
-            Todo::new("Task 1", "Desc", Some(Priority::Low)),
+            Task::new("Task 1", "Desc", Some(Priority::Low)),
             {
-                let mut t = Todo::new("Task 2", "Desc", Some(Priority::Medium));
+                let mut t = Task::new("Task 2", "Desc", Some(Priority::Medium));
                 t.completed = true;
                 t.created_at = Utc::now() - Duration::days(1);
                 t
             },
-            Todo::new("Task 3", "Desc", Some(Priority::High)),
+            Task::new("Task 3", "Desc", Some(Priority::High)),
             {
-                let mut t = Todo::new("Task 4", "Desc", Some(Priority::High));
+                let mut t = Task::new("Task 4", "Desc", Some(Priority::High));
                 t.completed = true;
                 t.created_at = Utc::now() - Duration::weeks(2);
                 t
@@ -64,30 +64,30 @@ mod tests {
     }
 
     #[test]
-    fn should_filter_todos_based_on_enum_value() {
-        let todos = setup_test_todos();
-        assert_eq!(Filter::All.count(&todos, ""), 4);
+    fn should_filter_tasks_based_on_enum_value() {
+        let tasks = setup_test_tasks();
+        assert_eq!(Filter::All.count(&tasks, ""), 4);
 
-        let active = Filter::Active.apply(&todos, "");
+        let active = Filter::Active.apply(&tasks, "");
         assert_eq!(active.len(), 2);
         assert!(active.iter().all(|t| !t.completed));
 
-        let completed = Filter::Completed.apply(&todos, "");
+        let completed = Filter::Completed.apply(&tasks, "");
         assert_eq!(completed.len(), 2);
         assert!(completed.iter().all(|t| t.completed));
 
-        let high = Filter::HighPriority.apply(&todos, "");
+        let high = Filter::HighPriority.apply(&tasks, "");
         assert_eq!(high.len(), 2);
         assert!(high.iter().all(|t| matches!(t.priority, Priority::High)));
 
-        let today = Filter::Today.apply(&todos, "");
+        let today = Filter::Today.apply(&tasks, "");
         assert_eq!(today.len(), 2);
     }
 
     #[test]
-    fn should_filter_todos_based_on_search_query() {
-        let todos = setup_test_todos();
-        let results = Filter::Active.apply(&todos, "Task 4");
+    fn should_filter_tasks_based_on_search_query() {
+        let tasks = setup_test_tasks();
+        let results = Filter::Active.apply(&tasks, "Task 4");
 
         assert_eq!(
             results.len(),
@@ -95,7 +95,7 @@ mod tests {
             "Should not find completed tasks when Active filter is on"
         );
 
-        let high_results = Filter::HighPriority.apply(&todos, "Task");
+        let high_results = Filter::HighPriority.apply(&tasks, "Task");
         assert!(
             high_results
                 .iter()

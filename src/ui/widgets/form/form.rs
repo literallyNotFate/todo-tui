@@ -1,5 +1,5 @@
 use crate::{
-    models::{Priority, Todo},
+    models::{Priority, Task},
     theme::ThemePalette,
     ui::{Field, FieldType, RenderContext, WidgetResponse, widgets::input::Input},
 };
@@ -36,7 +36,7 @@ impl Form {
     }
 
     /// Creates new form (for update) with id
-    pub fn from(task: &Todo) -> Self {
+    pub fn from(task: &Task) -> Self {
         Self {
             fields: vec![
                 Field::new("title", FieldType::text(" Title ", &task.title)),
@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn should_create_form_with_task() {
-        let task = Todo::new("Buy milk", "At the store", Some(Priority::High));
+        let task = Task::new("Buy milk", "At the store", Some(Priority::High));
         let form = Form::from(&task);
 
         assert_eq!(form.task_id, Some(task.id));
@@ -494,7 +494,7 @@ mod tests {
 
     #[test]
     fn should_return_all_data_on_update() {
-        let task = Todo::new("Old Title", "", None);
+        let task = Task::new("Old Title", "", None);
         let task_id: Uuid = task.id;
         let mut form = Form::from(&task);
 

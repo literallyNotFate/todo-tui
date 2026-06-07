@@ -6,7 +6,7 @@ pub mod storage;
 
 pub use actions::Action;
 pub use autosave::Autosave;
-pub use errors::{ApplicationError, KeyMapError, StorageError, TodoError};
+pub use errors::{ApplicationError, KeyMapError, StorageError, TaskError};
 pub use sorting::{Sort, SortBy, SortOrder};
 pub use storage::Storage;
 
@@ -45,7 +45,7 @@ pub fn init_logger(path: &Path, level: LogLevel) {
     }
 
     log::info!(
-        "Logger for 'todo-tui' initialized on {} {} with log level: {:?}",
+        "Logger for 'toodles' initialized on {} {} with log level: {:?}",
         std::env::consts::OS,
         std::env::consts::ARCH,
         level

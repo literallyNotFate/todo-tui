@@ -10,14 +10,14 @@ pub use ui_state::UIState;
 use crate::{
     common::default_bool_is_true,
     core::{ApplicationError, FocusArea, Selectable},
-    models::{Filter, Todo},
+    models::{Filter, Task},
     ui::{
         TextInput,
         widgets::modal::{Modal, ModalAction},
     },
 };
 
-/// Service response (data or TodoError/StorageError)
+/// Service response (data or TaskError/StorageError)
 pub type ApplicationResult<T> = Result<T, ApplicationError>;
 
 /// Active modal widget with modal itself and its action like save etc.
@@ -26,16 +26,16 @@ pub struct ActiveModal {
     pub action: ModalAction,
 }
 
-/// What is being stored in todos.json (data with saved UI state)
+/// What is being stored in tasks.json (data with saved UI state)
 #[derive(Serialize, Deserialize, Default)]
 pub struct TasksStateData {
-    pub todos: Vec<Todo>,
+    pub tasks: Vec<Task>,
     pub session: Session,
 }
 
 impl TasksStateData {
-    pub fn new(todos: Vec<Todo>, session: Session) -> Self {
-        Self { todos, session }
+    pub fn new(tasks: Vec<Task>, session: Session) -> Self {
+        Self { tasks, session }
     }
 }
 
