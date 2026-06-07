@@ -149,15 +149,15 @@ impl<'a> ApplicationController<'a> {
     }
 
     /// Handle saving all (tasks + config) on Ctrl+S
-    pub fn dispatch_save(&mut self) -> bool {
-        self.config.update_from_ui(self.ui);
+    pub fn dispatch_save(&mut self, storage: &mut Storage) -> bool {
+        self.config.update_from_ui(&self.ui);
 
         let current_id =
             self.state
                 .selected_id(&self.state.tasks, &self.ui.filter, &self.ui.search_query());
-        let session = Session::from_state(self.ui, current_id);
+        let session: Session = Session::from_state(&self.ui, current_id);
 
-        match Storage::save(&self.state.tasks, session, None, &self.config.storage) {
+        match storage.save(&self.state.tasks, session) {
             Ok(msg) => {
                 self.state.mark_saved();
                 let _ = self.config.save(None);
@@ -243,11 +243,10 @@ impl<'a> ApplicationController<'a> {
 mod tests {
     use super::*;
     use crate::{
-        config::StorageConfig,
         core::{Selectable, Sort, SortBy, SortOrder},
         ui::Notification,
     };
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use tempdir::TempDir;
 
     fn setup() -> (ApplicationState, UIState, Config, KeyMaps) {
@@ -257,18 +256,6 @@ mod tests {
             Config::default(),
             KeyMaps::default(),
         )
-    }
-
-    fn mock_dispatch_save(
-        state: &mut ApplicationState,
-        ui: &mut UIState,
-        path: &Path,
-        config: &StorageConfig,
-    ) {
-        let selected_id = state.selected_id(&state.tasks, &ui.filter, &ui.search_query());
-        let session = Session::from_state(ui, selected_id);
-        let result = Storage::save(&state.tasks, session, Some(path), config);
-        ui.show_result_popup(result);
     }
 
     #[test]
@@ -344,6 +331,7 @@ mod tests {
             note.message
         );
     }
+
     #[test]
     fn should_handle_empty_title_error_on_update() {
         let (mut state, mut ui, mut config, keymaps) = setup();
@@ -472,11 +460,20 @@ mod tests {
     #[test]
     fn should_trigger_popup_on_save() {
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("toodles.db");
 
-        let (mut state, mut ui, config, _) = setup();
+        let (mut state, mut ui, mut config, keymaps) = setup();
 
-        mock_dispatch_save(&mut state, &mut ui, &path, &config.storage);
-        assert!(ui.modal.is_some());
+        let mut storage = Storage::init(Some(&path), &config.storage).unwrap();
+        state.tasks.push(Task::new("Test Save", "", None));
+
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
+        let saved = ctrl.dispatch_save(&mut storage);
+
+        assert!(saved);
+        assert!(
+            ui.modal.is_some(),
+            "Modal popup should be triggered on successful save"
+        );
     }
 }

@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn should_render_only_saved_status_when_no_changes() {
         let temp_dir = TempDir::new("task_test").unwrap();
-        let path = temp_dir.path().join("tasks.json");
+        let path = temp_dir.path().join("test_tasks.db");
 
         let mut state = ApplicationState::default();
         let ui = UIState::default();
@@ -214,12 +214,8 @@ mod tests {
         state.tasks.clear();
         let session = Session::from_state(&ui, None);
 
-        let _ = Storage::save(
-            &state.tasks,
-            session,
-            Some(&path),
-            &StorageConfig::default(),
-        );
+        let mut storage: Storage = Storage::init(Some(&path), &StorageConfig::default()).unwrap();
+        let _ = storage.save(&state.tasks, session);
         state.mark_saved();
 
         let ctx = RenderContext::mock(&ui, &keymaps);

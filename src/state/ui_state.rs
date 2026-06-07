@@ -421,7 +421,7 @@ mod tests {
         assert_eq!(ui.modal.as_ref().unwrap().action, ModalAction::None);
 
         ui.close_modal();
-        let error: StorageError = StorageError::JSON {
+        let error: StorageError = StorageError::Database {
             path: PathBuf::default(),
             src: "Some error".to_string(),
         };

@@ -26,7 +26,18 @@ pub enum ApplicationMode {
 use serde::{Deserialize, Serialize};
 
 /// Which area of menu is being selected
-#[derive(Default, Serialize, Deserialize, PartialEq, Debug, Clone, Copy, strum::EnumIter)]
+#[derive(
+    Default,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Debug,
+    Clone,
+    Copy,
+    strum::EnumIter,
+    strum::Display,
+    strum::EnumString,
+)]
 pub enum FocusArea {
     #[default]
     Sidebar,

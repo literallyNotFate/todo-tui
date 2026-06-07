@@ -148,6 +148,7 @@ impl TaskDetails {
     Ord,
     strum::EnumIter,
     strum::Display,
+    strum::EnumString,
 )]
 #[strum(serialize_all = "PascalCase")]
 pub enum Priority {

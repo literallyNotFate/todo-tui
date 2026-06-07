@@ -38,11 +38,11 @@ pub enum StorageError {
     #[error("IO error at {path}: {src}")]
     IO { path: PathBuf, src: String },
 
-    #[error("Failed to parse JSON at {path}: {src}")]
-    JSON { path: PathBuf, src: String },
-
     #[error("Failed to parse TOML at {path}: {src}")]
     TOML { path: PathBuf, src: String },
+
+    #[error("Database error at {path}: {src}")]
+    Database { path: PathBuf, src: String },
 
     #[error("Failed to determine {context} directory: check your OS environment variables")]
     Environment { context: String },
@@ -134,23 +134,6 @@ mod tests {
     }
 
     #[test]
-    fn should_return_text_for_json_error() {
-        let path = PathBuf::from("data.json");
-        let error = StorageError::JSON {
-            path: path.clone(),
-            src: "unexpected end of file".to_string(),
-        };
-
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
-
-        assert_eq!(
-            s,
-            "Failed to parse JSON at data.json: unexpected end of file"
-        );
-    }
-
-    #[test]
     fn should_return_text_for_toml_error() {
         let path = PathBuf::from("theme.toml");
         let error = StorageError::TOML {
@@ -165,6 +148,20 @@ mod tests {
             s,
             "Failed to parse TOML at theme.toml: invalid color format"
         );
+    }
+
+    #[test]
+    fn should_return_text_for_database_error() {
+        let path = PathBuf::from("tasks.db");
+        let error = StorageError::Database {
+            path: path.clone(),
+            src: "cannot parse table".to_string(),
+        };
+
+        let mut s = String::new();
+        write!(&mut s, "{}", error).unwrap();
+
+        assert_eq!(s, "Database error at tasks.db: cannot parse table");
     }
 
     #[test]

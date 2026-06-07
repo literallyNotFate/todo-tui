@@ -2,7 +2,7 @@ use crate::{
     config::{Config, KeyMaps},
     core::{ApplicationError, ApplicationMode, Autosave, FocusArea, Storage},
     events::EventHandler,
-    state::{ApplicationResult, ApplicationState, Session, UIState},
+    state::{ApplicationResult, ApplicationState, Session, TasksStateData, UIState},
     ui::Renderer,
 };
 use ratatui::{
@@ -25,6 +25,7 @@ pub struct Application {
     pub mode: ApplicationMode,
     pub autosave: Autosave,
 
+    pub storage: Storage,
     pub config: Config,
     pub keymaps: KeyMaps,
     pub size: (u16, u16),
@@ -35,8 +36,13 @@ pub struct Application {
 impl Application {
     pub fn new(config: Config, config_error: Option<ApplicationError>) -> Self {
         let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
-        let storage_data = Storage::load(None, &config.storage).unwrap_or_default();
         let (keymaps, keymaps_error) = Self::load_keymaps();
+
+        let storage: Storage = Storage::init(None, &config.storage).unwrap_or_else(|e| {
+            log::error!("Failed to initialize SQLite storage: {}", e);
+            panic!("Critical storage error: {}", e);
+        });
+        let storage_data: TasksStateData = storage.load().unwrap_or_default();
 
         let mut ui: UIState = UIState::new(config.ui.clone());
         storage_data.session.apply_to(&mut ui);
@@ -51,6 +57,7 @@ impl Application {
             renderer: Renderer,
             keymaps,
             size,
+            storage,
             ticks_count: 0,
         };
 
@@ -164,13 +171,14 @@ impl Application {
         }
     }
 
+    /// Saves current application state to SQLite database
     pub fn save_all(&mut self) -> ApplicationResult<()> {
         let current_id =
             self.data
                 .selected_id(&self.data.tasks, &self.ui.filter, &self.ui.search_query());
 
-        let session = Session::from_state(&self.ui, current_id);
-        Storage::save(&self.data.tasks, session, None, &self.config.storage)?;
+        let session: Session = Session::from_state(&self.ui, current_id);
+        self.storage.save(&self.data.tasks, session)?;
 
         self.data.mark_saved();
         Ok(())
@@ -246,6 +254,16 @@ impl Application {
 
 impl Default for Application {
     fn default() -> Self {
+        let config: Config = Config::default();
+        let storage: Storage =
+            Storage::init(Some(&std::path::PathBuf::from(":memory:")), &config.storage)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to initialize default in-memory storage for Application: {}",
+                        e
+                    );
+                });
+
         Self {
             data: ApplicationState::default(),
             ui: UIState::default(),
@@ -254,8 +272,9 @@ impl Default for Application {
             renderer: Renderer,
             autosave: Autosave::new(false),
             size: (80, 24),
-            config: Config::default(),
+            config,
             keymaps: KeyMaps::default(),
+            storage,
             ticks_count: 0,
         }
     }
@@ -270,13 +289,36 @@ mod tests {
         ui::Notification,
     };
     use std::{
-        path::{Path, PathBuf},
+        path::PathBuf,
         thread::sleep,
         time::{Duration, Instant},
     };
     use tempdir::TempDir;
 
-    fn mock_tick(app: &mut Application, path: Option<&Path>) {
+    fn create_test_app() -> (Application, TempDir) {
+        let temp_dir: TempDir = TempDir::new("app_structure_test").unwrap();
+        let db_path: PathBuf = temp_dir.path().join("test_app.db");
+        let config: Config = Config::default();
+        let storage: Storage = Storage::init(Some(&db_path), &config.storage).unwrap();
+
+        let app = Application {
+            data: ApplicationState::default(),
+            ui: UIState::default(),
+            running: true,
+            renderer: Renderer,
+            mode: ApplicationMode::Navigation,
+            autosave: Autosave::new(false),
+            config,
+            keymaps: KeyMaps::default(),
+            size: (100, 100),
+            storage,
+            ticks_count: 0,
+        };
+
+        (app, temp_dir)
+    }
+
+    fn mock_tick(app: &mut Application) {
         let has_changes: bool = app.data.any_unsaved_changes();
 
         if app.autosave.enabled {
@@ -286,7 +328,7 @@ mod tests {
 
             let session = Session::from_state(&app.ui, None);
             if has_changes && app.autosave.should_save(has_changes) {
-                if Storage::save(&app.data.tasks, session, path, &app.config.storage).is_ok() {
+                if app.storage.save(&app.data.tasks, session).is_ok() {
                     app.data.mark_saved();
                     app.autosave.reset_timer();
                 }
@@ -298,7 +340,7 @@ mod tests {
 
     #[test]
     fn should_create_application() {
-        let app = Application::default();
+        let (app, _tmp) = create_test_app();
 
         assert!(app.running, "running should be true by default");
         assert_eq!(app.data.tasks.len(), 0, "tasks should be empty");
@@ -311,7 +353,7 @@ mod tests {
 
     #[test]
     fn should_test_tick_expires_notification() {
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
         let old_time = Instant::now() - Duration::from_secs(10);
 
         let mut notification: Notification = Notification::success("Test");
@@ -328,7 +370,7 @@ mod tests {
 
     #[test]
     fn should_select_none_if_empty_with_sync_ui() {
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
         app.data.select_state.select(Some(5));
         app.data.tasks.clear();
 
@@ -343,7 +385,7 @@ mod tests {
 
     #[test]
     fn should_adjust_out_of_bounds_index_with_sync_ui() {
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
 
         app.data.tasks.push(Task::new("1", "", None));
         app.data.tasks.push(Task::new("2", "", None));
@@ -363,7 +405,7 @@ mod tests {
 
     #[test]
     fn should_initialize_selection_with_sync_ui() {
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
 
         app.data.tasks.push(Task::new("Task", "", None));
         app.data.select_state.select(None);
@@ -379,7 +421,7 @@ mod tests {
 
     #[test]
     fn should_adjust_selection_on_filter_change_with_sync_ui() {
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
 
         app.data.tasks.push(Task::new("Active", "", None));
         app.data.tasks.push(Task::new("Done", "", None));
@@ -395,10 +437,7 @@ mod tests {
 
     #[test]
     fn should_reset_timer_on_first_change_transition() {
-        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
-
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
         app.autosave.enabled = true;
         app.autosave.interval = Duration::from_secs(30);
         app.autosave.last_tick_had_changes = false;
@@ -407,7 +446,7 @@ mod tests {
         app.data.mark_as_dirty();
 
         let time_before = app.autosave.time_until_next_save();
-        mock_tick(&mut app, Some(&path));
+        mock_tick(&mut app);
 
         assert_eq!(time_before, 30);
         assert!(app.autosave.last_tick_had_changes);
@@ -415,25 +454,21 @@ mod tests {
 
     #[test]
     fn should_reset_flow_after_undo() {
-        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
-
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
         app.autosave.enabled = true;
 
         app.data.tasks.push(Task::new("Initial", "", None));
-        let _ = Storage::save(
-            &app.data.tasks,
-            Session::default(),
-            Some(&path),
-            &app.config.storage,
+        assert!(
+            app.storage
+                .save(&app.data.tasks, Session::default())
+                .is_ok()
         );
         app.data.mark_saved();
         assert!(!app.data.any_unsaved_changes());
 
         app.data.tasks.push(Task::new("Change", "", None));
         app.data.mark_as_dirty();
-        mock_tick(&mut app, Some(&path));
+        mock_tick(&mut app);
         assert!(app.autosave.last_tick_had_changes);
 
         app.data.tasks.pop();
@@ -444,7 +479,7 @@ mod tests {
             "Data should be equal to saved state"
         );
 
-        mock_tick(&mut app, Some(&path));
+        mock_tick(&mut app);
         assert!(
             !app.autosave.last_tick_had_changes,
             "Flag should reset when data is clean"
@@ -452,17 +487,14 @@ mod tests {
 
         app.data.tasks.push(Task::new("New change", "", None));
         app.data.mark_as_dirty();
-        mock_tick(&mut app, Some(&path));
+        mock_tick(&mut app);
 
         assert_eq!(app.autosave.time_until_next_save(), 30);
     }
 
     #[test]
     fn should_go_autosave_full_cycle() {
-        let temp_dir = TempDir::new("task_test").unwrap();
-        let path = temp_dir.path().join("tasks.json");
-
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
         app.autosave.enabled = true;
         app.autosave.interval = Duration::from_millis(20);
         app.autosave.debounce = Duration::from_millis(20);
@@ -470,27 +502,27 @@ mod tests {
         app.data.tasks.push(Task::new("Test Task", "", None));
         app.data.mark_as_dirty();
 
-        mock_tick(&mut app, Some(&path));
+        mock_tick(&mut app);
 
         sleep(Duration::from_millis(30));
         app.autosave.register_activity();
-        mock_tick(&mut app, Some(&path));
+        mock_tick(&mut app);
 
         assert!(app.data.any_unsaved_changes(), "Still debouncing");
 
         sleep(Duration::from_millis(30));
-        mock_tick(&mut app, Some(&path));
+        mock_tick(&mut app);
 
         assert!(!app.data.any_unsaved_changes(), "Saved successfully");
-        assert!(path.exists());
+
+        let loaded = app.storage.load().unwrap();
+        assert_eq!(loaded.tasks.len(), 1);
+        assert_eq!(loaded.tasks[0].title, "Test Task");
     }
 
     #[test]
     fn should_do_nothing_if_autosave_disabled() {
-        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
-
-        let mut app = Application::default();
+        let (mut app, _tmp) = create_test_app();
         app.autosave.enabled = false;
         app.autosave.interval = Duration::from_millis(0);
 
@@ -498,12 +530,14 @@ mod tests {
         app.data.mark_as_dirty();
 
         sleep(Duration::from_millis(5));
-        mock_tick(&mut app, Some(&path));
+        mock_tick(&mut app);
 
         assert!(app.data.any_unsaved_changes());
+
+        let loaded = app.storage.load().unwrap();
         assert!(
-            !path.exists(),
-            "File should NOT be created when autosave is disabled"
+            loaded.tasks.is_empty(),
+            "Storage should NOT be updated when autosave is disabled"
         );
     }
 }

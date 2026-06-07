@@ -3,7 +3,16 @@ use serde::{Deserialize, Serialize};
 
 /// Selected filter enum
 #[derive(
-    Default, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, strum::EnumIter, strum::Display,
+    Default,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    strum::EnumIter,
+    strum::Display,
+    strum::EnumString,
 )]
 #[strum(serialize_all = "title_case")]
 pub enum Filter {

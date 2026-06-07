@@ -25,6 +25,7 @@ toml = { version = "1.0.3", features = ["parse", "display"] }
 log = "0.4"
 simplelog = "0.12"
 strum = { version = "0.28", features = ["derive"] }
+rusqlite = { version = "0.32.0", features = ["bundled"] }
 
 [features]
 default = ["serde"]

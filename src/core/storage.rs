@@ -1,32 +1,35 @@
 use crate::{
     config::StorageConfig,
-    core::StorageError,
-    models::Task,
+    core::{Selectable, StorageError},
+    models::{Priority, Task},
     state::{ApplicationResult, Session, TasksStateData},
 };
+use rusqlite::{Connection, params};
 use std::{
-    fs::{self, File},
-    io::{BufWriter, Write},
+    fs::{self},
     path::{Path, PathBuf},
 };
 
-/// Storage structure for all task fs operations
-pub struct Storage;
+/// Storage structure for all task SQLite database operations
+pub struct Storage {
+    conn: Connection,
+    path: PathBuf,
+}
 
 impl Storage {
-    /// Get default data path to save/load from
+    /// Get default database path to save/load from
     pub fn get_data_path() -> ApplicationResult<PathBuf> {
         let path: ApplicationResult<PathBuf> = dirs::data_dir()
-            .ok_or(
+            .ok_or_else(|| {
                 StorageError::Environment {
                     context: "data".to_string(),
                 }
-                .into(),
-            )
-            .map(|dir| dir.join("toodles").join("tasks.json"));
+                .into()
+            })
+            .map(|dir| dir.join("toodles").join("toodles.db"));
 
         if let Ok(ref p) = path {
-            log::debug!("Data path resolved to: {:?}", p);
+            log::debug!("Database path resolved to: {:?}", p);
         }
 
         path
@@ -35,12 +38,12 @@ impl Storage {
     /// Get default logging path
     pub fn get_log_path() -> ApplicationResult<PathBuf> {
         let path: ApplicationResult<PathBuf> = dirs::data_dir()
-            .ok_or(
+            .ok_or_else(|| {
                 StorageError::Environment {
                     context: "log".to_string(),
                 }
-                .into(),
-            )
+                .into()
+            })
             .map(|dir| dir.join("toodles").join("toodles.log"));
 
         if let Ok(ref p) = path {
@@ -50,19 +53,13 @@ impl Storage {
         path
     }
 
-    /// Save tasks and UI Session to user path/default path
-    pub fn save(
-        tasks: &[Task],
-        session: Session,
-        path: Option<&Path>,
-        config: &StorageConfig,
-    ) -> ApplicationResult<String> {
+    /// Initializes Storage: creates folders, makes backups (if needed) and opens connection
+    pub fn init(path: Option<&Path>, config: &StorageConfig) -> ApplicationResult<Self> {
         let p: PathBuf = match path {
             Some(p) => p.to_path_buf(),
             None => Self::get_data_path()?,
         };
 
-        log::debug!("Starting atomic save of tasks and UI session to {:?}", p);
         if let Some(parent) = p.parent() {
             fs::create_dir_all(parent).map_err(|e| StorageError::IO {
                 path: p.clone(),
@@ -70,118 +67,263 @@ impl Storage {
             })?;
         }
 
-        let mut temp_path: PathBuf = p.clone();
-        temp_path.set_extension("tmp");
-
-        let data: TasksStateData = TasksStateData::new(tasks.to_vec(), session);
-
-        let result = (|| -> Result<(), StorageError> {
-            let file = File::create(&temp_path).map_err(|e| StorageError::IO {
-                path: p.clone(),
-                src: e.to_string(),
-            })?;
-            let mut writer = BufWriter::new(file);
-
-            serde_json::to_writer_pretty(&mut writer, &data).map_err(|e| StorageError::JSON {
-                path: p.clone(),
-                src: e.to_string(),
-            })?;
-
-            writer.flush().map_err(|e| StorageError::IO {
-                path: p.clone(),
-                src: e.to_string(),
-            })?;
-
-            writer.get_ref().sync_all().map_err(|e| StorageError::IO {
-                path: p.clone(),
-                src: e.to_string(),
-            })?;
-
-            Ok(())
-        })();
-
-        if let Err(e) = result {
-            log::error!("Failed to write temporary file {:?}: {}", temp_path, e);
-            let _ = fs::remove_file(&temp_path);
-            return Err(e.into());
-        }
-
         if config.backup_enabled && p.exists() {
-            let mut backup_path = p.clone();
-            backup_path.set_extension("json.bak");
-            log::debug!("Creating backup at {:?}", backup_path);
-            let _ = fs::rename(&p, backup_path);
+            let mut backup_path: PathBuf = p.clone();
+            backup_path.set_extension("db.bak");
+            log::debug!("Creating database backup at {:?}", backup_path);
+            let _ = fs::copy(&p, backup_path);
         }
+
+        log::debug!("Opening SQLite connection at {:?}", p);
+        let conn: Connection = Connection::open(&p).map_err(|e| StorageError::Database {
+            path: p.clone(),
+            src: e.to_string(),
+        })?;
+
+        let storage = Self { conn, path: p };
+        storage.create_tables()?;
+
+        Ok(storage)
+    }
+
+    /// Save tasks and UI Session to the SQLite database
+    pub fn save(&mut self, tasks: &[Task], session: Session) -> ApplicationResult<String> {
+        log::debug!("Starting database transaction to save tasks and UI session");
+
+        let tx = self
+            .conn
+            .transaction()
+            .map_err(|e| StorageError::Database {
+                path: self.path.clone(),
+                src: e.to_string(),
+            })?;
+
+        let mut insert_todo_stmt = tx.prepare(
+            "INSERT INTO tasks (id, title, description, completed, priority, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                description = excluded.description,
+                completed = excluded.completed,
+                priority = excluded.priority,
+                updated_at = excluded.updated_at"
+        ).map_err(|e| StorageError::Database { path: self.path.clone(), src: e.to_string() })?;
+
+        for todo in tasks {
+            insert_todo_stmt
+                .execute(params![
+                    todo.id.to_string(),
+                    todo.title,
+                    todo.description,
+                    todo.completed,
+                    todo.priority.to_string(),
+                    todo.created_at.to_rfc3339(),
+                    todo.updated_at.to_rfc3339(),
+                ])
+                .map_err(|e| StorageError::Database {
+                    path: self.path.clone(),
+                    src: e.to_string(),
+                })?;
+        }
+        drop(insert_todo_stmt);
+
+        if !tasks.is_empty() {
+            let ids_placeholder: Vec<String> =
+                tasks.iter().map(|t| format!("'{}'", t.id)).collect();
+            let query = format!(
+                "DELETE FROM tasks WHERE id NOT IN ({})",
+                ids_placeholder.join(",")
+            );
+            tx.execute(&query, []).map_err(|e| StorageError::Database {
+                path: self.path.clone(),
+                src: e.to_string(),
+            })?;
+        } else {
+            tx.execute("DELETE FROM tasks", [])
+                .map_err(|e| StorageError::Database {
+                    path: self.path.clone(),
+                    src: e.to_string(),
+                })?;
+        }
+
+        tx.execute(
+            "INSERT INTO session (id, last_selected_id, last_focus, last_filter, last_query, description_scroll_pos, hotkeys_scroll_pos, use_system_theme)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(id) DO UPDATE SET
+                last_selected_id = excluded.last_selected_id,
+                last_focus = excluded.last_focus,
+                last_filter = excluded.last_filter,
+                last_query = excluded.last_query,
+                description_scroll_pos = excluded.description_scroll_pos,
+                hotkeys_scroll_pos = excluded.hotkeys_scroll_pos,
+                use_system_theme = excluded.use_system_theme",
+            params![
+                session.last_selected_id.map(|id| id.to_string()),
+                session.last_focus.to_string(),
+                session.last_filter.to_string(),
+                session.last_query,
+                session.description_scroll_pos,
+                session.hotkeys_scroll_pos,
+                session.use_system_theme,
+            ],
+        ).map_err(|e| StorageError::Database { path: self.path.clone(), src: e.to_string() })?;
+
+        tx.commit().map_err(|e| StorageError::Database {
+            path: self.path.clone(),
+            src: e.to_string(),
+        })?;
 
         log::info!(
-            "Successfully prepared storage data: {} tasks, filter: {:?}, focus: {:?}",
-            data.tasks.len(),
-            data.session.last_filter,
-            data.session.last_focus
+            "Successfully saved storage data: {} tasks, filter: {:?}, focus: {:?}",
+            tasks.len(),
+            session.last_filter,
+            session.last_focus
         );
 
-        fs::rename(&temp_path, &p).map_err(|err| {
-            log::error!("Atomic rename failed: {}", err);
-            StorageError::IO {
-                path: p,
-                src: err.to_string(),
-            }
-        })?;
-
-        Ok("Data was saved".into())
+        Ok("Data was successfully save to the database!".into())
     }
 
-    /// Load tasks and UI Session from a user path/default path
-    pub fn load(path: Option<&Path>, config: &StorageConfig) -> ApplicationResult<TasksStateData> {
-        let p: PathBuf = match path {
-            Some(p) => p.to_path_buf(),
-            None => Self::get_data_path()?,
-        };
+    /// Load tasks and session info from the SQLite database
+    pub fn load(&self) -> ApplicationResult<TasksStateData> {
+        log::debug!(
+            "Loading tasks and session from SQLite database at {:?}",
+            self.path
+        );
 
-        if p.exists() {
-            match Self::load_from_path(&p) {
-                Ok(data) => {
-                    log::info!(
-                        "Loaded {} tasks and session memory from {:?}",
-                        data.tasks.len(),
-                        p
-                    );
-                    return Ok(data);
-                }
-                Err(e) => {
-                    log::warn!("Main data file at {:?} is corrupted: {}", p, e);
-                    if !config.backup_enabled {
-                        return Err(e);
-                    }
-                }
-            }
+        let mut stmt = self.conn
+            .prepare("SELECT id, title, description, completed, priority, created_at, updated_at FROM tasks")
+            .map_err(|e| StorageError::Database { path: self.path.clone(), src: e.to_string() })?;
+
+        let task_iter = stmt
+            .query_map([], |row| {
+                let id_str: String = row.get(0)?;
+                let title_str: String = row.get(1)?;
+                let priority_str: String = row.get(4)?;
+                let created_str: String = row.get(5)?;
+                let updated_str: String = row.get(6)?;
+
+                let id = uuid::Uuid::parse_str(&id_str).unwrap_or_else(|_| uuid::Uuid::new_v4());
+                let priority = priority_str.parse().unwrap_or(Priority::Low);
+
+                let created_at = chrono::DateTime::parse_from_rfc3339(&created_str)
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|_| chrono::Utc::now());
+
+                let updated_at = chrono::DateTime::parse_from_rfc3339(&updated_str)
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|_| chrono::Utc::now());
+
+                let title_lower: String = title_str.to_lowercase();
+                Ok(Task {
+                    id,
+                    title: title_str,
+                    description: row.get(2)?,
+                    completed: row.get(3)?,
+                    priority,
+                    created_at,
+                    updated_at,
+                    title_lower,
+                })
+            })
+            .map_err(|e| StorageError::Database {
+                path: self.path.clone(),
+                src: e.to_string(),
+            })?;
+
+        let mut tasks = Vec::new();
+        for task in task_iter {
+            tasks.push(task.map_err(|e| StorageError::Database {
+                path: self.path.clone(),
+                src: e.to_string(),
+            })?);
         }
 
-        if config.backup_enabled {
-            let mut backup = p.clone();
-            backup.set_extension("json.bak");
-
-            if backup.exists() {
-                log::info!("Attempting to restore from backup: {:?}", backup);
-                return Self::load_from_path(&backup);
-            }
-        }
-
-        log::info!("No data file found, initializing default session and empty list");
-        Ok(TasksStateData::default())
+        let session: Session = self.load_session()?.unwrap_or_default();
+        log::info!(
+            "Loaded {} tasks and session memory from SQLite",
+            tasks.len()
+        );
+        Ok(TasksStateData::new(tasks, session))
     }
 
-    /// Helper function to load from path (not to duplicate code)
-    fn load_from_path(p: &Path) -> ApplicationResult<TasksStateData> {
-        let file = File::open(p).map_err(|err| StorageError::IO {
-            path: p.to_owned(),
-            src: err.to_string(),
-        })?;
-        let storage = serde_json::from_reader(file).map_err(|err| StorageError::JSON {
-            path: p.to_owned(),
-            src: err.to_string(),
-        })?;
-        Ok(storage)
+    /// Loads session status (все поля маппятся на реальную структуру таблицы)
+    pub fn load_session(&self) -> ApplicationResult<Option<Session>> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT last_selected_id, last_focus, last_filter, last_query,
+                    description_scroll_pos, hotkeys_scroll_pos, use_system_theme
+             FROM session LIMIT 1",
+            )
+            .map_err(|e| StorageError::Database {
+                path: self.path.clone(),
+                src: e.to_string(),
+            })?;
+
+        let mut session_iter = stmt
+            .query_map([], |row| {
+                let id_str: Option<String> = row.get(0)?;
+                let focus_str: String = row.get(1)?;
+                let filter_str: String = row.get(2)?;
+
+                let last_selected_id = id_str.and_then(|s| uuid::Uuid::parse_str(&s).ok());
+
+                Ok(Session {
+                    last_selected_id,
+                    last_focus: Selectable::new(focus_str.parse().unwrap_or_default()),
+                    last_filter: Selectable::new(filter_str.parse().unwrap_or_default()),
+                    last_query: row.get(3)?,
+                    description_scroll_pos: row.get(4)?,
+                    hotkeys_scroll_pos: row.get(5)?,
+                    use_system_theme: row.get(6)?,
+                })
+            })
+            .map_err(|e| StorageError::Database {
+                path: self.path.clone(),
+                src: e.to_string(),
+            })?;
+
+        if let Some(result) = session_iter.next() {
+            Ok(Some(result.map_err(|e| StorageError::Database {
+                path: self.path.clone(),
+                src: e.to_string(),
+            })?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Helper function to create db tables: tasks and session
+    fn create_tables(&self) -> ApplicationResult<()> {
+        self.conn
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    completed BOOLEAN NOT NULL DEFAULT 0,
+                    priority TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS session (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    last_selected_id TEXT,
+                    last_focus TEXT NOT NULL,
+                    last_filter TEXT NOT NULL,
+                    last_query TEXT NOT NULL,
+                    description_scroll_pos INTEGER NOT NULL,
+                    hotkeys_scroll_pos INTEGER NOT NULL,
+                    use_system_theme BOOLEAN NOT NULL
+                );",
+            )
+            .map_err(|e| StorageError::Database {
+                path: self.path.clone(),
+                src: e.to_string(),
+            })?;
+
+        Ok(())
     }
 }
 
@@ -191,8 +333,8 @@ mod tests {
     use super::*;
     use crate::{
         core::{ApplicationError, FocusArea},
-        models::{Filter, Priority},
-        state::{ApplicationState, UIState},
+        models::Filter,
+        state::UIState,
     };
     use tempdir::TempDir;
 
@@ -206,17 +348,17 @@ mod tests {
     #[test]
     fn should_save_and_load_data_successfully() {
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("toodles.db");
         let config: StorageConfig = setup_config(true);
+        let mut storage = Storage::init(Some(&path), &config).unwrap();
 
         let tasks = vec![Task::new("Task 1", "", None), Task::new("Task 2", "", None)];
         let session = Session::default();
 
-        let result: ApplicationResult<String> =
-            Storage::save(&tasks, session, Some(&path), &config);
+        let result: ApplicationResult<String> = storage.save(&tasks, session);
         assert!(result.is_ok());
 
-        let loaded_data: TasksStateData = Storage::load(Some(&path), &config).unwrap();
+        let loaded_data = storage.load().unwrap();
 
         assert_eq!(loaded_data.tasks.len(), 2);
         assert_eq!(loaded_data.tasks[0].title, "Task 1");
@@ -226,250 +368,160 @@ mod tests {
     }
 
     #[test]
-    fn should_create_backup_on_save() {
+    fn should_create_backup_on_init_if_file_exists() {
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("toodles.db");
         let config: StorageConfig = setup_config(true);
-        let backup_path: PathBuf = path.with_extension("json.bak");
+        let backup_path: PathBuf = path.with_extension("db.bak");
 
-        Storage::save(
-            &vec![Task::new("V1", "", None)],
-            Session::default(),
-            Some(&path),
-            &config,
-        )
-        .unwrap();
+        let mut storage: Storage = Storage::init(Some(&path), &config).unwrap();
         assert!(
             !backup_path.exists(),
-            "Backup shouldn't exist on first save"
+            "Backup shouldn't exist on first init"
         );
 
-        Storage::save(
-            &vec![Task::new("V2", "", None)],
-            Session::default(),
-            Some(&path),
-            &config,
-        )
-        .unwrap();
+        storage
+            .save(&vec![Task::new("V1", "", None)], Session::default())
+            .unwrap();
+        drop(storage);
+
+        let _storage2 = Storage::init(Some(&path), &config).unwrap();
 
         assert!(path.exists());
         assert!(backup_path.exists());
 
-        let backup_data = Storage::load(Some(&backup_path), &config).unwrap();
+        drop(_storage2);
+
+        let backup_storage = Storage::init(Some(&backup_path), &config).unwrap();
+        let backup_data = backup_storage.load().unwrap();
         assert_eq!(backup_data.tasks[0].title, "V1");
     }
 
     #[test]
-    fn should_restore_from_backup_if_main_file_is_missing() {
+    fn should_handle_sync_deletions() {
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
-        let config: StorageConfig = setup_config(true);
-        let backup_path: PathBuf = path.with_extension("json.bak");
-
-        let tasks = vec![Task::new("Backup Task", "", None)];
-        Storage::save(&tasks, Session::default(), Some(&backup_path), &config).unwrap();
-
-        assert!(!path.exists());
-
-        let loaded = Storage::load(Some(&path), &config).expect("Should fallback to backup");
-        assert_eq!(loaded.tasks[0].title, "Backup Task");
-    }
-
-    #[test]
-    fn should_handle_corrupted_main_file_with_backup_fallback() {
-        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
-        let config: StorageConfig = setup_config(true);
-        let backup_path: PathBuf = path.with_extension("json.bak");
-
-        Storage::save(
-            &vec![Task::new("Good Data", "", None)],
-            Session::default(),
-            Some(&backup_path),
-            &config,
-        )
-        .unwrap();
-
-        fs::write(&path, "invalid json data").unwrap();
-
-        let loaded = Storage::load(Some(&path), &config).unwrap();
-        assert_eq!(loaded.tasks[0].title, "Good Data");
-    }
-
-    #[test]
-    fn should_not_restore_if_backup_disabled() {
-        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("toodles.db");
         let config: StorageConfig = setup_config(false);
+        let mut storage: Storage = Storage::init(Some(&path), &config).unwrap();
 
-        fs::write(&path, "{ corrupted }").unwrap();
+        let task1: Task = Task::new("Task 1", "", None);
+        let task2: Task = Task::new("Task 2", "", None);
 
-        let result = Storage::load(Some(&path), &config);
-        assert!(
-            result.is_err(),
-            "Should return error if backup is disabled and file is corrupted"
-        );
-    }
+        storage
+            .save(&vec![task1.clone(), task2.clone()], Session::default())
+            .unwrap();
 
-    #[test]
-    fn should_clean_up_temp_file_on_error() {
-        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
-        let temp_path: PathBuf = path.with_extension("tmp");
-        let config: StorageConfig = setup_config(true);
+        storage.save(&vec![task1], Session::default()).unwrap();
 
-        Storage::save(
-            &vec![Task::new("Test", "", None)],
-            Session::default(),
-            Some(&path),
-            &config,
-        )
-        .unwrap();
-
-        assert!(
-            !temp_path.exists(),
-            "Temp file should be renamed or deleted after success"
-        );
+        let loaded = storage.load().unwrap();
+        assert_eq!(loaded.tasks.len(), 1);
+        assert_eq!(loaded.tasks[0].title, "Task 1");
     }
 
     #[test]
     fn should_create_new_state_empty_tasks() {
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("toodles.db");
         let config: StorageConfig = setup_config(true);
 
         assert!(!path.exists());
 
-        let state = Storage::load(Some(&path), &config).unwrap();
+        let mut storage: Storage = Storage::init(Some(&path), &config).unwrap();
+        let state = storage.load().unwrap();
         assert!(state.tasks.is_empty());
 
-        let session = Session::from_state(&UIState::default(), None);
-        let result = Storage::save(&state.tasks, session, Some(&path), &config);
+        let session: Session = Session::from_state(&UIState::default(), None);
+        let result: ApplicationResult<String> = storage.save(&state.tasks, session);
         assert!(result.is_ok());
         assert!(path.exists());
+    }
 
-        let content = fs::read_to_string(&path).unwrap();
-        let decoded: TasksStateData = serde_json::from_str(&content).unwrap();
+    #[test]
+    fn should_return_default_data_path() {
+        let path_result = Storage::get_data_path();
+        assert!(path_result.is_ok());
 
-        assert!(decoded.tasks.is_empty(), "tasks should be an empty list");
-        assert!(decoded.session.last_selected_id.is_none());
+        let path: PathBuf = path_result.unwrap();
+        assert!(path.ends_with("toodles/toodles.db") || path.ends_with("toodles\\toodles.db"));
+        assert!(path.is_absolute());
     }
 
     #[test]
     fn should_create_new_state_with_saved_tasks_and_session() {
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("tasks.db");
         let config: StorageConfig = setup_config(true);
+        let mut storage = Storage::init(Some(&path), &config).unwrap();
 
         let task = Task::new("Test Title", "Test Desc", Some(Priority::High));
         let task_id = task.id;
 
-        let storage_data = TasksStateData {
-            tasks: vec![task],
-            session: Session {
-                last_selected_id: Some(task_id),
-                ..Session::default()
-            },
+        let session = Session {
+            last_selected_id: Some(task_id),
+            ..Session::default()
         };
 
-        let json_data = serde_json::to_string(&storage_data).unwrap();
-        fs::write(&path, json_data).unwrap();
-
-        let loaded_state = Storage::load(Some(&path), &config).unwrap();
+        let tasks_to_save = vec![task];
+        storage.save(&tasks_to_save, session).unwrap();
+        let loaded_state = storage.load().unwrap();
 
         assert_eq!(loaded_state.tasks.len(), 1);
         assert_eq!(loaded_state.tasks[0].id, task_id);
+        assert_eq!(loaded_state.tasks[0].title, "Test Title");
         assert_eq!(loaded_state.session.last_selected_id, Some(task_id));
     }
 
     #[test]
-    fn should_create_new_state_default_if_path_not_found() {
+    fn should_create_directory_on_init_if_missing() {
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("non_existent_dir").join("tasks.json");
-        let config: StorageConfig = setup_config(false);
-
-        assert!(!path.exists());
-
-        let result: ApplicationResult<TasksStateData> = Storage::load(Some(&path), &config);
-        assert!(result.is_ok());
-
-        let tasks = result.unwrap().tasks;
-        let state: ApplicationState = ApplicationState::new(tasks);
-
-        assert!(state.tasks.is_empty());
-        assert_eq!(state.select_state.selected(), None);
-    }
-
-    #[test]
-    fn should_return_default_data_path() {
-        let path_result: ApplicationResult<PathBuf> = Storage::get_data_path();
-        assert!(path_result.is_ok());
-
-        let path: PathBuf = path_result.unwrap();
-        assert!(path.ends_with("toodles/tasks.json") || path.ends_with("toodles\\tasks.json"));
-        assert!(path.is_absolute());
-    }
-
-    #[test]
-    fn should_create_directory_on_save_if_missing() {
-        let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("a").join("b").join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("a").join("b").join("toodles.db");
         let config: StorageConfig = setup_config(false);
         assert!(!path.parent().unwrap().exists());
 
-        Storage::save(&vec![], Session::default(), Some(&path), &config).unwrap();
+        let _storage = Storage::init(Some(&path), &config).unwrap();
         assert!(
             path.parent().unwrap().exists(),
-            "Directory hierarchy should be created on save"
+            "Directory hierarchy should be created on init"
         );
-        assert!(path.exists(), "File should be created");
+        assert!(path.exists(), "Database file should be created");
     }
 
     #[test]
-    fn should_invoke_jsonerror_on_load_if_json_not_valid() {
+    fn should_invoke_database_error_on_init_if_corrupted() {
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("toodles.db");
         let config: StorageConfig = setup_config(false);
 
-        fs::write(&path, "invalid json {").unwrap();
-        let result: ApplicationResult<TasksStateData> = Storage::load(Some(&path), &config);
+        fs::write(&path, "not a sqlite database file").unwrap();
+
+        let result: ApplicationResult<Storage> = Storage::init(Some(&path), &config);
 
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::JSON { .. }))
+            Err(ApplicationError::Storage(StorageError::Database { .. }))
         ));
-
-        if let Err(ApplicationError::Storage(StorageError::JSON { path: err_path, .. })) = result {
-            assert_eq!(err_path, path);
-        }
     }
 
     #[test]
     #[cfg(unix)]
-    fn should_invoke_ioerror_on_save_when_no_write_permission() {
+    fn should_invoke_io_error_on_init_when_no_write_permission() {
         use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
         let temp_dir: TempDir = TempDir::new("task_test").unwrap();
-        let path: PathBuf = temp_dir.path().join("tasks.json");
+        let path: PathBuf = temp_dir.path().join("toodles.db");
         let config: StorageConfig = setup_config(false);
 
         let mut perms: Permissions = fs::metadata(temp_dir.path()).unwrap().permissions();
         perms.set_mode(0o444);
         fs::set_permissions(temp_dir.path(), perms).unwrap();
 
-        let tasks = vec![Task::new("Test", "", None)];
-        let result: ApplicationResult<String> =
-            Storage::save(&tasks, Session::default(), Some(&path), &config);
+        let result: ApplicationResult<Storage> = Storage::init(Some(&path), &config);
 
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(ApplicationError::Storage(StorageError::IO { .. }))
+            Err(ApplicationError::Storage(StorageError::Database { .. }))
         ));
-
-        if let Err(ApplicationError::Storage(StorageError::IO { path: err_path, .. })) = result {
-            assert_eq!(err_path, path);
-        }
     }
 }
