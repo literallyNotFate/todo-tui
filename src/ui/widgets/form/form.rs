@@ -51,7 +51,12 @@ impl Form {
 
     /// Form rendering
     pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        let chunks: std::rc::Rc<[Rect]> = self.layout(area);
+        let inner_area = area.inner(ratatui::prelude::Margin {
+            horizontal: 2,
+            vertical: 1,
+        });
+
+        let chunks: std::rc::Rc<[Rect]> = self.layout(inner_area);
         let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
         let palette = ctx.palette();
 

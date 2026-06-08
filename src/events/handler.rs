@@ -5,7 +5,7 @@ use crate::{
     core::{Action, ApplicationMode, Autosave, FocusArea, Selectable, Storage},
     models::{Filter, TaskDetails, TaskEditor},
     ui::{
-        Form, Popup, WidgetResponse, is_terminal_small,
+        Popup, WidgetResponse, is_terminal_small,
         widgets::{
             input::Input,
             modal::{ModalAction, ModalResult},
@@ -35,17 +35,15 @@ impl EventHandler {
 
         let mut ctrl =
             ApplicationController::new(&mut app.data, &mut app.ui, &mut app.config, &app.keymaps);
+
+        if ctrl.ui.modal.is_some() {
+            Self::handle_modal(event, &mut ctrl, &mut app.storage, &mut app.running);
+            return;
+        }
+
         match app.mode {
-            ApplicationMode::Form => {
-                Self::handle_form_mode(event, &mut ctrl, &mut app.mode);
-                return;
-            }
             ApplicationMode::Search => {
                 Self::handle_search_mode(event, &mut ctrl, &mut app.mode);
-                return;
-            }
-            _ if ctrl.ui.modal.is_some() => {
-                Self::handle_modal(event, &mut ctrl, &mut app.storage, &mut app.running);
                 return;
             }
             _ => {}
@@ -76,70 +74,59 @@ impl EventHandler {
                 Some(m) => m,
                 None => return,
             };
-            modal_wrapper.modal.handle_action(action, event.code)
+            modal_wrapper.modal.handle_action(action, &event)
         };
 
         if let Some(result) = result {
-            let action = ctrl.ui.modal.as_ref().unwrap().action.clone();
-            ctrl.ui.close_modal();
+            let modal_action = ctrl.ui.modal.as_ref().unwrap().action.clone();
 
-            if result == ModalResult::Confirmed {
-                log::debug!("Modal confirmed: action={:?}", action);
-                match action {
-                    ModalAction::Remove => ctrl.dispatch_remove(),
-                    ModalAction::Clear => ctrl.dispatch_clear(),
-                    ModalAction::Save => {
-                        ctrl.dispatch_save(storage);
-                    }
-                    ModalAction::UnsavedExit => {
-                        if ctrl.dispatch_save(storage) {
-                            *running = false;
-                        }
-                    }
-                    _ => {}
-                }
-            } else {
-                log::debug!("Modal cancelled: action={:?}", action);
-            }
-        }
-
-        ctrl.ui.request_redraw();
-    }
-
-    /// Handles form keys
-    fn handle_form_mode(
-        event: KeyEvent,
-        ctrl: &mut ApplicationController,
-        mode: &mut ApplicationMode,
-    ) {
-        let form = match &mut ctrl.ui.task_form {
-            Some(f) => f,
-            None => return,
-        };
-
-        match form.handle_key(&event) {
-            WidgetResponse::Submit => {
-                let (id, title, desc, priority) = form.data();
-                let editor: TaskEditor = TaskEditor {
+            match result {
+                ModalResult::FormSubmitted {
+                    id,
                     title,
-                    description: desc,
-                    priority: Selectable::new(priority),
-                };
+                    description,
+                    priority,
+                } => {
+                    let editor = TaskEditor {
+                        title,
+                        description,
+                        priority: Selectable::new(priority),
+                    };
 
-                if let Some(task_id) = id {
-                    ctrl.dispatch_update(task_id, editor);
-                } else {
-                    ctrl.dispatch_append(editor.title, editor.description, Some(*editor.priority));
+                    if let Some(task_id) = id {
+                        ctrl.dispatch_update(task_id, editor);
+                    } else {
+                        ctrl.dispatch_append(
+                            editor.title,
+                            editor.description,
+                            Some(*editor.priority),
+                        );
+                    }
                 }
 
-                ctrl.ui.task_form = None;
-                *mode = ApplicationMode::List;
+                ModalResult::Confirmed => {
+                    log::debug!("Modal confirmed: action={:?}", modal_action);
+                    match modal_action {
+                        ModalAction::Remove => ctrl.dispatch_remove(),
+                        ModalAction::Clear => ctrl.dispatch_clear(),
+                        ModalAction::Save => {
+                            ctrl.dispatch_save(storage);
+                        }
+                        ModalAction::UnsavedExit => {
+                            if ctrl.dispatch_save(storage) {
+                                *running = false;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                ModalResult::Cancelled => {
+                    log::debug!("Modal cancelled: action={:?}", modal_action);
+                }
             }
-            WidgetResponse::Cancel => {
-                ctrl.ui.task_form = None;
-                *mode = ApplicationMode::List;
-            }
-            _ => {}
+
+            ctrl.ui.close_modal();
         }
 
         ctrl.ui.request_redraw();
@@ -212,10 +199,7 @@ impl EventHandler {
             Action::NextTheme => ctrl.ui.next_theme(),
             Action::PrevTheme => ctrl.ui.prev_theme(),
             Action::ToggleThemeMode => ctrl.ui.toggle_mode(),
-            Action::Add => {
-                ctrl.ui.task_form = Some(Form::new());
-                *mode = ApplicationMode::Form;
-            }
+            Action::Add => ctrl.ui.show_modal(Popup::new_task(), ModalAction::None),
             Action::Search => {
                 ctrl.ui.show_search();
                 *mode = ApplicationMode::Search;
@@ -284,8 +268,8 @@ impl EventHandler {
                             .selected_id(ctrl.state)
                             .and_then(|id| ctrl.state.find_by_id(id))
                         {
-                            ctrl.ui.task_form = Some(Form::from(&task));
-                            *mode = ApplicationMode::Form;
+                            ctrl.ui
+                                .show_modal(Popup::update_task(&task), ModalAction::None)
                         }
                     }
                     Action::Complete => ctrl.dispatch_toggle(),
@@ -436,7 +420,7 @@ mod tests {
         EventHandler::handle_key(app, event);
 
         assert_eq!(app.mode, ApplicationMode::Navigation);
-        assert!(app.ui.task_form.is_none());
+        assert!(app.ui.modal.is_none());
         assert!(app.running);
     }
 
@@ -467,13 +451,14 @@ mod tests {
     fn should_restore_mode_on_esc_from_form() {
         let mut wrapper = setup_application();
         let app = &mut wrapper.app;
-        app.mode = ApplicationMode::Form;
-        app.ui.task_form = Some(Form::new());
+
+        app.ui.show_modal(Popup::new_task(), ModalAction::None);
+        assert_eq!(app.mode, ApplicationMode::List);
 
         EventHandler::handle_key(app, key_event(KeyCode::Esc));
 
         assert_eq!(app.mode, ApplicationMode::List);
-        assert!(app.ui.task_form.is_none());
+        assert!(app.ui.modal.is_none());
         assert!(app.running);
     }
 
@@ -686,7 +671,7 @@ mod tests {
         EventHandler::handle_modal(key_event(KeyCode::Enter), &mut ctrl, storage, running);
 
         assert!(*running);
-        assert!(ui.modal.is_none());
+        assert!(ctrl.ui.modal.is_none());
     }
 
     #[test]
@@ -749,11 +734,8 @@ mod tests {
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::execute_action(Action::Update, &mut ctrl, storage, mode, autosave, running);
 
-        assert_eq!(*mode, ApplicationMode::Form);
-        assert!(ctrl.ui.task_form.is_some());
-
-        let form = ctrl.ui.task_form.as_ref().unwrap();
-        assert_eq!(form.data().1, "Edit Me");
+        assert_eq!(*mode, ApplicationMode::List);
+        assert!(ctrl.ui.modal.is_some());
     }
 
     #[test]
@@ -766,7 +748,7 @@ mod tests {
         EventHandler::execute_action(Action::Update, &mut ctrl, storage, mode, autosave, running);
 
         assert_eq!(*mode, ApplicationMode::List);
-        assert!(ctrl.ui.task_form.is_none());
+        assert!(ctrl.ui.modal.is_none());
     }
 
     #[test]
@@ -822,74 +804,14 @@ mod tests {
     #[test]
     fn should_create_new_task_on_submit() {
         let mut ctx = TestContext::new();
-        let (state, ui, config, keymaps, _, _, _, _) = ctx.components();
-        let mut mode = ApplicationMode::Form;
+        let (state, ui, config, keymaps, storage, _, _, running) = ctx.components();
 
-        let mut form = Form::new();
-        form.set_value("title", "New Task");
-        form.set_value("description", "Desc");
-        form.focused = 3;
-        ui.task_form = Some(form);
+        ui.show_modal(Popup::new_task(), ModalAction::None);
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
-        EventHandler::handle_form_mode(key_event(KeyCode::Enter), &mut ctrl, &mut mode);
+        EventHandler::handle_modal(key_event(KeyCode::Enter), &mut ctrl, storage, running);
 
-        assert_eq!(ctrl.state.tasks.len(), 1);
-        assert_eq!(ctrl.state.tasks[0].title, "New Task");
-        assert!(ctrl.ui.task_form.is_none());
-        assert_eq!(mode, ApplicationMode::List);
-    }
-
-    #[test]
-    fn should_update_existing_task_on_submit() {
-        let mut ctx = TestContext::new();
-        let (state, ui, config, keymaps, _, _, _, _) = ctx.components();
-        let mut mode = ApplicationMode::Form;
-
-        let task = Task::new("Old Title", "", None);
-        let task_id = task.id;
-        state.tasks.push(task);
-
-        let mut form = Form::from(&state.tasks[0]);
-        form.set_value("title", "Updated Title");
-        form.focused = 3;
-        ui.task_form = Some(form);
-
-        let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
-        EventHandler::handle_form_mode(key_event(KeyCode::Enter), &mut ctrl, &mut mode);
-
-        assert_eq!(ctrl.state.tasks.len(), 1);
-        assert_eq!(ctrl.state.tasks[0].title, "Updated Title");
-        assert_eq!(ctrl.state.tasks[0].id, task_id);
-    }
-
-    #[test]
-    fn should_close_form_on_cancel() {
-        let mut ctx = TestContext::new();
-        let (state, ui, config, keymaps, _, _, _, _) = ctx.components();
-        let mut mode = ApplicationMode::Form;
-        ui.task_form = Some(Form::new());
-
-        let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
-        EventHandler::handle_form_mode(key_event(KeyCode::Esc), &mut ctrl, &mut mode);
-
-        assert_eq!(ctrl.state.tasks.len(), 0);
-        assert!(ctrl.ui.task_form.is_none());
-        assert_eq!(mode, ApplicationMode::List);
-    }
-
-    #[test]
-    fn should_do_nothing_on_continue() {
-        let mut ctx = TestContext::new();
-        let (state, ui, config, keymaps, _, _, _, _) = ctx.components();
-        let mut mode = ApplicationMode::Form;
-        ui.task_form = Some(Form::new());
-
-        let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
-        EventHandler::handle_form_mode(key_event(KeyCode::Char('a')), &mut ctrl, &mut mode);
-
-        assert!(ctrl.ui.task_form.is_some());
-        assert_eq!(mode, ApplicationMode::Form);
+        assert!(ctrl.ui.modal.is_none());
     }
 
     #[test]

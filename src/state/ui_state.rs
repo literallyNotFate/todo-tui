@@ -5,7 +5,7 @@ use crate::{
     state::{ActiveModal, AdaptiveScroll, ApplicationResult, ApplicationState, Session},
     theme::{Theme, ThemeID, ThemeName},
     ui::{
-        Confirm, Form, Notification, Popup, TextInput,
+        Confirm, Notification, Popup, TextInput,
         widgets::{
             input::Input,
             modal::{Modal, ModalAction, ModalSize},
@@ -21,7 +21,6 @@ pub struct UIState {
     pub focused: Selectable<FocusArea>,
 
     pub modal: Option<ActiveModal>,
-    pub task_form: Option<Form>,
     pub search_input: Option<TextInput>,
 
     pub desc_scroll: AdaptiveScroll,
@@ -48,7 +47,6 @@ impl UIState {
             filter: Selectable::default(),
             focused: Selectable::default(),
             modal: None,
-            task_form: None,
             search_input: None,
             desc_scroll: AdaptiveScroll::default(),
             hotkeys_scroll: AdaptiveScroll::default(),

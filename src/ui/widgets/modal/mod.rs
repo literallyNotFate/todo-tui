@@ -4,14 +4,15 @@ pub mod popup;
 pub use confirm::Confirm;
 pub use popup::Popup;
 
-use crate::{core::Action, ui::RenderContext};
-use ratatui::{crossterm::event::KeyCode, layout::Rect};
+use crate::{core::Action, models::Priority, ui::RenderContext};
+use ratatui::{crossterm::event::KeyEvent, layout::Rect};
+use uuid::Uuid;
 
 /// Modal trait for interactable widgets such as popup and confirm
 pub trait Modal {
     fn area(&self, frame_area: Rect) -> Rect;
     fn render(&self, ctx: &mut RenderContext, area: Rect);
-    fn handle_action(&mut self, action: Option<Action>, key: KeyCode) -> Option<ModalResult>;
+    fn handle_action(&mut self, action: Option<Action>, event: &KeyEvent) -> Option<ModalResult>;
 }
 
 /// Returns the result of the confirm operation
@@ -19,6 +20,12 @@ pub trait Modal {
 pub enum ModalResult {
     Confirmed,
     Cancelled,
+    FormSubmitted {
+        id: Option<Uuid>,
+        title: String,
+        description: String,
+        priority: Priority,
+    },
 }
 
 /// Actions that being performed after confirmation

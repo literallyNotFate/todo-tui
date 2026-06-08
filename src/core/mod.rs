@@ -19,7 +19,6 @@ use std::{fs::File, ops::Deref, path::Path};
 pub enum ApplicationMode {
     Navigation,
     List,
-    Form,
     Search,
 }
 

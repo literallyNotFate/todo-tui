@@ -1,15 +1,15 @@
 use crate::{
     core::Action,
-    models::TaskDetails,
+    models::{Task, TaskDetails},
     state::AdaptiveScroll,
     theme::ThemePalette,
     ui::{
-        RenderContext, center, scrollable,
+        Form, RenderContext, WidgetResponse, center, scrollable,
         widgets::modal::{Modal, ModalResult, ModalSize},
     },
 };
 use ratatui::{
-    crossterm::event::KeyCode,
+    crossterm::event::{KeyCode, KeyEvent},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span},
@@ -21,6 +21,7 @@ pub enum PopupContent {
     Message(String),
     Task(TaskDetails),
     Help(Vec<Line<'static>>),
+    Form(Form),
 }
 
 /// Defines how popup is getting closed (on any key or on specific)
@@ -99,6 +100,30 @@ impl Popup {
             title: " Keyboard Shortcuts ".into(),
             content: PopupContent::Help(lines),
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Char('?')),
+            scroll: AdaptiveScroll::default(),
+            size: ModalSize::Large,
+        }
+    }
+
+    /// Creating new task popup
+    pub fn new_task() -> Self {
+        Self {
+            kind: PopupKind::Info,
+            title: " Create Task ".into(),
+            content: PopupContent::Form(Form::new()),
+            close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
+            scroll: AdaptiveScroll::default(),
+            size: ModalSize::Large,
+        }
+    }
+
+    /// Updating new task popup
+    pub fn update_task(task: &Task) -> Self {
+        Self {
+            kind: PopupKind::Info,
+            title: String::from(" Update Task "),
+            content: PopupContent::Form(Form::from(task)),
+            close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
             scroll: AdaptiveScroll::default(),
             size: ModalSize::Large,
         }
@@ -358,11 +383,32 @@ impl Modal for Popup {
                     },
                 );
             }
+            PopupContent::Form(form) => {
+                form.render(ctx, inner_area);
+            }
         }
     }
 
-    /// Key event handling
-    fn handle_action(&mut self, action: Option<Action>, key: KeyCode) -> Option<ModalResult> {
+    /// Action handling
+    fn handle_action(&mut self, action: Option<Action>, event: &KeyEvent) -> Option<ModalResult> {
+        let key: KeyCode = event.code;
+
+        if let PopupContent::Form(ref mut form) = self.content {
+            match form.handle_key(event) {
+                WidgetResponse::Submit => {
+                    let (id, title, desc, priority) = form.data();
+                    return Some(ModalResult::FormSubmitted {
+                        id,
+                        title,
+                        description: desc,
+                        priority,
+                    });
+                }
+                WidgetResponse::Cancel => return Some(ModalResult::Cancelled),
+                WidgetResponse::Continue => return None,
+            }
+        }
+
         if let Some(act) = action {
             match act {
                 Action::MoveDown => {
@@ -396,6 +442,7 @@ impl Modal for Popup {
 mod tests {
     use super::*;
     use crate::{config::UIConfig, models::Task, theme::ThemeName};
+    use ratatui::crossterm::event::KeyModifiers;
 
     fn create_helper_frame() -> Rect {
         Rect::new(0, 0, 100, 100)
@@ -454,15 +501,15 @@ mod tests {
         let mut popup: Popup = Popup::info("Test").close_on_any_key();
 
         assert_eq!(
-            popup.handle_action(None, KeyCode::Char('q')),
+            popup.handle_action(None, &KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)),
             Some(ModalResult::Cancelled)
         );
         assert_eq!(
-            popup.handle_action(None, KeyCode::Enter),
+            popup.handle_action(None, &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
             Some(ModalResult::Cancelled)
         );
         assert_eq!(
-            popup.handle_action(None, KeyCode::Esc),
+            popup.handle_action(None, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
             Some(ModalResult::Cancelled)
         );
     }
@@ -472,17 +519,20 @@ mod tests {
         let mut popup: Popup = Popup::error("Test").close_on(KeyCode::Char('y'));
 
         assert_eq!(
-            popup.handle_action(None, KeyCode::Char('y')),
+            popup.handle_action(None, &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE)),
             Some(ModalResult::Cancelled)
         );
-        assert_eq!(popup.handle_action(None, KeyCode::Char('n')), None);
+        assert_eq!(
+            popup.handle_action(None, &KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)),
+            None
+        );
     }
 
     #[test]
     fn should_close_on_esc_anyway() {
         let mut popup: Popup = Popup::info("Test").close_on(KeyCode::Tab);
         assert_eq!(
-            popup.handle_action(None, KeyCode::Esc),
+            popup.handle_action(None, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
             Some(ModalResult::Cancelled)
         );
     }
@@ -496,13 +546,22 @@ mod tests {
 
         assert_eq!(popup.scroll.current.get(), 0);
 
-        popup.handle_action(Some(Action::MoveDown), KeyCode::Null);
+        popup.handle_action(
+            Some(Action::MoveDown),
+            &KeyEvent::new(KeyCode::Null, KeyModifiers::NONE),
+        );
         assert_eq!(popup.scroll.current.get(), 1);
 
-        popup.handle_action(Some(Action::MoveUp), KeyCode::Null);
+        popup.handle_action(
+            Some(Action::MoveUp),
+            &KeyEvent::new(KeyCode::Null, KeyModifiers::NONE),
+        );
         assert_eq!(popup.scroll.current.get(), 0);
 
-        popup.handle_action(Some(Action::MoveUp), KeyCode::Null);
+        popup.handle_action(
+            Some(Action::MoveUp),
+            &KeyEvent::new(KeyCode::Null, KeyModifiers::NONE),
+        );
         assert_eq!(popup.scroll.current.get(), 0);
     }
 

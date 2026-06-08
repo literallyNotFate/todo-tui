@@ -1,5 +1,4 @@
 use crate::{
-    core::ApplicationMode,
     models::Task,
     state::{ApplicationState, UIState},
     ui::{FeedbackKind, FeedbackWidget, RenderContext, widgets::dashboard::list::ListTasks},
@@ -19,27 +18,18 @@ impl<'a> ContentWidget<'a> {
 
     /// Content rendering
     pub fn render(&mut self, ctx: &mut RenderContext, area: Rect) {
-        match ctx.mode() {
-            ApplicationMode::Form => {
-                if let Some(form) = &self.ui.task_form {
-                    form.render(ctx, area);
-                }
-            }
-            _ => {
-                let query: &str = &self.ui.search_query();
-                let filtered: Vec<&Task> = self.ui.filter.value.apply(&self.state.tasks, query);
+        let query: &str = &self.ui.search_query();
+        let filtered: Vec<&Task> = self.ui.filter.value.apply(&self.state.tasks, query);
 
-                if filtered.is_empty() && query.is_empty() {
-                    FeedbackWidget::new(FeedbackKind::EmptyList).render(ctx, area);
-                    return;
-                }
-
-                ListTasks::new(self.ui, filtered, query, &self.state.sort).render(
-                    ctx,
-                    area,
-                    &mut self.state.select_state,
-                );
-            }
+        if filtered.is_empty() && query.is_empty() {
+            FeedbackWidget::new(FeedbackKind::EmptyList).render(ctx, area);
+            return;
         }
+
+        ListTasks::new(self.ui, filtered, query, &self.state.sort).render(
+            ctx,
+            area,
+            &mut self.state.select_state,
+        );
     }
 }
