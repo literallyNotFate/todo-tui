@@ -1,0 +1,215 @@
+use crate::{
+    core::StorageError,
+    models::{Priority, Task},
+    state::ApplicationResult,
+};
+use chrono::{DateTime, Utc};
+use rusqlite::{Connection, params};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+use uuid::Uuid;
+
+/// Task repository to manage all its database operations
+pub struct TaskRepository {
+    pub(super) conn: Arc<Mutex<Connection>>,
+    pub(super) db_path: PathBuf,
+}
+
+impl TaskRepository {
+    pub fn new(conn: Arc<Mutex<Connection>>, db_path: PathBuf) -> Self {
+        Self { conn, db_path }
+    }
+
+    /// Save tasks to the database
+    pub fn save(&self, tasks: &[Task]) -> ApplicationResult<()> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction().map_err(|e| StorageError::Database {
+            path: self.db_path.clone(),
+            src: e.to_string(),
+        })?;
+
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO tasks (id, title, description, completed, priority, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    description = excluded.description,
+                    completed = excluded.completed,
+                    priority = excluded.priority,
+                    updated_at = excluded.updated_at"
+            ).map_err(|e| StorageError::Database { path: self.db_path.clone(), src: e.to_string() })?;
+
+            for task in tasks {
+                stmt.execute(params![
+                    task.id.to_string(),
+                    task.title,
+                    task.description,
+                    task.completed,
+                    task.priority.to_string(),
+                    task.created_at.to_rfc3339(),
+                    task.updated_at.to_rfc3339(),
+                ])
+                .map_err(|e| StorageError::Database {
+                    path: self.db_path.clone(),
+                    src: e.to_string(),
+                })?;
+            }
+        }
+
+        if !tasks.is_empty() {
+            let ids_placeholder: Vec<String> =
+                tasks.iter().map(|t| format!("'{}'", t.id)).collect();
+            let query = format!(
+                "DELETE FROM tasks WHERE id NOT IN ({})",
+                ids_placeholder.join(",")
+            );
+            tx.execute(&query, []).map_err(|e| StorageError::Database {
+                path: self.db_path.clone(),
+                src: e.to_string(),
+            })?;
+        } else {
+            tx.execute("DELETE FROM tasks", [])
+                .map_err(|e| StorageError::Database {
+                    path: self.db_path.clone(),
+                    src: e.to_string(),
+                })?;
+        }
+
+        tx.commit().map_err(|e| StorageError::Database {
+            path: self.db_path.clone(),
+            src: e.to_string(),
+        })?;
+
+        Ok(())
+    }
+
+    /// Load tasks from the database
+    pub fn load(&self) -> ApplicationResult<Vec<Task>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT id, title, description, completed, priority, created_at, updated_at FROM tasks")
+            .map_err(|e| StorageError::Database { path: self.db_path.clone(), src: e.to_string() })?;
+
+        let task_iter = stmt
+            .query_map([], |row| {
+                let id_str: String = row.get(0)?;
+                let title_str: String = row.get(1)?;
+                let priority_str: String = row.get(4)?;
+                let created_str: String = row.get(5)?;
+                let updated_str: String = row.get(6)?;
+
+                let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
+                let priority = priority_str.parse().unwrap_or(Priority::Low);
+
+                let created_at = DateTime::parse_from_rfc3339(&created_str)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now());
+
+                let updated_at = DateTime::parse_from_rfc3339(&updated_str)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now());
+
+                let title_lower: String = title_str.to_lowercase();
+
+                Ok(Task {
+                    id,
+                    title: title_str,
+                    description: row.get(2)?,
+                    completed: row.get(3)?,
+                    priority,
+                    created_at,
+                    updated_at,
+                    title_lower,
+                })
+            })
+            .map_err(|e| StorageError::Database {
+                path: self.db_path.clone(),
+                src: e.to_string(),
+            })?;
+
+        let mut tasks = Vec::new();
+        for task in task_iter {
+            tasks.push(task.map_err(|e| StorageError::Database {
+                path: self.db_path.clone(),
+                src: e.to_string(),
+            })?);
+        }
+        Ok(tasks)
+    }
+}
+
+/// Unit-tests for task repository
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{Priority, Task};
+
+    fn setup_tasks_db() -> Arc<Mutex<Connection>> {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE tasks (
+                id TEXT PRIMARY KEY NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                completed BOOLEAN NOT NULL DEFAULT 0,
+                priority TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+
+        Arc::new(Mutex::new(conn))
+    }
+
+    #[test]
+    fn should_handle_save_load_for_tasks_repository() {
+        let conn = setup_tasks_db();
+        let repo = TaskRepository::new(conn, PathBuf::from("memory.db"));
+
+        let task1: Task = Task::new("Repo Task 1", "Desc 1", Some(Priority::High));
+        let task2: Task = Task::new("Repo Task 2", "Desc 2", None);
+        let tasks: Vec<Task> = vec![task1.clone(), task2.clone()];
+
+        assert!(repo.save(&tasks).is_ok());
+
+        let loaded: Vec<Task> = repo.load().unwrap();
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].id, task1.id);
+        assert_eq!(loaded[1].title, "Repo Task 2");
+    }
+
+    #[test]
+    fn should_handle_deletions_sync_for_tasks_repository() {
+        let conn = setup_tasks_db();
+        let repo = TaskRepository::new(conn, PathBuf::from("memory.db"));
+
+        let task1: Task = Task::new("Keep Me", "", None);
+        let task2: Task = Task::new("Delete Me", "", None);
+
+        repo.save(&vec![task1.clone(), task2.clone()]).unwrap();
+
+        repo.save(&vec![task1.clone()]).unwrap();
+
+        let loaded: Vec<Task> = repo.load().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].title, "Keep Me");
+    }
+
+    #[test]
+    fn should_truncate_table_if_empty_tasks_provided() {
+        let conn = setup_tasks_db();
+        let repo = TaskRepository::new(conn, PathBuf::from("memory.db"));
+
+        let task: Task = Task::new("Task", "", None);
+        repo.save(&vec![task]).unwrap();
+
+        repo.save(&[]).unwrap();
+
+        let loaded: Vec<Task> = repo.load().unwrap();
+        assert!(loaded.is_empty());
+    }
+}

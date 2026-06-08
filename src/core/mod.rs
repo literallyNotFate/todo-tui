@@ -8,7 +8,7 @@ pub use actions::Action;
 pub use autosave::Autosave;
 pub use errors::{ApplicationError, KeyMapError, StorageError, TaskError};
 pub use sorting::{Sort, SortBy, SortOrder};
-pub use storage::Storage;
+pub use storage::{SessionRepository, Storage, TaskRepository};
 
 use crate::config::LogLevel;
 use simplelog::*;
