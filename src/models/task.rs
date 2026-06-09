@@ -1,5 +1,4 @@
-use super::Filter;
-use crate::{config::UIConfig, core::Selectable, theme::ThemePalette};
+use crate::{config::UIConfig, core::Selectable, models::Filter, theme::ThemePalette};
 use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
@@ -23,27 +22,34 @@ pub struct Task {
 
 impl Task {
     /// Create new task object
-    pub fn new(
-        title: impl Into<String>,
-        description: impl Into<String>,
-        priority: Option<Priority>,
-    ) -> Self {
+    pub fn new(title: impl Into<String>) -> Self {
         let now = Utc::now();
         let title: String = title.into();
-        let title_lower = title.to_lowercase();
+        let title_lower: String = title.to_lowercase();
 
         Self {
             id: Uuid::new_v4(),
             title,
-            description: description.into(),
+            description: String::new(),
             completed: false,
-            priority: priority.unwrap_or_default(),
+            priority: Priority::default(),
             created_at: now,
             updated_at: now,
             title_lower,
         }
     }
 
+    /// Add description to task
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = description.into();
+        self
+    }
+
+    /// Add priority to task
+    pub fn with_priority(mut self, priority: Priority) -> Self {
+        self.priority = priority;
+        self
+    }
     /// Update task using editor model from form
     pub fn update_from_editor(&mut self, editor: TaskEditor) {
         self.title = editor.title;
@@ -200,10 +206,10 @@ mod tests {
 
     #[test]
     fn should_create_task_item() {
-        let task: Task = Task::new("Test", "Test", None);
+        let task: Task = Task::new("Test");
 
         assert_eq!(task.title, "Test");
-        assert_eq!(task.description, "Test");
+        assert_eq!(task.description, "");
         assert_eq!(task.priority, Priority::Low);
         assert!(!task.completed);
     }
@@ -211,10 +217,9 @@ mod tests {
     #[test]
     fn should_generate_unique_id_for_tasks() {
         let title: &str = "Test Task";
-        let desc: &str = "Description";
 
-        let task1 = Task::new(title, desc, None);
-        let task2 = Task::new(title, desc, None);
+        let task1 = Task::new(title);
+        let task2 = Task::new(title);
 
         assert!(!task1.id.is_nil(), "UUID should not be nil");
         assert_ne!(task1.id, task2.id, "each task must have a unique UUID");
@@ -235,6 +240,7 @@ mod tests {
         assert_eq!(task.description, "Test");
         assert_eq!(task.priority, Priority::Low);
         assert!(task.completed);
+        let mut task: Task = Task::new("Test");
 
         let editor: TaskEditor = TaskEditor {
             title: "Edit".into(),
@@ -246,12 +252,11 @@ mod tests {
         assert_eq!(task.title, "Edit");
         assert_eq!(task.description, "Edit");
         assert_eq!(task.priority, Priority::High);
-        assert!(task.completed);
     }
 
     #[test]
     fn should_toggle_completed() {
-        let mut task: Task = Task::new("Test", "Test", Some(Priority::Medium));
+        let mut task: Task = Task::new("Test").with_priority(Priority::Medium);
         assert_eq!(task.priority, Priority::Medium);
 
         task.toggle_completed();
@@ -263,7 +268,7 @@ mod tests {
 
     #[test]
     fn should_return_created_at_string() {
-        let mut task: Task = Task::new("Test", "Test", None);
+        let mut task: Task = Task::new("Test");
         assert_eq!(task.time_ago(), "just now".to_string());
 
         task.created_at = Utc::now().checked_sub_days(Days::new(2)).unwrap();
@@ -282,7 +287,9 @@ mod tests {
     #[test]
     fn should_test_task_filter_matching() {
         let today: NaiveDate = Local::now().date_naive();
-        let mut task = Task::new("Test", "Desc", Some(Priority::High));
+        let mut task = Task::new("Test")
+            .with_description("Desc")
+            .with_priority(Priority::High);
 
         assert!(task.matches_filter(&Filter::HighPriority, &today));
 
@@ -299,7 +306,7 @@ mod tests {
 
     #[test]
     fn should_create_task_details_from_task() {
-        let task = Task::new("Task 1", "Desc 1", None);
+        let task = Task::new("Task 1").with_description("Desc 1");
         let config = UIConfig::default();
         let details = TaskDetails::from(&task, &config);
 

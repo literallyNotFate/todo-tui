@@ -55,16 +55,20 @@ mod tests {
 
     fn setup_test_tasks() -> Vec<Task> {
         vec![
-            Task::new("Task 1", "Desc", Some(Priority::Low)),
+            Task::new("Task 1"),
             {
-                let mut t = Task::new("Task 2", "Desc", Some(Priority::Medium));
+                let mut t = Task::new("Task 2")
+                    .with_description("Desc")
+                    .with_priority(Priority::Medium);
                 t.completed = true;
                 t.created_at = Utc::now() - Duration::days(1);
                 t
             },
-            Task::new("Task 3", "Desc", Some(Priority::High)),
+            Task::new("Task 3")
+                .with_description("Desc")
+                .with_priority(Priority::High),
             {
-                let mut t = Task::new("Task 4", "Desc", Some(Priority::High));
+                let mut t = Task::new("Task 4").with_priority(Priority::High);
                 t.completed = true;
                 t.created_at = Utc::now() - Duration::weeks(2);
                 t

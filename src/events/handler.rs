@@ -199,7 +199,7 @@ impl EventHandler {
             Action::NextTheme => ctrl.ui.next_theme(),
             Action::PrevTheme => ctrl.ui.prev_theme(),
             Action::ToggleThemeMode => ctrl.ui.toggle_mode(),
-            Action::Add => ctrl.ui.show_modal(Popup::new_task(), ModalAction::None),
+            Action::Add => ctrl.ui.show_modal(Popup::append_task(), ModalAction::None),
             Action::Search => {
                 ctrl.ui.show_search();
                 *mode = ApplicationMode::Search;
@@ -440,7 +440,7 @@ mod tests {
     fn should_open_unsaved_confirm_on_exit_if_changes_exist() {
         let mut wrapper = setup_application();
         let app = &mut wrapper.app;
-        app.data.tasks.push(Task::new("Changes", "", None));
+        app.data.tasks.push(Task::new("Changes"));
         EventHandler::handle_key(app, key_event(KeyCode::Char('q')));
 
         assert!(app.running, "App should not close yet");
@@ -570,8 +570,8 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
 
-        state.tasks.push(Task::new("T1", "", None));
-        state.tasks.push(Task::new("T2", "", None));
+        state.tasks.push(Task::new("T1"));
+        state.tasks.push(Task::new("T2"));
         state.select_state.select(Some(0));
         ui.focused.set(FocusArea::Main);
         *mode = ApplicationMode::List;
@@ -593,7 +593,7 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, _, _, running) = ctx.components();
 
-        state.tasks.push(Task::new("To be deleted", "", None));
+        state.tasks.push(Task::new("To be deleted"));
         state.select_state.select(Some(0));
 
         ui.remove_confirm();
@@ -609,7 +609,7 @@ mod tests {
     fn should_cancel_clear_all_tasks() {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, _, _, running) = ctx.components();
-        state.tasks.push(Task::new("Keep me", "", None));
+        state.tasks.push(Task::new("Keep me"));
 
         ui.clear_confirm();
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
@@ -624,7 +624,7 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, _, _, running) = ctx.components();
 
-        state.tasks.push(Task::new("Task to DB", "", None));
+        state.tasks.push(Task::new("Task to DB"));
         ui.unsaved_confirm();
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
@@ -664,9 +664,9 @@ mod tests {
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
 
         ui.focused.set(FocusArea::Main);
-        state.tasks.push(Task::new("T1", "", None));
-        state.tasks.push(Task::new("T2", "", None));
-        state.tasks.push(Task::new("T3", "", None));
+        state.tasks.push(Task::new("T1"));
+        state.tasks.push(Task::new("T2"));
+        state.tasks.push(Task::new("T3"));
         state.select_state.select(Some(0));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
@@ -688,7 +688,7 @@ mod tests {
     fn should_toggle_task_on_enter() {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
-        state.tasks.push(Task::new("T1", "", None));
+        state.tasks.push(Task::new("T1"));
         state.select_state.select(Some(0));
         ui.focused.set(FocusArea::Main);
 
@@ -711,7 +711,7 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
 
-        state.tasks.push(Task::new("Edit Me", "Desc", None));
+        state.tasks.push(Task::new("Edit Me"));
         state.select_state.select(Some(0));
         ui.focused.set(FocusArea::Main);
 
@@ -741,7 +741,7 @@ mod tests {
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
 
         ui.focused.set(FocusArea::Main);
-        state.tasks.push(Task::new("To Delete", "", None));
+        state.tasks.push(Task::new("To Delete"));
         state.select_state.select(Some(0));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
@@ -757,8 +757,8 @@ mod tests {
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
 
         ui.focused.set(FocusArea::Main);
-        state.tasks.push(Task::new("Task 1", "", None));
-        state.tasks.push(Task::new("Task 2", "", None));
+        state.tasks.push(Task::new("Task 1"));
+        state.tasks.push(Task::new("Task 2"));
         state.select_state.select(Some(0));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
@@ -847,8 +847,8 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, _, _, _, _) = ctx.components();
 
-        state.tasks.push(Task::new("Apple", "", None));
-        state.tasks.push(Task::new("Banana", "", None));
+        state.tasks.push(Task::new("Apple"));
+        state.tasks.push(Task::new("Banana"));
         state.select_state.select(Some(1));
         ui.show_search();
 
@@ -945,7 +945,7 @@ mod tests {
     fn should_test_focus_stabilization_on_filter_change() {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
-        state.tasks.push(Task::new("T", "", None));
+        state.tasks.push(Task::new("T"));
         state.select_state.select(Some(10));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);

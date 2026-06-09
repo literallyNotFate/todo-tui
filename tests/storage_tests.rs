@@ -21,7 +21,7 @@ fn should_save_and_load_data_successfully() {
     let config: StorageConfig = setup_config(true);
     let mut storage = Storage::init(Some(&path), &config).unwrap();
 
-    let tasks: Vec<Task> = vec![Task::new("Task 1", "", None), Task::new("Task 2", "", None)];
+    let tasks: Vec<Task> = vec![Task::new("Task 1"), Task::new("Task 2")];
     let session: Session = Session::default();
 
     storage.save(&tasks, session).unwrap();

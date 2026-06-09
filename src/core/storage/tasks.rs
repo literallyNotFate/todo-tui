@@ -145,7 +145,6 @@ impl TaskRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{Priority, Task};
 
     fn setup_tasks_db() -> Arc<Mutex<Connection>> {
         let conn = Connection::open_in_memory().unwrap();
@@ -170,8 +169,10 @@ mod tests {
         let conn = setup_tasks_db();
         let repo = TaskRepository::new(conn, PathBuf::from("memory.db"));
 
-        let task1: Task = Task::new("Repo Task 1", "Desc 1", Some(Priority::High));
-        let task2: Task = Task::new("Repo Task 2", "Desc 2", None);
+        let task1: Task = Task::new("Repo Task 1")
+            .with_description("Desc 1")
+            .with_priority(Priority::High)
+        let task2: Task = Task::new("Repo Task 2").with_description("Desc 2");
         let tasks: Vec<Task> = vec![task1.clone(), task2.clone()];
 
         assert!(repo.save(&tasks).is_ok());
@@ -187,11 +188,10 @@ mod tests {
         let conn = setup_tasks_db();
         let repo = TaskRepository::new(conn, PathBuf::from("memory.db"));
 
-        let task1: Task = Task::new("Keep Me", "", None);
-        let task2: Task = Task::new("Delete Me", "", None);
+        let task1: Task = Task::new("Keep Me");
+        let task2: Task = Task::new("Delete Me");
 
         repo.save(&vec![task1.clone(), task2.clone()]).unwrap();
-
         repo.save(&vec![task1.clone()]).unwrap();
 
         let loaded: Vec<Task> = repo.load().unwrap();
@@ -204,7 +204,7 @@ mod tests {
         let conn = setup_tasks_db();
         let repo = TaskRepository::new(conn, PathBuf::from("memory.db"));
 
-        let task: Task = Task::new("Task", "", None);
+        let task: Task = Task::new("Task");
         repo.save(&vec![task]).unwrap();
 
         repo.save(&[]).unwrap();

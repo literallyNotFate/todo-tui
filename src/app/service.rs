@@ -184,7 +184,9 @@ mod tests {
     #[test]
     fn should_append_task_service() {
         let mut tasks: Vec<Task> = Vec::new();
-        let task_to_add: Task = Task::new("Buy stuff", "Just buy stuff", Some(Priority::High));
+        let task_to_add: Task = Task::new("Buy stuff")
+            .with_description("Just buy stuff")
+            .with_priority(Priority::High);
 
         let result: ApplicationResult<TaskCreatedResult> =
             TaskService::append_task(&mut tasks, task_to_add, &Sort::default());
@@ -198,7 +200,7 @@ mod tests {
     #[test]
     fn should_fail_append_task_service_on_empty_title() {
         let mut tasks: Vec<Task> = Vec::new();
-        let task_to_add: Task = Task::new("", "Just buy stuff", Some(Priority::High));
+        let task_to_add: Task = Task::new("");
         let result: ApplicationResult<TaskCreatedResult> =
             TaskService::append_task(&mut tasks, task_to_add, &Sort::default());
 
@@ -211,11 +213,11 @@ mod tests {
 
     #[test]
     fn should_update_task_service() {
-        let mut tasks: Vec<Task> = vec![Task::new(
-            "Old title",
-            "Description",
-            Some(Priority::Medium),
-        )];
+        let mut tasks: Vec<Task> = vec![
+            Task::new("Old title")
+                .with_description("Description")
+                .with_priority(Priority::Medium),
+        ];
         let id: Uuid = tasks[0].id;
         let editor: TaskEditor = TaskEditor {
             title: "New Title".into(),
@@ -237,7 +239,7 @@ mod tests {
 
     #[test]
     fn should_fail_update_task_service_with_empty_title() {
-        let mut tasks: Vec<Task> = vec![Task::new("Valid", "Desc", None)];
+        let mut tasks: Vec<Task> = vec![Task::new("Valid").with_description("Desc")];
         let id: Uuid = tasks[0].id;
         let editor: TaskEditor = TaskEditor {
             title: "".into(),
@@ -258,7 +260,7 @@ mod tests {
 
     #[test]
     fn should_fail_update_task_service_with_wrong_id() {
-        let mut tasks: Vec<Task> = vec![Task::new("Task", "", None)];
+        let mut tasks: Vec<Task> = vec![Task::new("Task")];
         let fake_id: Uuid = Uuid::new_v4();
         let editor: TaskEditor = TaskEditor {
             title: "X".into(),
@@ -278,10 +280,7 @@ mod tests {
 
     #[test]
     fn should_remove_task_service() {
-        let mut tasks: Vec<Task> = vec![
-            Task::new("Task 1", "Desc", None),
-            Task::new("Task 2", "Desc", None),
-        ];
+        let mut tasks: Vec<Task> = vec![Task::new("Task 1"), Task::new("Task 2")];
         let id_to_remove: Uuid = tasks[0].id;
 
         let result: ApplicationResult<TaskRemovedResult> =
@@ -295,7 +294,7 @@ mod tests {
 
     #[test]
     fn should_fail_remove_task_service_with_wrong_id() {
-        let mut tasks: Vec<Task> = vec![Task::new("Task", "", None)];
+        let mut tasks: Vec<Task> = vec![Task::new("Task")];
         let fake_id: Uuid = Uuid::new_v4();
 
         let result: ApplicationResult<TaskRemovedResult> =
@@ -310,7 +309,7 @@ mod tests {
 
     #[test]
     fn should_toggle_task_service() {
-        let mut tasks: Vec<Task> = vec![Task::new("Toggle Me", "", None)];
+        let mut tasks: Vec<Task> = vec![Task::new("Toggle Me")];
         let id: Uuid = tasks[0].id;
         assert!(!tasks[0].completed);
 
@@ -323,7 +322,7 @@ mod tests {
 
     #[test]
     fn should_fail_toggle_task_service_with_wrong_id() {
-        let mut tasks: Vec<Task> = vec![Task::new("Toggle Me", "", None)];
+        let mut tasks: Vec<Task> = vec![Task::new("Toggle Me")];
         let fake_id: Uuid = Uuid::new_v4();
         assert!(!tasks[0].completed);
 
@@ -335,7 +334,7 @@ mod tests {
 
     #[test]
     fn should_clear_tasks_service_completed() {
-        let mut tasks: Vec<Task> = vec![Task::new("Active", "", None), Task::new("Done", "", None)];
+        let mut tasks: Vec<Task> = vec![Task::new("Active"), Task::new("Done")];
         tasks[1].completed = true;
 
         let removed_count: usize = TaskService::clear(&mut tasks, &Filter::Completed);
@@ -348,8 +347,8 @@ mod tests {
     #[test]
     fn should_sort_by_priority_automatically() {
         let mut tasks: Vec<Task> = vec![
-            Task::new("Low Task", "", None),
-            Task::new("High Task", "", Some(Priority::High)),
+            Task::new("Low Task"),
+            Task::new("High Task").with_priority(Priority::High),
         ];
 
         TaskService::sorting(&mut tasks, &Sort::default());
@@ -361,8 +360,8 @@ mod tests {
     #[test]
     fn should_move_tasks_successully_with_same_priority() {
         let mut tasks: Vec<Task> = vec![
-            Task::new("Task 1", "", Some(Priority::High)),
-            Task::new("Task 2", "", Some(Priority::High)),
+            Task::new("Task 1").with_priority(Priority::High),
+            Task::new("Task 2").with_priority(Priority::High),
         ];
 
         let result: ApplicationResult<()> = TaskService::move_tasks(&mut tasks, 0, 1);
@@ -375,15 +374,15 @@ mod tests {
     #[test]
     fn should_not_move_tasks_with_different_priorities() {
         let mut tasks: Vec<Task> = vec![
-            Task::new("High Task", "", Some(Priority::High)),
-            Task::new("Medium Task", "", Some(Priority::Medium)),
+            Task::new("High Task").with_priority(Priority::High),
+            Task::new("Medium Task").with_priority(Priority::Medium),
         ];
 
         let result: ApplicationResult<()> = TaskService::move_tasks(&mut tasks, 0, 1);
 
         assert_eq!(
             result,
-            Err(ApplicationError::Task(TaskError::MoveForbidden.into()))
+            Err(ApplicationError::Task(TaskError::MoveForbidden))
         );
         assert_eq!(tasks[0].title, "High Task");
         assert_eq!(tasks[1].title, "Medium Task");
@@ -392,8 +391,8 @@ mod tests {
     #[test]
     fn should_test_boundaries_on_move_tasks_service() {
         let mut tasks: Vec<Task> = vec![
-            Task::new("Task 1", "", Some(Priority::Low)),
-            Task::new("Task 2", "", Some(Priority::High)),
+            Task::new("Task 1"),
+            Task::new("Task 2").with_priority(Priority::High),
         ];
 
         let res_same = TaskService::move_tasks(&mut tasks, 0, 0);

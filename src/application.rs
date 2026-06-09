@@ -387,9 +387,9 @@ mod tests {
     fn should_adjust_out_of_bounds_index_with_sync_ui() {
         let (mut app, _tmp) = create_test_app();
 
-        app.data.tasks.push(Task::new("1", "", None));
-        app.data.tasks.push(Task::new("2", "", None));
-        app.data.tasks.push(Task::new("3", "", None));
+        app.data.tasks.push(Task::new("1"));
+        app.data.tasks.push(Task::new("2"));
+        app.data.tasks.push(Task::new("3"));
 
         app.data.select_state.select(Some(2));
         app.data.tasks.truncate(1);
@@ -407,7 +407,7 @@ mod tests {
     fn should_initialize_selection_with_sync_ui() {
         let (mut app, _tmp) = create_test_app();
 
-        app.data.tasks.push(Task::new("Task", "", None));
+        app.data.tasks.push(Task::new("Task"));
         app.data.select_state.select(None);
 
         app.sync_ui(None);
@@ -423,8 +423,8 @@ mod tests {
     fn should_adjust_selection_on_filter_change_with_sync_ui() {
         let (mut app, _tmp) = create_test_app();
 
-        app.data.tasks.push(Task::new("Active", "", None));
-        app.data.tasks.push(Task::new("Done", "", None));
+        app.data.tasks.push(Task::new("Active"));
+        app.data.tasks.push(Task::new("Done"));
         app.data.tasks[1].completed = true;
 
         app.ui.filter.set(Filter::Completed);
@@ -442,7 +442,7 @@ mod tests {
         app.autosave.interval = Duration::from_secs(30);
         app.autosave.last_tick_had_changes = false;
 
-        app.data.tasks.push(Task::new("Task", "", None));
+        app.data.tasks.push(Task::new("Task"));
         app.data.mark_as_dirty();
 
         let time_before = app.autosave.time_until_next_save();
@@ -466,7 +466,7 @@ mod tests {
         app.data.mark_saved();
         assert!(!app.data.any_unsaved_changes());
 
-        app.data.tasks.push(Task::new("Change", "", None));
+        app.data.tasks.push(Task::new("Change"));
         app.data.mark_as_dirty();
         mock_tick(&mut app);
         assert!(app.autosave.last_tick_had_changes);
@@ -485,7 +485,7 @@ mod tests {
             "Flag should reset when data is clean"
         );
 
-        app.data.tasks.push(Task::new("New change", "", None));
+        app.data.tasks.push(Task::new("New change"));
         app.data.mark_as_dirty();
         mock_tick(&mut app);
 
@@ -499,7 +499,7 @@ mod tests {
         app.autosave.interval = Duration::from_millis(20);
         app.autosave.debounce = Duration::from_millis(20);
 
-        app.data.tasks.push(Task::new("Test Task", "", None));
+        app.data.tasks.push(Task::new("Test Task"));
         app.data.mark_as_dirty();
 
         mock_tick(&mut app);
@@ -526,7 +526,7 @@ mod tests {
         app.autosave.enabled = false;
         app.autosave.interval = Duration::from_millis(0);
 
-        app.data.tasks.push(Task::new("Hidden Task", "", None));
+        app.data.tasks.push(Task::new("Hidden Task"));
         app.data.mark_as_dirty();
 
         sleep(Duration::from_millis(5));

@@ -302,9 +302,9 @@ mod tests {
     fn should_return_swap_indices_for_move() {
         let mut state = ApplicationState::default();
         state.tasks = vec![
-            Task::new("Task 1", "", Some(Priority::High)),
-            Task::new("Task 2", "", Some(Priority::Low)),
-            Task::new("Task 3", "", Some(Priority::High)),
+            Task::new("Task 1").with_priority(Priority::High),
+            Task::new("Task 2").with_priority(Priority::Low),
+            Task::new("Task 3").with_priority(Priority::High),
         ];
 
         let filter: Filter = Filter::HighPriority;
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn should_test_swap_indices_boundaries() {
         let mut state = ApplicationState::default();
-        state.tasks = vec![Task::new("1", "", None)];
+        state.tasks = vec![Task::new("1")];
         state.select_state.select(Some(0));
 
         let up = state.swap_indices(&Filter::All, "", -1);
@@ -332,10 +332,7 @@ mod tests {
     #[test]
     fn should_return_currently_selected_task() {
         let mut state = ApplicationState::default();
-        state.tasks = vec![
-            Task::new("A", "", Some(Priority::Low)),
-            Task::new("B", "", Some(Priority::Low)),
-        ];
+        state.tasks = vec![Task::new("A"), Task::new("B")];
 
         state.select_state.select(Some(1));
         let id: Uuid = state.tasks[1].id;
@@ -349,10 +346,7 @@ mod tests {
     #[test]
     fn should_return_task_by_id() {
         let mut state = ApplicationState::default();
-        state.tasks = vec![
-            Task::new("A", "", Some(Priority::Low)),
-            Task::new("B", "", Some(Priority::Low)),
-        ];
+        state.tasks = vec![Task::new("A"), Task::new("B")];
         let id_to_find: Uuid = state.tasks[1].id;
         let selected: Option<&Task> = state.find_by_id(id_to_find);
 

@@ -447,8 +447,8 @@ mod tests {
         let mut state = ApplicationState::default();
 
         let tasks: Vec<Task> = vec![
-            Task::new("Task 1", "", None),
-            Task::new("Task 2", "", Some(Priority::Medium)),
+            Task::new("Task 1"),
+            Task::new("Task 2").with_priority(Priority::Medium),
         ];
         let last_id: Uuid = tasks[1].id;
         state.tasks = tasks;

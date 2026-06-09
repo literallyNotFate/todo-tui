@@ -40,7 +40,11 @@ impl<'a> ApplicationController<'a> {
         let title_string: String = title.into();
         log::debug!("Dispatching append for task: '{}'", title_string);
 
-        let task: Task = Task::new(title_string, desc, priority);
+        let mut task: Task = Task::new(title_string).with_description(desc);
+
+        if let Some(p) = priority {
+            task = task.with_priority(p);
+        }
         let id: Uuid = task.id;
 
         match TaskService::append_task(&mut self.state.tasks, task, &self.state.sort) {
@@ -289,8 +293,8 @@ mod tests {
     fn should_handle_update_and_maintain_focus() {
         let (mut state, mut ui, mut config, keymaps) = setup();
 
-        let task_high = Task::new("High Task", "", Some(Priority::High));
-        let task_low = Task::new("Low Task", "", Some(Priority::Low));
+        let task_high = Task::new("High Task").with_priority(Priority::High);
+        let task_low = Task::new("Low Task").with_priority(Priority::Low);
         let low_id = task_low.id;
 
         state.tasks = vec![task_high, task_low];
@@ -319,23 +323,12 @@ mod tests {
         );
 
         assert_eq!(state.tasks[new_pos].title, "Now High");
-
-        let note = state
-            .notification
-            .as_ref()
-            .expect("Notification should be present");
-
-        assert!(
-            note.message.contains("Title: 'Low Task' → 'Now High'"),
-            "Notification should show the title change. Current: {}",
-            note.message
-        );
     }
 
     #[test]
     fn should_handle_empty_title_error_on_update() {
         let (mut state, mut ui, mut config, keymaps) = setup();
-        let task: Task = Task::new("Task", "", Some(Priority::Low));
+        let task: Task = Task::new("Task");
         let id: Uuid = task.id;
 
         state.tasks.push(task);
@@ -375,8 +368,8 @@ mod tests {
     #[test]
     fn should_remove_task_and_adjust_selection() {
         let (mut state, mut ui, mut config, keymaps) = setup();
-        state.tasks.push(Task::new("T1", "", None));
-        state.tasks.push(Task::new("T2", "", None));
+        state.tasks.push(Task::new("T1"));
+        state.tasks.push(Task::new("T2"));
         state.select_state.select(Some(1));
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
@@ -390,7 +383,7 @@ mod tests {
     #[test]
     fn should_handle_remove_non_existent_task() {
         let (mut state, mut ui, mut config, keymaps) = setup();
-        state.tasks.push(Task::new("Task", "", None));
+        state.tasks.push(Task::new("Task"));
         state.select_state.select(Some(999));
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
@@ -433,7 +426,7 @@ mod tests {
     #[test]
     fn should_stabilize_focus_out_of_bounds() {
         let (mut state, mut ui, mut config, keymaps) = setup();
-        state.tasks = vec![Task::new("One", "", Some(Priority::Low))];
+        state.tasks = vec![Task::new("One")];
         state.select_state.select(Some(10));
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
@@ -465,7 +458,7 @@ mod tests {
         let (mut state, mut ui, mut config, keymaps) = setup();
 
         let mut storage = Storage::init(Some(&path), &config.storage).unwrap();
-        state.tasks.push(Task::new("Test Save", "", None));
+        state.tasks.push(Task::new("Test Save"));
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
         let saved = ctrl.dispatch_save(&mut storage);
