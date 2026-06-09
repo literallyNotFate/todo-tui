@@ -81,7 +81,7 @@ impl EventHandler {
             let modal_action = ctrl.ui.modal.as_ref().unwrap().action.clone();
 
             match result {
-                ModalResult::FormSubmitted {
+                ModalResult::TaskSubmitted {
                     id,
                     title,
                     description,
@@ -294,11 +294,11 @@ impl EventHandler {
                                 log::debug!("Opening task details popup");
                                 ctrl.ui.show_modal(
                                     Popup::details(
-                                        " Details ".into(),
+                                        " Details ",
                                         TaskDetails::from(task, &ctrl.config.ui),
                                     )
-                                    .close_on(KeyCode::Tab)
-                                    .with_scroll(ctrl.ui.desc_scroll.clone()),
+                                    .with_scroll(ctrl.ui.desc_scroll.clone())
+                                    .close_on(KeyCode::Tab),
                                     ModalAction::None,
                                 );
                             }
@@ -448,21 +448,6 @@ mod tests {
     }
 
     #[test]
-    fn should_restore_mode_on_esc_from_form() {
-        let mut wrapper = setup_application();
-        let app = &mut wrapper.app;
-
-        app.ui.show_modal(Popup::new_task(), ModalAction::None);
-        assert_eq!(app.mode, ApplicationMode::List);
-
-        EventHandler::handle_key(app, key_event(KeyCode::Esc));
-
-        assert_eq!(app.mode, ApplicationMode::List);
-        assert!(app.ui.modal.is_none());
-        assert!(app.running);
-    }
-
-    #[test]
     fn should_prioritize_modal_over_global_keys() {
         let mut wrapper = setup_application();
         let app = &mut wrapper.app;
@@ -471,7 +456,6 @@ mod tests {
         EventHandler::handle_key(app, key_event(KeyCode::Char('a')));
 
         assert_eq!(app.mode, ApplicationMode::Navigation);
-        assert!(app.ui.task_form.is_none());
         assert!(app.ui.modal.is_some());
     }
 

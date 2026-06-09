@@ -20,7 +20,7 @@ pub trait Modal {
 pub enum ModalResult {
     Confirmed,
     Cancelled,
-    FormSubmitted {
+    TaskSubmitted {
         id: Option<Uuid>,
         title: String,
         description: String,

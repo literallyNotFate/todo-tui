@@ -1,16 +1,16 @@
 use crate::{
     core::Action,
-    models::{Task, TaskDetails},
+    models::TaskDetails,
     state::AdaptiveScroll,
     theme::ThemePalette,
     ui::{
-        Form, RenderContext, WidgetResponse, center, scrollable,
+        Form, PopupComponent, RenderContext, WidgetResponse, center,
         widgets::modal::{Modal, ModalResult, ModalSize},
     },
 };
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent},
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span},
 };
@@ -40,92 +40,27 @@ pub enum PopupKind {
 }
 
 /// Popup modal widget
-#[derive(Debug)]
 pub struct Popup {
     pub title: String,
-    pub content: PopupContent,
+    pub content: Box<dyn PopupComponent>,
     pub kind: PopupKind,
     pub close_behavior: PopupCloseBehavior,
-    pub scroll: AdaptiveScroll,
     pub size: ModalSize,
 }
 
 impl Popup {
-    /// Creating info popup template
-    pub fn info(message: impl Into<String>) -> Self {
+    /// Create generic popup widget
+    pub fn new(
+        title: impl Into<String>,
+        content: Box<dyn PopupComponent>,
+        kind: PopupKind,
+    ) -> Self {
         Self {
-            kind: PopupKind::Info,
-            title: String::from(" Info "),
-            content: PopupContent::Message(message.into()),
+            title: title.into(),
+            content,
+            kind,
             close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
-            scroll: AdaptiveScroll::default(),
             size: ModalSize::Medium,
-        }
-    }
-
-    /// Creating success popup template
-    pub fn success(message: impl Into<String>) -> Self {
-        Self {
-            kind: PopupKind::Success,
-            title: String::from(" Success "),
-            ..Self::info(message)
-        }
-    }
-
-    /// Creating error popup template
-    pub fn error(message: impl Into<String>) -> Self {
-        Self {
-            kind: PopupKind::Error,
-            title: String::from(" Error "),
-            ..Self::info(message)
-        }
-    }
-
-    /// Creating task details popup template
-    pub fn details(title: String, details: TaskDetails) -> Self {
-        Self {
-            title,
-            content: PopupContent::Task(details),
-            kind: PopupKind::Info,
-            close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
-            scroll: AdaptiveScroll::default(),
-            size: ModalSize::Large,
-        }
-    }
-
-    /// Creating hotkeys popup templete
-    pub fn help(lines: Vec<Line<'static>>) -> Self {
-        Self {
-            kind: PopupKind::Info,
-            title: " Keyboard Shortcuts ".into(),
-            content: PopupContent::Help(lines),
-            close_behavior: PopupCloseBehavior::Specific(KeyCode::Char('?')),
-            scroll: AdaptiveScroll::default(),
-            size: ModalSize::Large,
-        }
-    }
-
-    /// Creating new task popup
-    pub fn new_task() -> Self {
-        Self {
-            kind: PopupKind::Info,
-            title: " Create Task ".into(),
-            content: PopupContent::Form(Form::new()),
-            close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
-            scroll: AdaptiveScroll::default(),
-            size: ModalSize::Large,
-        }
-    }
-
-    /// Updating new task popup
-    pub fn update_task(task: &Task) -> Self {
-        Self {
-            kind: PopupKind::Info,
-            title: String::from(" Update Task "),
-            content: PopupContent::Form(Form::from(task)),
-            close_behavior: PopupCloseBehavior::Specific(KeyCode::Esc),
-            scroll: AdaptiveScroll::default(),
-            size: ModalSize::Large,
         }
     }
 
@@ -155,28 +90,8 @@ impl Popup {
 
     /// With adaptive scroll
     pub fn with_scroll(mut self, scroll: AdaptiveScroll) -> Self {
-        self.scroll = scroll;
+        self.content.set_scroll(scroll);
         self
-    }
-
-    /// Vertical layout for inner content
-    fn vertical_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1), Constraint::Min(1), Constraint::Fill(1)])
-            .split(area)
-    }
-
-    /// Horizontal layout for inner content
-    fn horizontal_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(10), // Left
-                Constraint::Percentage(80),
-                Constraint::Percentage(10), // Right
-            ])
-            .split(area)
     }
 
     /// Generate bottom title based on close behavior and keymaps
@@ -195,7 +110,7 @@ impl Popup {
         ));
         spans.push(Span::styled(":close ", Style::default().fg(palette.muted)));
 
-        if matches!(self.content, PopupContent::Task(_) | PopupContent::Help(_)) {
+        if self.content.is_scrollable() {
             let up = ctx.get_key(Action::MoveUp);
             let down = ctx.get_key(Action::MoveDown);
 
@@ -234,11 +149,11 @@ impl Modal for Popup {
         center(frame_area, width, height)
     }
 
-    /// Popup rendering
+    /// Generic popup rendering
     fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
+        use ratatui::widgets::Block;
 
-        let palette: ThemePalette = ctx.palette();
+        let palette = ctx.palette();
         let popup_block: Block = Block::bordered()
             .border_type(ctx.config.border_type.into())
             .title_alignment(Alignment::Center)
@@ -251,172 +166,28 @@ impl Modal for Popup {
         let inner_area = popup_block.inner(area);
         ctx.render_widget(popup_block, area);
 
-        match &self.content {
-            PopupContent::Message(msg) => {
-                let vertical_chunks: std::rc::Rc<[Rect]> = self.vertical_layout(inner_area);
-                let message_area: Rect = self.horizontal_layout(vertical_chunks[1])[1];
-                let message: Paragraph = Paragraph::new(msg.as_str())
-                    .centered()
-                    .wrap(Wrap { trim: true });
-                ctx.render_widget(message, message_area);
-            }
-            PopupContent::Task(details) => {
-                let (status_text, status_style) = if details.completed {
-                    (
-                        " DONE ",
-                        Style::default().bg(palette.success).fg(palette.bg).bold(),
-                    )
-                } else {
-                    (
-                        " ACTIVE ",
-                        Style::default().bg(palette.accent).fg(palette.bg).bold(),
-                    )
-                };
-
-                let header_line = Line::from(vec![
-                    Span::styled(" ● ", Style::default().fg(palette.accent)),
-                    Span::styled(&details.title, Style::default().fg(palette.fg).bold()),
-                    Span::raw(" "),
-                    Span::styled(
-                        format!("#{}", details.id_short),
-                        Style::default().fg(palette.muted).italic(),
-                    ),
-                ]);
-
-                let meta_line = Line::from(vec![
-                    Span::styled(status_text, status_style),
-                    Span::raw("  "),
-                    Span::styled("Created ", Style::default().fg(palette.muted)),
-                    Span::styled(&details.created_at, Style::default().fg(palette.success)),
-                    Span::raw("  •  "),
-                    Span::styled("Updated ", Style::default().fg(palette.muted)),
-                    Span::styled(&details.updated_at, Style::default().fg(palette.accent)),
-                ]);
-
-                let content_lines: Vec<Line> = details
-                    .description
-                    .lines()
-                    .map(|l| Line::from(l.to_string()))
-                    .collect();
-
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(1), // Title + ID
-                        Constraint::Length(1),
-                        Constraint::Length(1), // Status + Times
-                        Constraint::Length(1), // Separator
-                        Constraint::Fill(1),   // Description
-                    ])
-                    .margin(1)
-                    .split(inner_area);
-
-                ctx.render_widget(Paragraph::new(header_line), chunks[0]);
-                ctx.render_widget(Paragraph::new(meta_line), chunks[2]);
-
-                ctx.render_widget(
-                    Block::default()
-                        .borders(Borders::BOTTOM)
-                        .border_style(palette.muted)
-                        .title_alignment(Alignment::Right)
-                        .title(Span::styled(
-                            " info ",
-                            Style::default().fg(palette.muted).italic(),
-                        )),
-                    chunks[3],
-                );
-
-                scrollable(
-                    ctx,
-                    chunks[4],
-                    Block::default()
-                        .title(Span::styled(
-                            " Description ",
-                            Style::default().fg(palette.muted),
-                        ))
-                        .padding(Padding::vertical(1)),
-                    &self.scroll,
-                    &content_lines,
-                    false,
-                    Style::default().fg(palette.accent),
-                    |ctx, area| {
-                        let paragraph = Paragraph::new(content_lines.clone())
-                            .wrap(Wrap { trim: true })
-                            .scroll((self.scroll.current.get() as u16, 0));
-                        ctx.render_widget(paragraph, area);
-                    },
-                );
-            }
-            PopupContent::Help(lines) => {
-                let mid: usize = lines.len().div_ceil(2);
-                let dummy_lines = vec![Line::from(""); mid];
-
-                scrollable(
-                    ctx,
-                    inner_area,
-                    Block::default().title(""),
-                    &self.scroll,
-                    &dummy_lines,
-                    false,
-                    Style::default().fg(palette.accent),
-                    |ctx, area| {
-                        let chunks = Layout::default()
-                            .direction(Direction::Horizontal)
-                            .constraints([
-                                Constraint::Percentage(48),
-                                Constraint::Percentage(4),
-                                Constraint::Percentage(48),
-                            ])
-                            .split(area);
-
-                        let (left, right) = lines.split_at(mid);
-                        let scroll_val = self.scroll.current.get() as u16;
-
-                        ctx.render_widget(
-                            Paragraph::new(left.to_vec()).scroll((scroll_val, 0)),
-                            chunks[0],
-                        );
-                        ctx.render_widget(
-                            Paragraph::new(right.to_vec()).scroll((scroll_val, 0)),
-                            chunks[2],
-                        );
-                    },
-                );
-            }
-            PopupContent::Form(form) => {
-                form.render(ctx, inner_area);
-            }
-        }
+        self.content.render(ctx, inner_area);
     }
 
     /// Action handling
     fn handle_action(&mut self, action: Option<Action>, event: &KeyEvent) -> Option<ModalResult> {
         let key: KeyCode = event.code;
-
-        if let PopupContent::Form(ref mut form) = self.content {
-            match form.handle_key(event) {
-                WidgetResponse::Submit => {
-                    let (id, title, desc, priority) = form.data();
-                    return Some(ModalResult::FormSubmitted {
-                        id,
-                        title,
-                        description: desc,
-                        priority,
-                    });
-                }
-                WidgetResponse::Cancel => return Some(ModalResult::Cancelled),
-                WidgetResponse::Continue => return None,
+        match self.content.handle_key(event) {
+            WidgetResponse::Submit => {
+                return Some(self.content.to_modal_result());
             }
+            WidgetResponse::Cancel => return Some(ModalResult::Cancelled),
+            WidgetResponse::Continue => {}
         }
 
         if let Some(act) = action {
             match act {
                 Action::MoveDown => {
-                    self.scroll.scroll_down();
+                    self.content.scroll_down();
                     return None;
                 }
                 Action::MoveUp => {
-                    self.scroll.scroll_up();
+                    self.content.scroll_up();
                     return None;
                 }
                 _ => {}
@@ -441,135 +212,77 @@ impl Modal for Popup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::UIConfig, models::Task, theme::ThemeName};
+    use crate::theme::ThemeName;
     use ratatui::crossterm::event::KeyModifiers;
+
+    struct DummyComponent;
+    impl PopupComponent for DummyComponent {
+        fn render(&self, _ctx: &mut RenderContext, _area: Rect) {}
+    }
 
     fn create_helper_frame() -> Rect {
         Rect::new(0, 0, 100, 100)
     }
 
     #[test]
-    fn should_create_message_popup() {
-        let mut popup: Popup = Popup::success("Success");
-
-        assert_eq!(popup.kind, PopupKind::Success);
-        assert!(matches!(popup.content, PopupContent::Message(_)));
-        assert_eq!(popup.title, " Success ");
-        assert_eq!(
-            popup.close_behavior,
-            PopupCloseBehavior::Specific(KeyCode::Esc)
-        );
-
-        popup = Popup::info("Info");
-        assert_eq!(popup.kind, PopupKind::Info);
-        assert!(matches!(popup.content, PopupContent::Message(_)));
-
-        popup = Popup::error("Error");
-        assert_eq!(popup.kind, PopupKind::Error);
-        assert!(matches!(popup.content, PopupContent::Message(_)));
-    }
-
-    #[test]
     fn should_create_popup_with_chaining_api() {
-        let popup: Popup = Popup::success("Task completed!")
-            .title("Some title")
+        let popup = Popup::new("Some title", Box::new(DummyComponent), PopupKind::Success)
             .close_on_any_key();
 
         assert_eq!(popup.kind, PopupKind::Success);
-        assert!(matches!(popup.content, PopupContent::Message(_)));
         assert_eq!(popup.title, "Some title");
         assert_eq!(popup.close_behavior, PopupCloseBehavior::AnyKey);
     }
 
     #[test]
-    fn should_create_task_details_popup() {
-        let task = Task::new("Task 1", "Desc 1", None);
-        let details = TaskDetails::from(&task, &UIConfig::default());
-        let popup: Popup = Popup::details("Test".to_string(), details);
-
-        assert_eq!(popup.kind, PopupKind::Info);
-        assert!(matches!(popup.content, PopupContent::Task(_)));
-        assert_eq!(popup.title, "Test");
-        assert_eq!(
-            popup.close_behavior,
-            PopupCloseBehavior::Specific(KeyCode::Esc)
-        );
-    }
-
-    #[test]
     fn should_popup_close_on_any_key() {
-        let mut popup: Popup = Popup::info("Test").close_on_any_key();
+        let mut popup =
+            Popup::new("Test", Box::new(DummyComponent), PopupKind::Info).close_on_any_key();
+        let event_q = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+        let event_enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
 
         assert_eq!(
-            popup.handle_action(None, &KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)),
+            popup.handle_action(None, &event_q),
             Some(ModalResult::Cancelled)
         );
         assert_eq!(
-            popup.handle_action(None, &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            Some(ModalResult::Cancelled)
-        );
-        assert_eq!(
-            popup.handle_action(None, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            popup.handle_action(None, &event_enter),
             Some(ModalResult::Cancelled)
         );
     }
 
     #[test]
     fn should_popup_close_on_specific_key() {
-        let mut popup: Popup = Popup::error("Test").close_on(KeyCode::Char('y'));
+        let mut popup = Popup::new("Test", Box::new(DummyComponent), PopupKind::Error)
+            .close_on(KeyCode::Char('y'));
+        let event_y = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
+        let event_n = KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE);
 
         assert_eq!(
-            popup.handle_action(None, &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE)),
+            popup.handle_action(None, &event_y),
             Some(ModalResult::Cancelled)
         );
-        assert_eq!(
-            popup.handle_action(None, &KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)),
-            None
-        );
+        assert_eq!(popup.handle_action(None, &event_n), None);
     }
 
     #[test]
     fn should_close_on_esc_anyway() {
-        let mut popup: Popup = Popup::info("Test").close_on(KeyCode::Tab);
+        let mut popup =
+            Popup::new("Test", Box::new(DummyComponent), PopupKind::Info).close_on(KeyCode::Tab);
+        let event_esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         assert_eq!(
-            popup.handle_action(None, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            popup.handle_action(None, &event_esc),
             Some(ModalResult::Cancelled)
         );
     }
 
     #[test]
-    fn should_handle_scroll_input() {
-        let task = Task::new("T", "D", None);
-        let config = UIConfig::default();
-        let details = TaskDetails::from(&task, &config);
-        let mut popup = Popup::details("Test".to_string(), details);
-
-        assert_eq!(popup.scroll.current.get(), 0);
-
-        popup.handle_action(
-            Some(Action::MoveDown),
-            &KeyEvent::new(KeyCode::Null, KeyModifiers::NONE),
-        );
-        assert_eq!(popup.scroll.current.get(), 1);
-
-        popup.handle_action(
-            Some(Action::MoveUp),
-            &KeyEvent::new(KeyCode::Null, KeyModifiers::NONE),
-        );
-        assert_eq!(popup.scroll.current.get(), 0);
-
-        popup.handle_action(
-            Some(Action::MoveUp),
-            &KeyEvent::new(KeyCode::Null, KeyModifiers::NONE),
-        );
-        assert_eq!(popup.scroll.current.get(), 0);
-    }
-
-    #[test]
     fn should_calculate_dynamic_area_for_popup() {
-        let frame: Rect = create_helper_frame();
-        let small_popup = Popup::info("Small").with_size(ModalSize::Small);
-        let large_popup = Popup::info("Large").with_size(ModalSize::Large);
+        let frame = create_helper_frame();
+        let small_popup =
+            Popup::new("S", Box::new(DummyComponent), PopupKind::Info).with_size(ModalSize::Small);
+        let large_popup =
+            Popup::new("L", Box::new(DummyComponent), PopupKind::Info).with_size(ModalSize::Large);
 
         let small_area = small_popup.area(frame);
         let large_area = large_popup.area(frame);
@@ -580,18 +293,14 @@ mod tests {
 
     #[test]
     fn should_return_color_based_on_popup_kind_with_theme() {
-        let mut popup = Popup::success("Test");
-        let mut palette: ThemePalette = ThemeName::GruvboxDark.palette();
-        let mut color: Color = popup.color_on_kind(&palette);
-        assert_eq!(color, Color::Rgb(184, 187, 38));
+        let palette = ThemeName::GruvboxDark.palette();
+        let success_popup = Popup::new("T", Box::new(DummyComponent), PopupKind::Success);
+        assert_eq!(
+            success_popup.color_on_kind(&palette),
+            Color::Rgb(184, 187, 38)
+        );
 
-        popup = Popup::info("Test");
-        color = popup.color_on_kind(&palette);
-        assert_eq!(color, Color::Rgb(250, 189, 47));
-
-        popup = Popup::error("Test");
-        palette = ThemeName::CatppuccinMocha.palette();
-        color = popup.color_on_kind(&palette);
-        assert_ne!(color, Color::Rgb(251, 73, 52));
+        let info_popup = Popup::new("T", Box::new(DummyComponent), PopupKind::Info);
+        assert_eq!(info_popup.color_on_kind(&palette), Color::Rgb(250, 189, 47));
     }
 }

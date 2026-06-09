@@ -1,3 +1,6 @@
+///
+/// Toodles - TUI task manager written in Rust
+///
 pub mod app;
 pub mod application;
 pub mod common;
@@ -10,3 +13,8 @@ pub mod theme;
 pub mod ui;
 
 pub use application::Application;
+
+/// Pretty assertions for tests
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;

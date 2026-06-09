@@ -15,7 +15,6 @@ dirs = "5.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = "1.0"
 thiserror = "1.0"
-tempdir = "0.3"
 uuid = { version = "1.10", features = ["serde", "v4"] }
 tui-textarea = "0.7.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -30,3 +29,7 @@ rusqlite = { version = "0.32.0", features = ["bundled"] }
 [features]
 default = ["serde"]
 serde = ["dep:serde"]
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+tempdir = "0.3"
