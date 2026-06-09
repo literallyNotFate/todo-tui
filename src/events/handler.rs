@@ -79,6 +79,7 @@ impl EventHandler {
 
         if let Some(result) = result {
             let modal_action = ctrl.ui.modal.as_ref().unwrap().action.clone();
+            ctrl.ui.close_modal();
 
             match result {
                 ModalResult::TaskSubmitted {
@@ -125,8 +126,6 @@ impl EventHandler {
                     log::debug!("Modal cancelled: action={:?}", modal_action);
                 }
             }
-
-            ctrl.ui.close_modal();
         }
 
         ctrl.ui.request_redraw();

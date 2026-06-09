@@ -6,12 +6,31 @@ pub struct MessageComponent(pub String);
 
 impl PopupComponent for MessageComponent {
     fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        use ratatui::widgets::{Paragraph, Wrap};
+        use ratatui::{
+            layout::{Constraint, Direction, Layout},
+            widgets::{Paragraph, Wrap},
+        };
 
-        let message: Paragraph = Paragraph::new(self.0.as_str())
+        let vertical_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Fill(1), Constraint::Min(1), Constraint::Fill(1)])
+            .split(area);
+
+        let horizontal_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(10),
+                Constraint::Percentage(80),
+                Constraint::Percentage(10),
+            ])
+            .split(vertical_chunks[1]);
+
+        let message_area = horizontal_chunks[1];
+        let message = Paragraph::new(self.0.as_str())
             .centered()
             .wrap(Wrap { trim: true });
-        ctx.render_widget(message, area);
+
+        ctx.render_widget(message, message_area);
     }
 }
 
