@@ -1,65 +1,31 @@
 use crate::{
-    models::{Priority, Task},
     theme::ThemePalette,
     ui::{Field, FieldType, RenderContext, WidgetResponse, widgets::input::Input},
 };
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, Paragraph},
+    text::Line,
 };
-use uuid::Uuid;
 
-/// Form for appending/updating task
+/// Main form interface
 #[derive(Clone, Debug)]
 pub struct Form {
-    pub task_id: Option<Uuid>,
-    pub focused: usize,
     pub fields: Vec<Field>,
+    pub focused: usize,
 }
 
 impl Form {
-    /// Creates new form (for append)
-    pub fn new() -> Self {
-        Self {
-            fields: vec![
-                Field::new("title", FieldType::text(" Title ", "")),
-                Field::new("priority", FieldType::priority(Priority::Low)),
-                Field::new("description", FieldType::textarea("")),
-                Field::new("button", FieldType::Button),
-            ],
-            focused: 0,
-            task_id: None,
-        }
-    }
-
-    /// Creates new form (for update) with id
-    pub fn from(task: &Task) -> Self {
-        Self {
-            fields: vec![
-                Field::new("title", FieldType::text(" Title ", &task.title)),
-                Field::new("priority", FieldType::priority(task.priority)),
-                Field::new("description", FieldType::textarea(&task.description)),
-                Field::new("button", FieldType::Button),
-            ],
-            focused: 0,
-            task_id: Some(task.id),
-        }
+    pub fn new(fields: Vec<Field>) -> Self {
+        Self { fields, focused: 0 }
     }
 
     /// Form rendering
     pub fn render(&self, ctx: &mut RenderContext, area: Rect) {
-        let inner_area = area.inner(ratatui::prelude::Margin {
-            horizontal: 2,
-            vertical: 1,
-        });
+        use ratatui::{prelude::Margin, style::Style, widgets::Block};
 
-        let chunks: std::rc::Rc<[Rect]> = self.layout(inner_area);
-        let button_layout: std::rc::Rc<[Rect]> = self.button_layout(chunks[4]);
         let palette = ctx.palette();
-
         ctx.render_widget(
             Block::default()
                 .title_bottom(self.hotkeys(&palette))
@@ -67,84 +33,17 @@ impl Form {
             area,
         );
 
+        let inner_area = area.inner(Margin {
+            horizontal: 2,
+            vertical: 1,
+        });
+        let chunks = self.layout(inner_area);
+
         for (i, field) in self.fields.iter().enumerate() {
-            let is_focused = self.focused == i;
-            let focused_style: Style;
-
-            match &field.field_type {
-                FieldType::Multiline { input } => {
-                    let mut input = input.clone();
-
-                    if is_focused {
-                        input.set_cursor_style(
-                            Style::default().bg(palette.accent).fg(palette.selection),
-                        );
-                        focused_style = Style::default().fg(palette.accent);
-                    } else {
-                        input.set_cursor_style(Style::default());
-                        focused_style = Style::default().fg(palette.muted);
-                    }
-
-                    let block = Block::bordered()
-                        .title(" Description ")
-                        .border_type(ctx.config.border_type.into())
-                        .border_style(focused_style);
-
-                    input.set_block(block);
-                    input.set_style(Style::default().fg(palette.fg));
-
-                    ctx.render_widget(&input, chunks[i]);
-                }
-                FieldType::Text { input } => {
-                    input.render(ctx, chunks[i], is_focused);
-                }
-                FieldType::Enum { input } => {
-                    input.render(ctx, chunks[i], is_focused);
-                }
-                FieldType::Button => {
-                    let (border_style, text_style) = if is_focused {
-                        (
-                            Style::default().fg(palette.accent),
-                            Style::default().fg(palette.fg),
-                        )
-                    } else {
-                        (
-                            Style::default().fg(palette.muted),
-                            Style::default().fg(palette.muted),
-                        )
-                    };
-
-                    let button = Paragraph::new(" Save ")
-                        .block(
-                            Block::bordered()
-                                .border_type(ctx.config.border_type.into())
-                                .border_style(border_style)
-                                .style(text_style),
-                        )
-                        .centered();
-
-                    ctx.render_widget(button, button_layout[2]);
-                }
+            if i < chunks.len() {
+                field.field_type.render(ctx, chunks[i], self.focused == i);
             }
         }
-    }
-
-    /// Returs all values from form inputs to append/update
-    pub fn data(&self) -> (Option<Uuid>, String, String, Priority) {
-        let mut title: String = String::new();
-        let mut description: String = String::new();
-        let mut priority: Priority = Priority::Low;
-
-        for field in &self.fields {
-            match &field.field_type {
-                FieldType::Text { input } => title = input.buffer.clone(),
-                FieldType::Multiline { input } => description = input.lines().join("\n"),
-                FieldType::Enum { input } => priority = *input.selected,
-                FieldType::Button => continue,
-            }
-        }
-
-        (self.task_id, title, description, priority)
     }
 
     /// Key event handling
@@ -153,9 +52,7 @@ impl Form {
         let modifiers: KeyModifiers = event.modifiers;
 
         match (key, modifiers) {
-            (KeyCode::Enter, KeyModifiers::ALT) => {
-                return WidgetResponse::Submit;
-            }
+            (KeyCode::Enter, KeyModifiers::ALT) => return WidgetResponse::Submit,
             (KeyCode::Enter, KeyModifiers::NONE) if self.is_button_selected() => {
                 return WidgetResponse::Submit;
             }
@@ -191,7 +88,10 @@ impl Form {
                 FieldType::Text { input } => {
                     input.handle_key(&key);
                 }
-                FieldType::Enum { input } => {
+                FieldType::PriorityEnum { input } => {
+                    input.handle_key(&key);
+                }
+                FieldType::ColorEnum { input } => {
                     input.handle_key(&key);
                 }
                 _ => {}
@@ -201,22 +101,17 @@ impl Form {
         WidgetResponse::Continue
     }
 
-    /// Helper function to initialize field values (textbased only) using field key/name (for tests)
-    #[cfg(test)]
-    pub fn set_value(&mut self, key: &str, value: &str) {
-        use tui_textarea::TextArea;
-        if let Some(field) = self.fields.iter_mut().find(|f| f.name == key) {
-            match &mut field.field_type {
-                FieldType::Text { input } => {
-                    input.buffer = value.to_string();
-                }
-                FieldType::Multiline { input } => {
-                    let lines: Vec<String> = value.lines().map(|s| s.to_string()).collect();
-                    *input = TextArea::new(lines);
-                }
-                _ => {}
-            }
-        }
+    /// Get value from the text field by its name
+    pub fn get_text_value(&self, name: &str) -> String {
+        self.fields
+            .iter()
+            .find(|f| f.name == name)
+            .map(|f| match &f.field_type {
+                FieldType::Text { input } => input.buffer.clone(),
+                FieldType::Multiline { input } => input.lines().join("\n"),
+                _ => String::new(),
+            })
+            .unwrap_or_default()
     }
 
     /// Focus on the next field
@@ -252,11 +147,10 @@ impl Form {
 
     /// Checks whether textarea is selected
     fn is_enum_focused(&self) -> bool {
-        if let Some(f) = self.fields.get(self.focused) {
-            matches!(f.field_type, FieldType::Enum { .. })
-        } else {
-            false
-        }
+        matches!(
+            self.fields.get(self.focused).map(|f| &f.field_type),
+            Some(FieldType::PriorityEnum { .. }) | Some(FieldType::ColorEnum { .. })
+        )
     }
 
     /// Check if cursor of textarea is on the top (to focus to prev field)
@@ -285,72 +179,95 @@ impl Form {
 
     /// Generates hotkeys for form
     fn hotkeys(&self, palette: &ThemePalette) -> Line<'static> {
-        let mut spans = Vec::new();
-
-        spans.push(Span::styled(
-            "<alt+enter>",
-            Style::default().fg(palette.success).bold(),
-        ));
-        spans.push(Span::styled(":submit ", Style::default().fg(palette.muted)));
+        use ratatui::text::{Line, Span};
+        let mut spans = vec![
+            Span::styled("<alt+enter>", Style::default().fg(palette.success).bold()),
+            Span::styled(":submit ", Style::default().fg(palette.muted)),
+        ];
 
         if self.is_enum_focused() {
             spans.push(Span::styled(
                 " ◄/►",
                 Style::default().fg(palette.accent).bold(),
             ));
-            spans.push(Span::styled(
-                ":priority ",
-                Style::default().fg(palette.muted),
-            ));
+            spans.push(Span::styled(":select ", Style::default().fg(palette.muted)));
         }
 
-        spans.push(Span::styled(
-            " ▲/▼",
-            Style::default().fg(palette.secondary).bold(),
-        ));
-        spans.push(Span::styled(":move ", Style::default().fg(palette.muted)));
-
-        spans.push(Span::styled(
-            " <esc>",
-            Style::default().fg(palette.warning).bold(),
-        ));
-        spans.push(Span::styled(":back ", Style::default().fg(palette.muted)));
-
+        spans.extend(vec![
+            Span::styled(" ▲/▼", Style::default().fg(palette.secondary).bold()),
+            Span::styled(":move ", Style::default().fg(palette.muted)),
+            Span::styled(" <esc>", Style::default().fg(palette.warning).bold()),
+            Span::styled(":back ", Style::default().fg(palette.muted)),
+        ]);
         Line::from(spans).centered()
     }
 
     /// Main form layout method
     fn layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
+        use ratatui::layout::{Constraint, Direction, Layout};
+        let constraints: Vec<Constraint> = self
+            .fields
+            .iter()
+            .map(|f| match &f.field_type {
+                FieldType::Text { .. }
+                | FieldType::PriorityEnum { .. }
+                | FieldType::ColorEnum { .. }
+                | FieldType::Button => Constraint::Length(3),
+                FieldType::Multiline { .. } => Constraint::Min(6),
+            })
+            .collect();
         Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // Title
-                Constraint::Length(3), // Priority
-                Constraint::Min(10),   // Description
-                Constraint::Length(3),
-                Constraint::Length(3), // Button
-            ])
+            .constraints(constraints)
             .split(area)
     }
 
-    /// Form buttons layout method
-    fn button_layout(&self, area: Rect) -> std::rc::Rc<[Rect]> {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(15), // Button 1
-                Constraint::Min(0),
-                Constraint::Length(15), // Button 2
-            ])
-            .split(area)
+    /// Helper function to initialize field values using field key/name (primarily for tests)
+    #[cfg(test)]
+    pub fn set_value(&mut self, key: &str, value: &str) {
+        use crate::models::{FolderColor, Priority};
+        use std::str::FromStr;
+        use tui_textarea::TextArea;
+
+        if let Some(field) = self.fields.iter_mut().find(|f| f.name == key) {
+            match &mut field.field_type {
+                FieldType::Text { input } => {
+                    input.buffer = value.to_string();
+                }
+                FieldType::Multiline { input } => {
+                    let lines: Vec<String> = value.lines().map(|s| s.to_string()).collect();
+                    *input = TextArea::new(lines);
+                }
+                FieldType::PriorityEnum { input } => {
+                    if let Ok(priority) = Priority::from_str(value) {
+                        input.selected.value = priority;
+                    }
+                }
+                FieldType::ColorEnum { input } => {
+                    if let Ok(color) = FolderColor::from_str(value) {
+                        input.selected.value = color;
+                    }
+                }
+                FieldType::Button => {}
+            }
+        }
     }
 }
-
-/// Unit-tests for form
+/// Unit-tests for generic form widget and its contexts
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::crossterm::event::{KeyCode, KeyEventKind, KeyEventState, KeyModifiers};
+    use crate::models::Priority;
+    use ratatui::crossterm::event::{KeyEventKind, KeyEventState};
+
+    fn create_test_form() -> Form {
+        Form::new(vec![
+            Field::new("title", FieldType::text("Title", "")),
+            Field::new("priority", FieldType::priority(Priority::Low)),
+            Field::new("description", FieldType::textarea("")),
+            Field::new("save", FieldType::Button),
+        ])
+    }
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent {
@@ -362,10 +279,9 @@ mod tests {
     }
 
     #[test]
-    fn should_create_new_form() {
-        let form = Form::new();
+    fn should_create_generic_form_with_fields() {
+        let form = create_test_form();
         assert_eq!(form.focused, 0);
-        assert!(form.task_id.is_none());
         assert_eq!(form.fields.len(), 4);
 
         assert_eq!(form.fields[0].name, "title");
@@ -375,26 +291,8 @@ mod tests {
     }
 
     #[test]
-    fn should_create_form_with_task() {
-        let task = Task::new("Buy milk", "At the store", Some(Priority::High));
-        let form = Form::from(&task);
-
-        assert_eq!(form.task_id, Some(task.id));
-
-        if let FieldType::Text { input } = &form.fields[0].field_type {
-            assert_eq!(input.buffer, "Buy milk");
-        }
-        if let FieldType::Enum { input } = &form.fields[1].field_type {
-            assert_eq!(input.selected, Priority::High);
-        }
-        if let FieldType::Multiline { input } = &form.fields[2].field_type {
-            assert_eq!(input.lines().join("\n"), "At the store");
-        }
-    }
-
-    #[test]
-    fn should_navigate_through_form_with_button() {
-        let mut form = Form::new();
+    fn should_navigate_through_fields_using_down_key() {
+        let mut form = create_test_form();
         assert_eq!(form.focused, 0);
 
         form.handle_key(&key(KeyCode::Down));
@@ -411,23 +309,25 @@ mod tests {
     }
 
     #[test]
-    fn should_handle_multiline_input() {
-        let mut form = Form::new();
+    fn should_handle_text_and_textarea_inputs() {
+        let mut form = create_test_form();
+
+        form.handle_key(&key(KeyCode::Char('R')));
+        form.handle_key(&key(KeyCode::Char('u')));
+        form.handle_key(&key(KeyCode::Char('s')));
+        form.handle_key(&key(KeyCode::Char('t')));
+        assert_eq!(form.get_text_value("title"), "Rust");
+
         form.focused = 2;
-
-        form.handle_key(&key(KeyCode::Char('L')));
-        form.handle_key(&key(KeyCode::Char('i')));
-        form.handle_key(&key(KeyCode::Char('n')));
-        form.handle_key(&key(KeyCode::Char('e')));
-
-        if let FieldType::Multiline { input } = &form.fields[2].field_type {
-            assert_eq!(input.lines()[0], "Line");
-        }
+        form.handle_key(&key(KeyCode::Char('T')));
+        form.handle_key(&key(KeyCode::Char('U')));
+        form.handle_key(&key(KeyCode::Char('I')));
+        assert_eq!(form.get_text_value("description"), "TUI");
     }
 
     #[test]
     fn should_return_submit_on_button_enter() {
-        let mut form = Form::new();
+        let mut form = create_test_form();
         form.focused = 3;
 
         let response = form.handle_key(&key(KeyCode::Enter));
@@ -435,15 +335,14 @@ mod tests {
     }
 
     #[test]
-    fn should_prevent_navigation_if_textarea_not_at_edge() {
-        let mut form = Form::new();
+    fn should_prevent_navigation_if_textarea_cursor_not_at_edge() {
+        let mut form = create_test_form();
         form.focused = 2;
 
         if let FieldType::Multiline { input } = &mut form.fields[2].field_type {
             input.insert_str("Line 1");
             input.insert_newline();
             input.insert_str("Line 2");
-
             input.move_cursor(tui_textarea::CursorMove::Up);
         }
 
@@ -459,70 +358,13 @@ mod tests {
     }
 
     #[test]
-    fn should_handle_key_for_form() {
-        let mut form = Form::new();
+    fn should_properly_set_text_values_via_helper() {
+        let mut form = create_test_form();
 
-        form.handle_key(&key(KeyCode::Char('R')));
-        form.handle_key(&key(KeyCode::Char('u')));
-        form.handle_key(&key(KeyCode::Char('s')));
-        form.handle_key(&key(KeyCode::Char('t')));
+        form.set_value("title", "New Title");
+        form.set_value("description", "Line 1\nLine 2");
 
-        if let FieldType::Text { input } = &form.fields[0].field_type {
-            assert_eq!(input.buffer, "Rust");
-        }
-
-        form.next_focus();
-        form.handle_key(&key(KeyCode::Right));
-
-        if let FieldType::Enum { input } = &form.fields[1].field_type {
-            assert_ne!(input.selected, Priority::Low);
-        }
-    }
-
-    #[test]
-    fn should_return_all_data_on_append() {
-        let mut form = Form::new();
-
-        if let FieldType::Text { input } = &mut form.fields[0].field_type {
-            input.buffer = "Task".to_string();
-        }
-
-        if let FieldType::Multiline { input } = &mut form.fields[2].field_type {
-            input.insert_str("Multiline content");
-        }
-
-        let (_, title, desc, priority) = form.data();
-        assert_eq!(title, "Task");
-        assert_eq!(desc, "Multiline content");
-        assert_eq!(priority, Priority::Low);
-    }
-
-    #[test]
-    fn should_return_all_data_on_update() {
-        let task = Task::new("Old Title", "", None);
-        let task_id: Uuid = task.id;
-        let mut form = Form::from(&task);
-
-        if let FieldType::Text { input } = &mut form.fields[0].field_type {
-            input.buffer = "Updated Title".to_string();
-        }
-
-        let (id, title, desc, priority) = form.data();
-        assert_eq!(id, Some(task_id));
-        assert_eq!(title, "Updated Title");
-        assert_eq!(desc, "");
-        assert_eq!(priority, Priority::Low);
-    }
-
-    #[test]
-    fn should_properly_set_value_for_text_input() {
-        let mut form = Form::new();
-
-        form.set_value("title", "Title test");
-        form.set_value("description", "Desc test");
-
-        let (_, title, desc, _) = form.data();
-        assert_eq!(title, "Title test");
-        assert_eq!(desc, "Desc test");
+        assert_eq!(form.get_text_value("title"), "New Title");
+        assert_eq!(form.get_text_value("description"), "Line 1\nLine 2");
     }
 }

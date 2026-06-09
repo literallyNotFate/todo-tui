@@ -790,12 +790,26 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, _, _, running) = ctx.components();
 
-        ui.show_modal(Popup::new_task(), ModalAction::None);
-
+        ui.show_modal(Popup::append_task(), ModalAction::None);
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
+
+        EventHandler::handle_modal(key_event(KeyCode::Char('G')), &mut ctrl, storage, running);
+        EventHandler::handle_modal(key_event(KeyCode::Char('o')), &mut ctrl, storage, running);
+
+        EventHandler::handle_modal(key_event(KeyCode::Down), &mut ctrl, storage, running);
+        EventHandler::handle_modal(key_event(KeyCode::Down), &mut ctrl, storage, running);
+
+        EventHandler::handle_modal(key_event(KeyCode::Char('T')), &mut ctrl, storage, running);
+        EventHandler::handle_modal(key_event(KeyCode::Char('U')), &mut ctrl, storage, running);
+        EventHandler::handle_modal(key_event(KeyCode::Char('I')), &mut ctrl, storage, running);
+
+        EventHandler::handle_modal(key_event(KeyCode::Down), &mut ctrl, storage, running);
         EventHandler::handle_modal(key_event(KeyCode::Enter), &mut ctrl, storage, running);
 
         assert!(ctrl.ui.modal.is_none());
+        assert_eq!(ctrl.state.tasks.len(), 1);
+        assert_eq!(ctrl.state.tasks[0].title, "Go");
+        assert_eq!(ctrl.state.tasks[0].description, "TUI");
     }
 
     #[test]

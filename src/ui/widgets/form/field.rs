@@ -1,14 +1,16 @@
 use crate::{
-    models::Priority,
-    ui::{EnumInput, TextInput, widgets::input::Input},
+    models::{FolderColor, Priority},
+    ui::{EnumInput, RenderContext, TextInput, widgets::input::Input},
 };
+use ratatui::layout::Rect;
 use tui_textarea::TextArea;
 
 /// All possible field types for form (text input, enum input, textarea, button)
 #[derive(Clone, Debug)]
 pub enum FieldType {
     Text { input: TextInput },
-    Enum { input: EnumInput<Priority> },
+    PriorityEnum { input: EnumInput<Priority> },
+    ColorEnum { input: EnumInput<FolderColor> },
     Multiline { input: TextArea<'static> },
     Button,
 }
@@ -23,8 +25,18 @@ impl FieldType {
 
     /// Create enum input with selected value and title
     pub fn priority(p: Priority) -> Self {
-        Self::Enum {
+        Self::PriorityEnum {
             input: EnumInput::from(p).title(" Priority "),
+        }
+    }
+
+    /// Create color enum input mapped from database string
+    pub fn color(color_str: &str) -> Self {
+        use std::str::FromStr;
+        let color_enum = FolderColor::from_str(color_str).unwrap_or(FolderColor::Blue);
+
+        Self::ColorEnum {
+            input: EnumInput::from(color_enum).title(" Folder Color "),
         }
     }
 
@@ -40,6 +52,83 @@ impl FieldType {
 
         Self::Multiline {
             input: TextArea::new(lines),
+        }
+    }
+
+    /// Render field to the terminal
+    pub fn render(&self, ctx: &mut RenderContext, area: Rect, is_focused: bool) {
+        use ratatui::{
+            layout::{Constraint, Direction, Layout},
+            style::Style,
+            widgets::{Block, Paragraph},
+        };
+
+        let palette = ctx.palette();
+        let border_type = ctx.config.border_type.into();
+
+        let focused_style = if is_focused {
+            Style::default().fg(palette.accent)
+        } else {
+            Style::default().fg(palette.muted)
+        };
+
+        match self {
+            FieldType::Text { input } => {
+                input.render(ctx, area, is_focused);
+            }
+            FieldType::PriorityEnum { input } => {
+                input.render(ctx, area, is_focused);
+            }
+            FieldType::ColorEnum { input } => {
+                input.render(ctx, area, is_focused);
+            }
+            FieldType::Multiline { input } => {
+                let mut input = input.clone();
+
+                if is_focused {
+                    input.set_cursor_style(
+                        Style::default().bg(palette.accent).fg(palette.selection),
+                    );
+                } else {
+                    input.set_cursor_style(Style::default());
+                }
+
+                let block: Block = Block::bordered()
+                    .title(" Description ")
+                    .border_type(border_type)
+                    .border_style(focused_style);
+
+                input.set_block(block);
+                input.set_style(Style::default().fg(palette.fg));
+                ctx.render_widget(&input, area);
+            }
+            FieldType::Button => {
+                let button_layout = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([
+                        Constraint::Length(15),
+                        Constraint::Min(0),
+                        Constraint::Length(15),
+                    ])
+                    .split(area);
+
+                let text_style = if is_focused {
+                    Style::default().fg(palette.fg)
+                } else {
+                    Style::default().fg(palette.muted)
+                };
+
+                let button: Paragraph = Paragraph::new(" Save ")
+                    .block(
+                        Block::bordered()
+                            .border_type(border_type)
+                            .border_style(focused_style)
+                            .style(text_style),
+                    )
+                    .centered();
+
+                ctx.render_widget(button, button_layout[2]);
+            }
         }
     }
 }
