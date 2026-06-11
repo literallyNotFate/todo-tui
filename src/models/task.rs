@@ -1,5 +1,5 @@
-use crate::{config::UIConfig, core::Selectable, models::Filter, theme::ThemePalette};
-use chrono::{DateTime, Local, TimeDelta, Utc};
+use crate::{config::UIConfig, core::Selectable, theme::ThemePalette};
+use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use uuid::Uuid;
@@ -19,6 +19,51 @@ pub struct Task {
 
     #[serde(skip)]
     pub title_lower: String,
+}
+
+/// Task details to be shown
+#[derive(Debug, Clone)]
+pub struct TaskDetails {
+    pub id_short: String,
+    pub title: String,
+    pub completed: bool,
+    pub description: String,
+    pub folder_id: Option<Uuid>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Task priority
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Default,
+    Hash,
+    Eq,
+    PartialEq,
+    Copy,
+    PartialOrd,
+    Ord,
+    strum::EnumIter,
+    strum::Display,
+    strum::EnumString,
+)]
+#[strum(serialize_all = "PascalCase")]
+pub enum Priority {
+    #[default]
+    Low,
+    Medium,
+    High,
+}
+
+/// Model for updating task
+pub struct TaskEditor {
+    pub title: String,
+    pub description: String,
+    pub priority: Selectable<Priority>,
+    pub folder_id: Option<Uuid>,
 }
 
 impl Task {
@@ -97,16 +142,9 @@ impl Task {
         format!("{} {}{} ago", count, unit, s)
     }
 
-    /// Checks whether specific task matches current filter conditions (for filter)
-    pub fn matches_filter(&self, filter: &Filter, today: &chrono::NaiveDate) -> bool {
-        match filter {
-            Filter::All => true,
-            Filter::Active => !self.completed,
-            Filter::Completed => self.completed,
-            Filter::HighPriority => self.priority == Priority::High,
-            Filter::Today => self.created_at.with_timezone(&Local).date_naive() == *today,
-            Filter::InFolder(folder_id) => self.folder_id == Some(*folder_id),
-        }
+    /// Check whether task is created today
+    pub fn is_due_today(&self, today: &NaiveDate) -> bool {
+        self.created_at.with_timezone(&Local).date_naive() == *today
     }
 }
 
@@ -122,19 +160,6 @@ impl Hash for Task {
     }
 }
 
-/// Task details to be shown
-#[derive(Debug, Clone)]
-pub struct TaskDetails {
-    pub id_short: String,
-    pub title: String,
-    pub completed: bool,
-    pub description: String,
-    pub folder_id: Option<Uuid>,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-/// Implementation of initializing task details from task with UIConfig (date format)
 impl TaskDetails {
     pub fn from(task: &Task, config: &UIConfig) -> Self {
         let time_fmt: &str = if config.use_24h { "%H:%M" } else { "%I:%M %p" };
@@ -153,31 +178,6 @@ impl TaskDetails {
     }
 }
 
-/// Task priority
-#[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    Default,
-    Hash,
-    Eq,
-    PartialEq,
-    Copy,
-    PartialOrd,
-    Ord,
-    strum::EnumIter,
-    strum::Display,
-    strum::EnumString,
-)]
-#[strum(serialize_all = "PascalCase")]
-pub enum Priority {
-    #[default]
-    Low,
-    Medium,
-    High,
-}
-
 impl Priority {
     pub fn palette(&self, palette: &ThemePalette) -> ratatui::style::Color {
         match self {
@@ -186,14 +186,6 @@ impl Priority {
             Priority::Low => palette.success,
         }
     }
-}
-
-/// Model for updating task
-pub struct TaskEditor {
-    pub title: String,
-    pub description: String,
-    pub priority: Selectable<Priority>,
-    pub folder_id: Option<Uuid>,
 }
 
 impl TaskEditor {
@@ -312,23 +304,16 @@ mod tests {
     }
 
     #[test]
-    fn should_test_task_filter_matching() {
+    fn should_test_task_due_today() {
         let today: NaiveDate = Local::now().date_naive();
         let mut task = Task::new("Test")
             .with_description("Desc")
             .with_priority(Priority::High);
 
-        assert!(task.matches_filter(&Filter::HighPriority, &today));
-
-        assert!(task.matches_filter(&Filter::Active, &today));
-        task.completed = true;
-        assert!(task.matches_filter(&Filter::Completed, &today));
-        assert!(!task.matches_filter(&Filter::Active, &today));
-
-        assert!(task.matches_filter(&Filter::Today, &today));
+        assert!(task.is_due_today(&today));
 
         task.created_at = Utc::now() - Duration::days(1);
-        assert!(!task.matches_filter(&Filter::Today, &today));
+        assert!(!task.is_due_today(&today));
     }
 
     #[test]

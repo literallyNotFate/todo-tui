@@ -62,6 +62,12 @@ impl PopupComponent for DetailsComponent {
             )
         };
 
+        let folder_display: String = if let Some(fid) = self.details.folder_id {
+            format!(" Folder: {}... ", &fid.to_string()[..8])
+        } else {
+            " Inbox ".to_string()
+        };
+
         let header_line = Line::from(vec![
             Span::styled(" ● ", Style::default().fg(palette.accent)),
             Span::styled(&self.details.title, Style::default().fg(palette.fg).bold()),
@@ -75,6 +81,11 @@ impl PopupComponent for DetailsComponent {
         let meta_line = Line::from(vec![
             Span::styled(status_text, status_style),
             Span::raw("  "),
+            Span::styled(
+                folder_display,
+                Style::default().fg(palette.secondary).italic(),
+            ),
+            Span::raw(" • "),
             Span::styled("Created ", Style::default().fg(palette.muted)),
             Span::styled(
                 &self.details.created_at,

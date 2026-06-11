@@ -1,7 +1,7 @@
 use crate::{
     config::{KeyMaps, UIConfig},
     core::{Action, ApplicationMode, FocusArea},
-    models::Filter,
+    models::TaskFilter,
     state::UIState,
     theme::{Theme, ThemePalette},
     ui::is_terminal_small,
@@ -24,7 +24,7 @@ pub struct RenderContext<'a, 'b> {
 
     mode: ApplicationMode,
     focus: FocusArea,
-    filter: Filter,
+    filter: TaskFilter,
     is_small: bool,
 }
 
@@ -36,6 +36,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
         mode: ApplicationMode,
     ) -> Self {
         let area: Rect = frame.area();
+        let query: &str = ui.search_query();
 
         Self {
             frame: Some(frame),
@@ -43,8 +44,8 @@ impl<'a, 'b> RenderContext<'a, 'b> {
             mode,
             keymaps,
             config: &ui.config,
-            focus: *ui.focused,
-            filter: *ui.filter,
+            focus: ui.focused.value,
+            filter: TaskFilter::new(ui.active_tab, ui.active_folder, query),
             is_small: is_terminal_small(area.width, area.height),
             is_dimmed: ui.modal.is_some(),
         }
@@ -53,6 +54,8 @@ impl<'a, 'b> RenderContext<'a, 'b> {
     /// Mock constructor for tests without frame
     #[cfg(test)]
     pub fn mock(ui: &'a UIState, keymaps: &'a KeyMaps) -> Self {
+        use crate::state::SidebarTab;
+
         Self {
             frame: None,
             theme: ui.theme.clone(),
@@ -60,7 +63,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
             keymaps,
             config: &ui.config,
             focus: FocusArea::default(),
-            filter: Filter::default(),
+            filter: TaskFilter::new(SidebarTab::Inbox, None, ""),
             is_small: false,
             is_dimmed: false,
         }
@@ -135,12 +138,21 @@ impl<'a, 'b> RenderContext<'a, 'b> {
         self.focus
     }
 
-    /// Returns current filter name for tasks
-    pub fn filter(&self) -> String {
-        self.filter.to_string()
+    /// Access to task filter if matches method is needed
+    pub fn filter(&self) -> &TaskFilter {
+        &self.filter
     }
 
-    /// Helper: is that widget being foucused on?
+    /// Returns current filter name for tasks
+    pub fn filter_name(&self) -> String {
+        if let Some(_id) = self.filter.folder_id {
+            "Folder".to_string()
+        } else {
+            self.filter.tab.to_string()
+        }
+    }
+
+    /// Helper: is that widget being focused on?
     pub fn is_focused(&self, area: FocusArea) -> bool {
         self.focus == area
     }
@@ -176,7 +188,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
     }
 
     /// Creates basic block with border focusing
-    pub fn block(&self, title: impl Into<String>, focus: Option<FocusArea>) -> Block<'static> {
+    pub fn block(&self, title: impl Into<String>, focus: Option<FocusArea>) -> Block<'a> {
         let palette = self.palette();
         let border_color = match focus {
             Some(area) if self.is_focused(area) => self.color(palette.accent),

@@ -3,7 +3,8 @@ use crate::{
     app::ApplicationController,
     config::KeyMaps,
     core::{Action, ApplicationMode, Autosave, FocusArea, Selectable, Storage},
-    models::{Filter, FolderColor, FolderEditor, TaskDetails, TaskEditor},
+    models::{FolderColor, FolderEditor, TaskDetails, TaskEditor},
+    state::SidebarTab,
     ui::{
         Popup, WidgetResponse, is_terminal_small,
         widgets::{
@@ -258,11 +259,11 @@ impl EventHandler {
                 if focus == FocusArea::Sidebar =>
             {
                 match action {
-                    Action::FilterAll => ctrl.ui.change_filter(Filter::All),
-                    Action::FilterActive => ctrl.ui.change_filter(Filter::Active),
-                    Action::FilterCompleted => ctrl.ui.change_filter(Filter::Completed),
-                    Action::FilterHigh => ctrl.ui.change_filter(Filter::HighPriority),
-                    Action::FilterToday => ctrl.ui.change_filter(Filter::Today),
+                    Action::FilterAll => ctrl.ui.change_filter(SidebarTab::Inbox, None),
+                    Action::FilterActive => ctrl.ui.change_filter(SidebarTab::Active, None),
+                    Action::FilterCompleted => ctrl.ui.change_filter(SidebarTab::Completed, None),
+                    Action::FilterHigh => ctrl.ui.change_filter(SidebarTab::HighPriority, None),
+                    Action::FilterToday => ctrl.ui.change_filter(SidebarTab::Today, None),
                     _ => {}
                 }
                 ctrl.stabilize(None);
@@ -555,7 +556,7 @@ mod tests {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
         ui.focused.set(FocusArea::Sidebar);
-        ui.filter.set(Filter::All);
+        ui.active_tab = SidebarTab::Inbox;
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::execute_action(
@@ -566,7 +567,7 @@ mod tests {
             autosave,
             running,
         );
-        assert_eq!(ctrl.ui.filter, Filter::Active);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Active);
 
         EventHandler::execute_action(
             Action::MoveDown,
@@ -576,10 +577,10 @@ mod tests {
             autosave,
             running,
         );
-        assert_eq!(ctrl.ui.filter, Filter::Completed);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Completed);
 
         EventHandler::execute_action(Action::MoveUp, &mut ctrl, storage, mode, autosave, running);
-        assert_eq!(ctrl.ui.filter, Filter::Active);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Active);
     }
 
     #[test]
@@ -895,6 +896,9 @@ mod tests {
     fn should_cycle_filter_down_up_on_key() {
         let mut ctx = TestContext::new();
         let (state, ui, config, keymaps, storage, mode, autosave, running) = ctx.components();
+        ui.focused.set(FocusArea::Sidebar);
+        ui.active_tab = SidebarTab::Inbox;
+
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
 
         EventHandler::execute_action(
@@ -905,7 +909,7 @@ mod tests {
             autosave,
             running,
         );
-        assert_eq!(ctrl.ui.filter, Filter::Active);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Active);
 
         EventHandler::execute_action(
             Action::MoveDown,
@@ -915,10 +919,10 @@ mod tests {
             autosave,
             running,
         );
-        assert_eq!(ctrl.ui.filter, Filter::Completed);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Completed);
 
         EventHandler::execute_action(Action::MoveUp, &mut ctrl, storage, mode, autosave, running);
-        assert_eq!(ctrl.ui.filter, Filter::Active);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Active);
     }
 
     #[test]
@@ -935,7 +939,7 @@ mod tests {
             autosave,
             running,
         );
-        assert_eq!(ctrl.ui.filter, Filter::Completed);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Completed);
 
         EventHandler::execute_action(
             Action::FilterToday,
@@ -945,7 +949,7 @@ mod tests {
             autosave,
             running,
         );
-        assert_eq!(ctrl.ui.filter, Filter::Today);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Today);
 
         EventHandler::execute_action(
             Action::FilterAll,
@@ -955,7 +959,7 @@ mod tests {
             autosave,
             running,
         );
-        assert_eq!(ctrl.ui.filter, Filter::All);
+        assert_eq!(ctrl.ui.active_tab, SidebarTab::Inbox);
     }
 
     #[test]
@@ -985,8 +989,10 @@ mod tests {
     fn should_ignore_unrelated_keys_in_left_panel() {
         let mut wrapper = setup_application();
         let app = &mut wrapper.app;
-        app.ui.filter.set(Filter::All);
+        app.ui.focused.set(FocusArea::Sidebar);
+        app.ui.active_tab = SidebarTab::Inbox;
+
         EventHandler::handle_key(app, key_event(KeyCode::Char('x')));
-        assert_eq!(app.ui.filter, Filter::All);
+        assert_eq!(app.ui.active_tab, SidebarTab::Inbox);
     }
 }

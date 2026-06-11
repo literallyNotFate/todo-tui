@@ -1,7 +1,7 @@
 use crate::{
     config::UIConfig,
     core::{FocusArea, Selectable},
-    models::Filter,
+    models::TaskFilter,
     state::{ActiveModal, AdaptiveScroll, ApplicationResult, ApplicationState, Session},
     theme::{Theme, ThemeID, ThemeName},
     ui::{
@@ -12,14 +12,15 @@ use crate::{
         },
     },
 };
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Main application UI state (only for rendering purposes)
-#[derive(Default)]
 pub struct UIState {
-    pub filter: Selectable<Filter>,
-    pub focused: Selectable<FocusArea>,
+    pub active_tab: SidebarTab,
+    pub active_folder: Option<Uuid>,
 
+    pub focused: Selectable<FocusArea>,
     pub modal: Option<ActiveModal>,
     pub search_input: Option<TextInput>,
 
@@ -30,6 +31,30 @@ pub struct UIState {
     pub config: UIConfig,
 
     should_redraw: bool,
+}
+
+/// Application sidebar tab (main filters)
+#[derive(
+    Default,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    strum::EnumIter,
+    strum::Display,
+    strum::EnumString,
+)]
+#[strum(serialize_all = "title_case")]
+pub enum SidebarTab {
+    #[default]
+    Inbox,
+    Active,
+    Completed,
+    HighPriority,
+    Today,
 }
 
 impl UIState {
@@ -44,7 +69,8 @@ impl UIState {
         let theme: Theme = Theme::new(config.theme.clone());
 
         Self {
-            filter: Selectable::default(),
+            active_tab: SidebarTab::Inbox,
+            active_folder: None,
             focused: Selectable::default(),
             modal: None,
             search_input: None,
@@ -58,15 +84,7 @@ impl UIState {
 
     /// Apply UI state from loaded session
     pub fn apply_session(&mut self, session: Session) {
-        self.filter = session.last_filter;
-        self.focused = session.last_focus;
-        self.desc_scroll = AdaptiveScroll::with_position(session.description_scroll_pos);
-        self.hotkeys_scroll = AdaptiveScroll::with_position(session.hotkeys_scroll_pos);
-        self.config.use_system_theme = session.use_system_theme;
-
-        self.search_input =
-            (!session.last_query.is_empty()).then(|| TextInput::from(session.last_query));
-        self.refresh_theme();
+        session.apply_to(self);
     }
 
     /// Request UI to be redrawed in the application draw method
@@ -161,12 +179,8 @@ impl UIState {
     /// Return id of a task based on TableState selection
     pub fn selected_id(&self, state: &ApplicationState) -> Option<Uuid> {
         let index: usize = state.select_state.selected()?;
-
-        self.filter
-            .value
-            .apply(&state.tasks, self.search_query())
-            .get(index)
-            .map(|task| task.id)
+        let filter = TaskFilter::new(self.active_tab, self.active_folder, self.search_query());
+        filter.apply(&state.tasks).get(index).map(|task| task.id)
     }
 
     /// Toggle dark/light theme mode
@@ -274,60 +288,75 @@ impl UIState {
 
     /// Next filter tab (including dynamic folders)
     pub fn next_tab_filter(&mut self, folder_ids: &[Uuid]) {
-        let mut all_filters = vec![
-            Filter::All,
-            Filter::Active,
-            Filter::Completed,
-            Filter::HighPriority,
-            Filter::Today,
-        ];
-        for id in folder_ids {
-            all_filters.push(Filter::InFolder(*id));
-        }
-
-        let current_filter = *self.filter;
-        if let Some(current_idx) = all_filters.iter().position(|f| f == &current_filter) {
-            let next_idx = (current_idx + 1) % all_filters.len();
-            self.filter.set(all_filters[next_idx]);
-        } else {
-            self.filter.set(Filter::All);
-        }
-
-        log::trace!("Filter changed to: {:?}", self.filter);
+        self.move_sidebar(1, folder_ids);
     }
 
     /// Previous filter tab (including dynamic folders)
     pub fn prev_tab_filter(&mut self, folder_ids: &[Uuid]) {
-        let mut all_filters = vec![
-            Filter::All,
-            Filter::Active,
-            Filter::Completed,
-            Filter::HighPriority,
-            Filter::Today,
-        ];
-        for id in folder_ids {
-            all_filters.push(Filter::InFolder(*id));
-        }
+        self.move_sidebar(-1, folder_ids);
+    }
 
-        let current_filter = *self.filter;
-        if let Some(current_idx) = all_filters.iter().position(|f| f == &current_filter) {
-            let prev_idx = if current_idx == 0 {
-                all_filters.len() - 1
-            } else {
-                current_idx - 1
-            };
-            self.filter.set(all_filters[prev_idx]);
+    /// Centralized method to sidebar navigation
+    pub fn move_sidebar(&mut self, direction: i32, folder_ids: &[Uuid]) {
+        let static_count = 5;
+        let has_divider: bool = !folder_ids.is_empty();
+        let divider_count = if has_divider { 1 } else { 0 };
+        let total_count = static_count + divider_count + folder_ids.len();
+
+        let mut current_idx = match self.active_folder {
+            Some(id) => {
+                let folder_pos = folder_ids.iter().position(|&x| x == id).unwrap_or(0);
+                static_count + divider_count + folder_pos
+            }
+            None => self.active_tab as usize,
+        };
+
+        if direction > 0 {
+            current_idx = (current_idx + 1) % total_count;
+            if has_divider && current_idx == static_count {
+                current_idx += 1;
+            }
         } else {
-            self.filter.set(Filter::All);
+            if current_idx == 0 {
+                current_idx = total_count - 1;
+            } else {
+                current_idx -= 1;
+                if has_divider && current_idx == static_count {
+                    current_idx -= 1;
+                }
+            }
         }
 
-        log::trace!("Filter changed to: {:?}", self.filter);
+        if current_idx < static_count {
+            self.active_tab = match current_idx {
+                0 => SidebarTab::Inbox,
+                1 => SidebarTab::Active,
+                2 => SidebarTab::Completed,
+                3 => SidebarTab::HighPriority,
+                _ => SidebarTab::Today,
+            };
+            self.active_folder = None;
+        } else {
+            let folder_pos = current_idx - static_count - divider_count;
+            self.active_folder = Some(folder_ids[folder_pos]);
+        }
+
+        log::trace!(
+            "Sidebar position changed to: Tab={:?}, Folder={:?}",
+            self.active_tab,
+            self.active_folder
+        );
     }
 
     /// Changes to specific filter
-    pub fn change_filter(&mut self, filter: Filter) {
-        self.filter.set(filter);
-        log::trace!("Filter changed to: {:?}", self.filter);
+    pub fn change_filter(&mut self, tab: SidebarTab, folder_id: Option<Uuid>) {
+        self.active_tab = tab;
+        self.active_folder = folder_id;
+        log::trace!(
+            "Sidebar manually set to: Tab={:?}, Folder={:?}",
+            self.active_tab,
+            self.active_folder
+        );
     }
 
     /// Toggle main menu focus (filters/tasks + form)
@@ -394,6 +423,12 @@ impl UIState {
     }
 }
 
+impl Default for UIState {
+    fn default() -> Self {
+        Self::new(UIConfig::default())
+    }
+}
+
 /// Unit-tests for UIState
 #[cfg(test)]
 mod tests {
@@ -411,40 +446,43 @@ mod tests {
     #[test]
     fn should_navigate_through_filters_and_dynamic_folders() {
         let mut ui = UIState::default();
-        ui.filter.set(Filter::All);
+        ui.active_tab = SidebarTab::Inbox;
+        ui.active_folder = None;
 
         let folder_a = Uuid::new_v4();
         let folder_b = Uuid::new_v4();
         let folders_ids = vec![folder_a, folder_b];
 
         ui.next_tab_filter(&folders_ids);
-        assert_eq!(*ui.filter, Filter::Active);
+        assert_eq!(ui.active_tab, SidebarTab::Active);
 
         ui.next_tab_filter(&folders_ids);
-        assert_eq!(*ui.filter, Filter::Completed);
+        assert_eq!(ui.active_tab, SidebarTab::Completed);
 
         ui.prev_tab_filter(&folders_ids);
-        assert_eq!(*ui.filter, Filter::Active);
+        assert_eq!(ui.active_tab, SidebarTab::Active);
 
         ui.next_tab_filter(&folders_ids);
         ui.next_tab_filter(&folders_ids);
         ui.next_tab_filter(&folders_ids);
-        assert_eq!(*ui.filter, Filter::Today);
+        assert_eq!(ui.active_tab, SidebarTab::Today);
 
         ui.next_tab_filter(&folders_ids);
-        assert_eq!(*ui.filter, Filter::InFolder(folder_a));
+        assert_eq!(ui.active_folder, Some(folder_a));
 
         ui.next_tab_filter(&folders_ids);
-        assert_eq!(*ui.filter, Filter::InFolder(folder_b));
+        assert_eq!(ui.active_folder, Some(folder_b));
 
         ui.next_tab_filter(&folders_ids);
-        assert_eq!(*ui.filter, Filter::All);
+        assert_eq!(ui.active_tab, SidebarTab::Inbox);
+        assert_eq!(ui.active_folder, None);
 
         ui.prev_tab_filter(&folders_ids);
-        assert_eq!(*ui.filter, Filter::InFolder(folder_b));
+        assert_eq!(ui.active_folder, Some(folder_b));
 
-        ui.change_filter(Filter::HighPriority);
-        assert_eq!(*ui.filter, Filter::HighPriority);
+        ui.change_filter(SidebarTab::HighPriority, None);
+        assert_eq!(ui.active_tab, SidebarTab::HighPriority);
+        assert_eq!(ui.active_folder, None);
     }
 
     #[test]
@@ -498,7 +536,7 @@ mod tests {
         };
 
         ui.show_result_popup(Err(error.into()));
-        assert!(ui.modal.is_some(),);
+        assert!(ui.modal.is_some());
     }
 
     #[test]
@@ -516,7 +554,7 @@ mod tests {
 
     #[test]
     fn should_return_id_of_selected_task() {
-        let ui = UIState::default();
+        let mut ui = UIState::default();
         let mut state = ApplicationState::default();
 
         let tasks: Vec<Task> = vec![
@@ -526,6 +564,8 @@ mod tests {
         let last_id: Uuid = tasks[1].id;
         state.tasks = tasks;
         state.select_state.select(Some(1));
+
+        ui.active_tab = SidebarTab::Inbox;
 
         let expected_id: Uuid = ui.selected_id(&state).unwrap();
         assert_eq!(last_id, expected_id);
@@ -612,22 +652,21 @@ mod tests {
     #[test]
     fn show_test_redraw_lifecycle() {
         let mut ui = UIState::default();
-
-        assert!(
-            !ui.needs_redraw(),
-            "Initial state should not require redraw"
-        );
-
-        ui.request_redraw();
         assert!(
             ui.needs_redraw(),
-            "Flag should be true after request_redraw"
+            "Initial state should require redraw for first frame"
         );
 
         ui.clear_redraw_flag();
         assert!(
             !ui.needs_redraw(),
             "Flag should be false after clear_redraw_flag"
+        );
+
+        ui.request_redraw();
+        assert!(
+            ui.needs_redraw(),
+            "Flag should be true after request_redraw"
         );
     }
 
@@ -698,8 +737,9 @@ mod tests {
         let mut ui = UIState::default();
         let folder_id = Uuid::new_v4();
 
-        ui.change_filter(Filter::InFolder(folder_id));
-        assert_eq!(*ui.filter, Filter::InFolder(folder_id));
+        ui.change_filter(SidebarTab::Inbox, Some(folder_id));
+        assert_eq!(ui.active_tab, SidebarTab::Inbox);
+        assert_eq!(ui.active_folder, Some(folder_id));
 
         ui.remove_folder_confirm(folder_id);
         assert!(ui.modal.is_some());

@@ -1,7 +1,7 @@
 use crate::{
     core::FocusArea,
-    models::{Filter, Folder, Priority, Task},
-    state::UIState,
+    models::{Folder, Priority, Task, TaskFilter},
+    state::{SidebarTab, UIState},
     theme::ThemePalette,
     ui::RenderContext,
 };
@@ -87,18 +87,18 @@ impl<'a> SidebarWidget<'a> {
         focused: bool,
         palette: &ThemePalette,
         is_dimmed: bool,
-    ) -> (List<'static>, usize) {
+    ) -> (List<'_>, usize) {
         let mut items = Vec::new();
         let mut selected_index = 0;
         let mut current_idx = 0;
 
-        for tab in Filter::iter() {
-            let is_selected = self.ui.filter.value == tab;
+        for tab in SidebarTab::iter() {
+            let is_selected = self.ui.active_tab == tab && self.ui.active_folder.is_none();
             if is_selected {
                 selected_index = current_idx;
             }
 
-            let count = tab.count(self.tasks, query);
+            let count = TaskFilter::new(tab, None, query).apply(self.tasks).len();
             let text = format!(" {} ({})", tab.to_string(), count);
             items.push(self.create_list_item(text, is_selected, focused, palette, is_dimmed, None));
 
@@ -113,21 +113,12 @@ impl<'a> SidebarWidget<'a> {
             current_idx += 1;
         }
 
-        for folder in self.folders {
-            let count = self
-                .tasks
-                .iter()
-                .filter(|t| {
-                    t.folder_id == Some(folder.id)
-                        && (query.is_empty() || t.title_lower.contains(query))
-                })
-                .count();
+        for folder in self.folders.iter() {
+            let count = TaskFilter::new(SidebarTab::Inbox, Some(folder.id), query)
+                .apply(self.tasks)
+                .len();
 
-            let is_selected = match &self.ui.filter.value {
-                Filter::InFolder(id) => *id == folder.id,
-                _ => false,
-            };
-
+            let is_selected = self.ui.active_folder == Some(folder.id);
             if is_selected {
                 selected_index = current_idx;
             }
@@ -444,12 +435,12 @@ mod tests {
 
         let folders = vec![];
         let mut ui = UIState::default();
-        ui.filter.value = Filter::All;
+        ui.active_tab = SidebarTab::Inbox;
         let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks, &folders);
 
         let (list, selected_index) = sidebar.construct_list("", true, &ui.theme.palette(), false);
 
-        assert_eq!(list.len(), Filter::iter().len());
+        assert_eq!(list.len(), SidebarTab::iter().len());
         assert_eq!(selected_index, 0);
     }
 
@@ -561,12 +552,13 @@ mod tests {
         ];
 
         let mut ui = UIState::default();
-        ui.filter.value = Filter::InFolder(folder.id);
+        ui.active_tab = SidebarTab::Inbox;
+        ui.active_folder = Some(folder.id);
 
         let sidebar = SidebarWidget::new(&ui, &tasks, &folders);
         let (list, selected_index) = sidebar.construct_list("", true, &ui.theme.palette(), false);
 
-        let expected_len = Filter::iter().len() + 1 + 1;
+        let expected_len = SidebarTab::iter().count() + 1 + 1;
         assert_eq!(list.len(), expected_len);
         assert_eq!(selected_index, expected_len - 1);
     }

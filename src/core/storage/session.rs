@@ -24,12 +24,16 @@ impl SessionRepository {
     pub fn save(&self, session: &Session) -> ApplicationResult<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO session (id, last_selected_id, last_focus, last_filter, last_query, description_scroll_pos, hotkeys_scroll_pos, use_system_theme)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO session (
+                id, last_selected_id, last_focus, last_tab, last_folder_id,
+                last_query, description_scroll_pos, hotkeys_scroll_pos, use_system_theme
+             )
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET
                 last_selected_id = excluded.last_selected_id,
                 last_focus = excluded.last_focus,
-                last_filter = excluded.last_filter,
+                last_tab = excluded.last_tab,
+                last_folder_id = excluded.last_folder_id,
                 last_query = excluded.last_query,
                 description_scroll_pos = excluded.description_scroll_pos,
                 hotkeys_scroll_pos = excluded.hotkeys_scroll_pos,
@@ -37,13 +41,18 @@ impl SessionRepository {
             params![
                 session.last_selected_id.map(|id| id.to_string()),
                 session.last_focus.to_string(),
-                session.last_filter.to_string(),
+                session.last_tab.to_string(),
+                session.last_folder_id.map(|id| id.to_string()),
                 session.last_query,
                 session.description_scroll_pos,
                 session.hotkeys_scroll_pos,
                 session.use_system_theme,
             ],
-        ).map_err(|e| StorageError::Database { path: self.db_path.clone(), src: e.to_string() })?;
+        )
+        .map_err(|e| StorageError::Database {
+            path: self.db_path.clone(),
+            src: e.to_string(),
+        })?;
         Ok(())
     }
 
@@ -52,9 +61,9 @@ impl SessionRepository {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT last_selected_id, last_focus, last_filter, last_query,
-                    description_scroll_pos, hotkeys_scroll_pos, use_system_theme
-             FROM session LIMIT 1",
+                "SELECT last_selected_id, last_focus, last_tab, last_folder_id, last_query,
+                        description_scroll_pos, hotkeys_scroll_pos, use_system_theme
+                 FROM session LIMIT 1",
             )
             .map_err(|e| StorageError::Database {
                 path: self.db_path.clone(),
@@ -65,17 +74,21 @@ impl SessionRepository {
             .query_row([], |row| {
                 let id_str: Option<String> = row.get(0)?;
                 let focus_str: String = row.get(1)?;
-                let filter_str: String = row.get(2)?;
+                let tab_str: String = row.get(2)?;
+                let folder_id_str: Option<String> = row.get(3)?;
+
                 let last_selected_id = id_str.and_then(|s| Uuid::parse_str(&s).ok());
+                let last_folder_id = folder_id_str.and_then(|s| Uuid::parse_str(&s).ok());
 
                 Ok(Session {
                     last_selected_id,
                     last_focus: Selectable::new(focus_str.parse().unwrap_or_default()),
-                    last_filter: Selectable::new(filter_str.parse().unwrap_or_default()),
-                    last_query: row.get(3)?,
-                    description_scroll_pos: row.get(4)?,
-                    hotkeys_scroll_pos: row.get(5)?,
-                    use_system_theme: row.get(6)?,
+                    last_tab: Selectable::new(tab_str.parse().unwrap_or_default()),
+                    last_folder_id,
+                    last_query: row.get(4)?,
+                    description_scroll_pos: row.get(5)?,
+                    hotkeys_scroll_pos: row.get(6)?,
+                    use_system_theme: row.get(7)?,
                 })
             })
             .optional()
@@ -92,6 +105,7 @@ impl SessionRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{core::Selectable, state::SidebarTab};
 
     fn setup_session_db() -> Arc<Mutex<Connection>> {
         let conn: Connection = Connection::open_in_memory().unwrap();
@@ -100,7 +114,8 @@ mod tests {
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 last_selected_id TEXT,
                 last_focus TEXT NOT NULL,
-                last_filter TEXT NOT NULL,
+                last_tab TEXT NOT NULL,
+                last_folder_id TEXT,
                 last_query TEXT NOT NULL,
                 description_scroll_pos INTEGER NOT NULL,
                 hotkeys_scroll_pos INTEGER NOT NULL,
@@ -126,9 +141,13 @@ mod tests {
         let conn = setup_session_db();
         let repo = SessionRepository::new(conn, PathBuf::from("memory.db"));
 
-        let target_id: Uuid = Uuid::new_v4();
+        let target_task_id: Uuid = Uuid::new_v4();
+        let target_folder_id: Uuid = Uuid::new_v4();
+
         let session = Session {
-            last_selected_id: Some(target_id),
+            last_selected_id: Some(target_task_id),
+            last_tab: Selectable::new(SidebarTab::Completed),
+            last_folder_id: Some(target_folder_id),
             last_query: "search query".to_string(),
             description_scroll_pos: 42,
             use_system_theme: true,
@@ -138,7 +157,9 @@ mod tests {
         assert!(repo.save(&session).is_ok());
 
         let loaded: Session = repo.load().unwrap().unwrap();
-        assert_eq!(loaded.last_selected_id, Some(target_id));
+        assert_eq!(loaded.last_selected_id, Some(target_task_id));
+        assert_eq!(loaded.last_tab.value, SidebarTab::Completed);
+        assert_eq!(loaded.last_folder_id, Some(target_folder_id));
         assert_eq!(loaded.last_query, "search query");
         assert_eq!(loaded.description_scroll_pos, 42);
         assert!(loaded.use_system_theme);

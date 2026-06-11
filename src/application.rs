@@ -176,8 +176,8 @@ impl Application {
     /// Saves current application state to SQLite database
     pub fn save_all(&mut self) -> ApplicationResult<()> {
         let current_id = self.data.selected_id(
-            &self.data.tasks,
-            &self.ui.filter.value,
+            self.ui.active_tab,
+            self.ui.active_folder,
             &self.ui.search_query(),
         );
 
@@ -194,14 +194,14 @@ impl Application {
     /// Synchronizing selection after tab switching
     pub fn sync_ui(&mut self, target_id: Option<uuid::Uuid>) {
         let query: &str = self.ui.search_query();
-        let filtered_ids: Vec<uuid::Uuid> = self
-            .ui
-            .filter
-            .value
-            .apply(&self.data.tasks, query)
-            .iter()
-            .map(|t| t.id)
-            .collect();
+        let filtered_ids: Vec<uuid::Uuid> = ApplicationState::filter(
+            &self.data.tasks,
+            self.ui.active_tab,
+            self.ui.active_folder,
+            query,
+        )
+        .map(|t| t.id)
+        .collect();
 
         let id_to_find = target_id.or(self.data.last_selected_id);
 
@@ -222,9 +222,10 @@ impl Application {
             .and_then(|idx| filtered_ids.get(idx).cloned());
 
         log::trace!(
-            "UI Sync: Filter: {:?}, Query: '{}', Visible IDs: {}, Selected: {:?}",
-            self.ui.filter.value,
-            query,
+            "UI Sync: Tab: {:?}, Folder: {:?}, Query: '{}', Visible IDs: {}, Selected: {:?}",
+            self.ui.active_tab,
+            self.ui.active_folder,
+            self.ui.search_query(),
             filtered_ids.len(),
             self.data.select_state.selected()
         );
@@ -292,10 +293,7 @@ impl Default for Application {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        models::{Filter, Task},
-        ui::Notification,
-    };
+    use crate::{models::Task, state::SidebarTab, ui::Notification};
     use std::{
         path::PathBuf,
         thread::sleep,
@@ -436,14 +434,14 @@ mod tests {
     }
 
     #[test]
-    fn should_adjust_selection_on_filter_change_with_sync_ui() {
+    fn should_adjust_selection_on_tab_change_with_sync_ui() {
         let (mut app, _tmp) = create_test_app();
 
         app.data.tasks.push(Task::new("Active"));
         app.data.tasks.push(Task::new("Done"));
         app.data.tasks[1].completed = true;
 
-        app.ui.filter.set(Filter::Completed);
+        app.ui.active_tab = SidebarTab::Completed;
         app.data.select_state.select(Some(1));
 
         app.sync_ui(None);

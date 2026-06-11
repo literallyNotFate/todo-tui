@@ -2,8 +2,8 @@ use crate::{
     app::{FolderService, TaskService},
     config::{Config, KeyMaps},
     core::{Storage, TaskError},
-    models::{Filter, Folder, FolderEditor, Priority, Task, task::TaskEditor},
-    state::{ApplicationState, Session, TasksStateSave, UIState},
+    models::{Folder, FolderEditor, Priority, Task, task::TaskEditor},
+    state::{ApplicationState, Session, SidebarTab, TasksStateSave, UIState},
 };
 use uuid::Uuid;
 
@@ -40,11 +40,7 @@ impl<'a> ApplicationController<'a> {
         let title_string: String = title.into();
         log::debug!("Dispatching append for task: '{}'", title_string);
 
-        let current_folder_id = match &self.ui.filter.value {
-            Filter::InFolder(folder_id) => Some(*folder_id),
-            _ => None,
-        };
-
+        let current_folder_id: Option<Uuid> = self.ui.active_folder;
         let mut task: Task = Task::new(title_string).with_description(desc);
 
         if let Some(p) = priority {
@@ -161,8 +157,9 @@ impl<'a> ApplicationController<'a> {
                 self.state.tasks.retain(|t| t.folder_id != Some(id));
                 let removed_tasks = initial_tasks_count - self.state.tasks.len();
 
-                if self.ui.filter.value == Filter::InFolder(id) {
-                    self.ui.filter.value = Filter::All;
+                if self.ui.active_folder == Some(id) {
+                    self.ui.active_tab = SidebarTab::Inbox;
+                    self.ui.active_folder = None;
                 }
 
                 self.stabilize(None);
@@ -195,10 +192,12 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle moving a task
     pub fn dispatch_move_tasks(&mut self, delta: i32) {
-        if let Some((index_a, index_b)) =
-            self.state
-                .swap_indices(&self.ui.filter.value, &self.ui.search_query(), delta)
-        {
+        if let Some((index_a, index_b)) = self.state.swap_indices(
+            self.ui.active_tab,
+            self.ui.active_folder,
+            &self.ui.search_query(),
+            delta,
+        ) {
             match TaskService::move_tasks(&mut self.state.tasks, index_a, index_b) {
                 Ok(_) => {
                     let current_index: usize = self.state.select_state.selected().unwrap_or(0);
@@ -218,14 +217,28 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle clearing tasks by filter
     pub fn dispatch_clear(&mut self) {
-        let removed: usize = TaskService::clear_tasks(&mut self.state.tasks, &self.ui.filter.value);
+        let removed: usize = TaskService::clear_tasks(
+            &mut self.state.tasks,
+            self.ui.active_tab,
+            self.ui.active_folder,
+        );
 
         if removed > 0 {
             log::info!("Clear successful: {} tasks removed", removed);
             self.state.mark_as_dirty();
             self.stabilize(None);
 
-            let msg: String = format!("Cleared {} tasks from '{}'", removed, self.ui.filter.value);
+            let context_name = if let Some(folder_id) = self.ui.active_folder {
+                if let Some(f) = self.state.folders.iter().find(|f| f.id == folder_id) {
+                    format!("folder '{}'", f.name)
+                } else {
+                    "selected folder".to_string()
+                }
+            } else {
+                format!("tab '{:?}'", self.ui.active_tab)
+            };
+
+            let msg: String = format!("Cleared {} tasks from {}", removed, context_name);
             self.ui.push_notification(self.state, Ok(msg));
         } else {
             log::debug!("Clear skipped: no tasks matched current filter");
@@ -239,8 +252,8 @@ impl<'a> ApplicationController<'a> {
         self.config.update_from_ui(&self.ui);
 
         let current_id = self.state.selected_id(
-            &self.state.tasks,
-            &self.ui.filter.value,
+            self.ui.active_tab,
+            self.ui.active_folder,
             &self.ui.search_query(),
         );
 
@@ -266,24 +279,23 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle sorting
     pub fn dispatch_sorting(&mut self) {
-        let selected_id = self
-            .state
-            .selected(
-                &self.state.tasks,
-                &self.ui.filter.value,
-                &self.ui.search_query(),
-            )
-            .map(|t| t.id);
+        let selected_id = self.state.selected_id(
+            self.ui.active_tab,
+            self.ui.active_folder,
+            &self.ui.search_query(),
+        );
 
         TaskService::sorting(&mut self.state.tasks, &self.state.sort);
         self.state.mark_as_dirty();
 
         if let Some(id) = selected_id {
-            let filtered = self
-                .ui
-                .filter
-                .value
-                .apply(&self.state.tasks, &self.ui.search_query());
+            let filtered: Vec<&Task> = ApplicationState::filter(
+                &self.state.tasks,
+                self.ui.active_tab,
+                self.ui.active_folder,
+                &self.ui.search_query(),
+            )
+            .collect();
             let new_pos = filtered.iter().position(|t| t.id == id);
 
             self.state.select_state.select(new_pos);
@@ -292,7 +304,14 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle selection change
     pub fn dispatch_move_selection(&mut self, delta: i32) {
-        let len = self.state.filter(&self.ui.filter).count();
+        let len: usize = ApplicationState::filter(
+            &self.state.tasks,
+            self.ui.active_tab,
+            self.ui.active_folder,
+            &self.ui.search_query(),
+        )
+        .count();
+
         let wrap: bool = self.config.behavior.wrap_scrolling;
         self.state.move_selection(delta, len, wrap);
         self.ui.desc_scroll.reset();
@@ -300,13 +319,14 @@ impl<'a> ApplicationController<'a> {
 
     /// Function to synchronize cursor and data
     pub fn stabilize(&mut self, focus_id: Option<Uuid>) {
-        let visible_ids: Vec<Uuid> = self
-            .ui
-            .filter
-            .apply(&self.state.tasks, &self.ui.search_query())
-            .iter()
-            .map(|t| t.id)
-            .collect();
+        let visible_ids: Vec<Uuid> = ApplicationState::filter(
+            &self.state.tasks,
+            self.ui.active_tab,
+            self.ui.active_folder,
+            &self.ui.search_query(),
+        )
+        .map(|t| t.id)
+        .collect();
 
         log::trace!(
             "Stabilizing UI focus. Focus ID: {:?}, filtered count: {}",
@@ -350,7 +370,8 @@ mod tests {
     use super::*;
     use crate::{
         core::{Selectable, Sort, SortBy, SortOrder},
-        models::FolderColor,
+        models::{FolderColor, task::Priority},
+        state::SidebarTab,
         ui::Notification,
     };
     use std::path::PathBuf;
@@ -383,7 +404,9 @@ mod tests {
     fn should_auto_bind_folder_id_on_append_when_inside_folder_filter() {
         let (mut state, mut ui, mut config, keymaps) = setup();
         let folder_id = Uuid::new_v4();
-        ui.filter.value = Filter::InFolder(folder_id);
+
+        ui.active_tab = SidebarTab::Inbox;
+        ui.active_folder = Some(folder_id);
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
         ctrl.dispatch_append_task("Folder Task", "", None);

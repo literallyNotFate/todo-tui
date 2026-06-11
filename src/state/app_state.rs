@@ -1,6 +1,7 @@
 use crate::{
     core::Sort,
-    models::{Filter, Folder, Priority, Task},
+    models::{Folder, Priority, Task},
+    state::SidebarTab,
     ui::Notification,
 };
 use chrono::Local;
@@ -146,32 +147,50 @@ impl ApplicationState {
         self.select_state.select(Some(next));
     }
 
-    /// Return filtered tasks based on active filter selection
-    pub(crate) fn filter(&self, filter: &Filter) -> impl Iterator<Item = (usize, &Task)> {
+    /// Return filtered tasks based on active sidebar tab, selected folder, and search query
+    pub fn filter<'a>(
+        tasks: &'a [Task],
+        tab: SidebarTab,
+        folder_id: Option<Uuid>,
+        query: &str,
+    ) -> impl Iterator<Item = &'a Task> + 'a {
         let today = Local::now().date_naive();
+        let query_lower: String = query.to_lowercase();
 
-        self.tasks
-            .iter()
-            .enumerate()
-            .filter(move |(_, task)| match filter {
-                Filter::All => true,
-                Filter::Active => !task.completed,
-                Filter::Completed => task.completed,
-                Filter::HighPriority => task.priority == Priority::High,
-                Filter::Today => task.created_at.with_timezone(&Local).date_naive() == today,
-                Filter::InFolder(target_folder_id) => task.folder_id == Some(*target_folder_id),
-            })
+        tasks.iter().filter(move |task| {
+            if !query_lower.is_empty() && !task.title_lower.contains(&query_lower) {
+                return false;
+            }
+
+            if let Some(target_folder_id) = folder_id {
+                return task.folder_id == Some(target_folder_id);
+            }
+
+            match tab {
+                SidebarTab::Inbox => true,
+                SidebarTab::Active => !task.completed,
+                SidebarTab::Completed => task.completed,
+                SidebarTab::HighPriority => task.priority == Priority::High,
+                SidebarTab::Today => task.is_due_today(&today),
+            }
+        })
     }
 
-    /// Return indices of tasks to swap
-    pub fn swap_indices(&self, filter: &Filter, query: &str, delta: i32) -> Option<(usize, usize)> {
+    /// Return indices of tasks to swap for manual sorting
+    pub fn swap_indices(
+        &self,
+        tab: SidebarTab,
+        folder_id: Option<Uuid>,
+        query: &str,
+        delta: i32,
+    ) -> Option<(usize, usize)> {
         log::debug!(
             "Calculating swap: current_idx={:?}, delta={}",
             self.select_state.selected(),
             delta
         );
 
-        let filtered: Vec<&Task> = filter.apply(&self.tasks, query);
+        let filtered: Vec<&Task> = Self::filter(&self.tasks, tab, folder_id, query).collect();
         let current_index: usize = self.select_state.selected()?;
 
         let target_index: usize = if delta > 0 {
@@ -219,21 +238,26 @@ impl ApplicationState {
         self.select_state.select(Some(new_idx));
     }
 
-    /// Return currently selected task
+    /// Return currently selected task based on current filter/query context
     pub fn selected<'a>(
-        &self,
-        tasks: &'a [Task],
-        filter: &Filter,
+        &'a self,
+        tab: SidebarTab,
+        folder_id: Option<Uuid>,
         query: &str,
     ) -> Option<&'a Task> {
-        let filtered = filter.apply(tasks, query);
+        let filtered: Vec<&Task> = Self::filter(&self.tasks, tab, folder_id, query).collect();
         let index = self.select_state.selected()?;
         filtered.get(index).copied()
     }
 
     /// Return id of current selected task
-    pub fn selected_id(&self, tasks: &[Task], filter: &Filter, query: &str) -> Option<Uuid> {
-        self.selected(tasks, filter, query).map(|t| t.id)
+    pub fn selected_id(
+        &self,
+        tab: SidebarTab,
+        folder_id: Option<Uuid>,
+        query: &str,
+    ) -> Option<Uuid> {
+        self.selected(tab, folder_id, query).map(|t| t.id)
     }
 
     /// Return task of a given id
@@ -300,11 +324,8 @@ mod tests {
             Task::new("Task 3").with_priority(Priority::High),
         ];
 
-        let filter: Filter = Filter::HighPriority;
-        let query: &str = "";
-
         state.select_state.select(Some(0));
-        let indices: Option<(usize, usize)> = state.swap_indices(&filter, query, 1);
+        let indices = state.swap_indices(SidebarTab::HighPriority, None, "", 1);
 
         assert_eq!(indices, Some((0, 2)));
     }
@@ -315,10 +336,10 @@ mod tests {
         state.tasks = vec![Task::new("1")];
         state.select_state.select(Some(0));
 
-        let up = state.swap_indices(&Filter::All, "", -1);
+        let up = state.swap_indices(SidebarTab::Inbox, None, "", -1);
         assert_eq!(up, None, "Should not move above 0");
 
-        let down = state.swap_indices(&Filter::All, "", 1);
+        let down = state.swap_indices(SidebarTab::Inbox, None, "", 1);
         assert_eq!(down, None, "Should not move below last element");
     }
 
@@ -329,8 +350,9 @@ mod tests {
 
         state.select_state.select(Some(1));
         let id: Uuid = state.tasks[1].id;
-        let selected: Option<&Task> = state.selected(&state.tasks, &Filter::All, "");
-        let selected_id: Option<Uuid> = state.selected_id(&state.tasks, &Filter::All, "");
+
+        let selected = state.selected(SidebarTab::Inbox, None, "");
+        let selected_id = state.selected_id(SidebarTab::Inbox, None, "");
 
         assert_eq!(selected.unwrap().title, "B");
         assert_eq!(selected_id.unwrap(), id);

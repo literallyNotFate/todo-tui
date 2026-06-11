@@ -1,8 +1,8 @@
 use crate::{
     app::OperationResult,
     core::{Sort, TaskError},
-    models::{Filter, Priority, Task, task::TaskEditor},
-    state::ApplicationResult,
+    models::{Priority, Task, task::TaskEditor},
+    state::{ApplicationResult, SidebarTab},
 };
 use chrono::Local;
 use uuid::Uuid;
@@ -114,26 +114,31 @@ impl TaskService {
         Ok(())
     }
 
-    /// Clear tasks that being filtered by current filter
-    pub fn clear_tasks(tasks: &mut Vec<Task>, filter: &Filter) -> usize {
+    /// Clear tasks that are being filtered by current sidebar tab or folder selection.
+    /// Returns the number of removed tasks.
+    pub fn clear_tasks(tasks: &mut Vec<Task>, tab: SidebarTab, folder_id: Option<Uuid>) -> usize {
         let initial_len: usize = tasks.len();
+        let today = Local::now().date_naive();
 
-        match filter {
-            Filter::All => tasks.clear(),
-            Filter::Completed => tasks.retain(|t| !t.completed),
-            Filter::Active => tasks.retain(|t| t.completed),
-            Filter::HighPriority => tasks.retain(|t| t.priority != Priority::High),
-            Filter::Today => {
-                let today = Local::now().date_naive();
-                tasks.retain(|t| t.created_at.with_timezone(&Local).date_naive() != today);
+        tasks.retain(|t| {
+            if let Some(target_folder_id) = folder_id {
+                return t.folder_id != Some(target_folder_id);
             }
-            Filter::InFolder(folder_id) => tasks.retain(|t| t.folder_id != Some(*folder_id)),
-        }
+
+            match tab {
+                SidebarTab::Inbox => false,
+                SidebarTab::Active => t.completed,
+                SidebarTab::Completed => !t.completed,
+                SidebarTab::HighPriority => t.priority != Priority::High,
+                SidebarTab::Today => !t.is_due_today(&today),
+            }
+        });
 
         let removed: usize = initial_len - tasks.len();
         log::info!(
-            "Massive clear performed. Filter: {:?}, Removed: {} tasks",
-            filter,
+            "Massive clear performed. Tab: {:?}, Folder: {:?}, Removed: {} tasks",
+            tab,
+            folder_id,
             removed
         );
 
@@ -341,7 +346,8 @@ mod tests {
         let mut tasks: Vec<Task> = vec![Task::new("Active"), Task::new("Done")];
         tasks[1].completed = true;
 
-        let removed_count: usize = TaskService::clear_tasks(&mut tasks, &Filter::Completed);
+        let removed_count: usize =
+            TaskService::clear_tasks(&mut tasks, SidebarTab::Completed, None);
 
         assert_eq!(removed_count, 1);
         assert_eq!(tasks.len(), 1);

@@ -124,10 +124,10 @@ impl Storage {
         self.session().save(&state.session)?;
 
         log::info!(
-            "Successfully saved storage data: {} folders, {} tasks, filter: {:?}, focus: {:?}",
+            "Successfully saved storage data: {} folders, {} tasks, tab: {:?}, focus: {:?}",
             state.folders.len(),
             state.tasks.len(),
-            state.session.last_filter,
+            state.session.last_tab,
             state.session.last_focus
         );
 
@@ -182,7 +182,8 @@ impl Storage {
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 last_selected_id TEXT,
                 last_focus TEXT NOT NULL,
-                last_filter TEXT NOT NULL,
+                last_tab TEXT NOT NULL,
+                last_folder_id TEXT,
                 last_query TEXT NOT NULL,
                 description_scroll_pos INTEGER NOT NULL,
                 hotkeys_scroll_pos INTEGER NOT NULL,

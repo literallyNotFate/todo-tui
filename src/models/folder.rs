@@ -48,6 +48,11 @@ impl Folder {
         self.name_lower = self.name.to_lowercase();
         self.updated_at = Utc::now();
     }
+
+    // Static method to find folder by ID
+    pub fn find_by_id(folders: &[Folder], id: &Uuid) -> Option<Self> {
+        folders.iter().find(|f| f.id == *id).cloned()
+    }
 }
 
 /// Folder color struct
@@ -181,6 +186,18 @@ mod tests {
         assert_eq!(folder.name_lower, "new name");
         assert_eq!(folder.color, "Green");
         assert!(folder.updated_at > old_updated_at);
+    }
+
+    #[test]
+    fn should_return_folder_name_by_id() {
+        let folders = vec![Folder::new("Test1", "Blue"), Folder::new("Test2", "Red")];
+        let id = folders[0].id;
+
+        let found: Option<Folder> = Folder::find_by_id(&folders, &id);
+        assert_eq!(found.unwrap().name, "Test1");
+
+        let found: Option<Folder> = Folder::find_by_id(&folders, &Uuid::new_v4());
+        assert!(found.is_none());
     }
 
     #[test]
