@@ -41,13 +41,15 @@ pub enum Action {
     FilterHigh,
     FilterToday,
 
-    Add,
+    AddTask,
     Update,
     Remove,
     Complete,
     Details,
     Search,
     ClearAll,
+
+    AddFolder,
 
     NextTheme,
     PrevTheme,
@@ -83,13 +85,15 @@ impl Action {
             Self::FilterHigh => ("Filter: High Priority", "Filters"),
             Self::FilterToday => ("Filter: Today", "Filters"),
 
-            Self::Add => ("Add new task", "Actions"),
+            Self::AddTask => ("Add new task", "Actions"),
             Self::Update => ("Update selected", "Actions"),
             Self::Remove => ("Remove selected", "Actions"),
             Self::Complete => ("Mark as Done/Undone", "Actions"),
             Self::Details => ("Show task details", "Actions"),
             Self::Search => ("Search tasks", "Actions"),
             Self::ClearAll => ("Clear all tasks", "Actions"),
+
+            Self::AddFolder => ("Add new folder", "Actions"),
 
             Self::NextTheme => ("Next theme", "UI"),
             Self::PrevTheme => ("Previous theme", "UI"),

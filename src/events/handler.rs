@@ -3,7 +3,7 @@ use crate::{
     app::ApplicationController,
     config::KeyMaps,
     core::{Action, ApplicationMode, Autosave, FocusArea, Selectable, Storage},
-    models::{Filter, TaskDetails, TaskEditor},
+    models::{Filter, FolderColor, FolderEditor, TaskDetails, TaskEditor},
     ui::{
         Popup, WidgetResponse, is_terminal_small,
         widgets::{
@@ -92,24 +92,38 @@ impl EventHandler {
                         title,
                         description,
                         priority: Selectable::new(priority),
+                        folder_id: None,
                     };
 
                     if let Some(task_id) = id {
-                        ctrl.dispatch_update(task_id, editor);
+                        ctrl.dispatch_update_task(task_id, editor);
                     } else {
-                        ctrl.dispatch_append(
+                        ctrl.dispatch_append_task(
                             editor.title,
                             editor.description,
                             Some(*editor.priority),
                         );
                     }
                 }
+                ModalResult::FolderSubmitted { id, name, color } => {
+                    use std::str::FromStr;
+                    let folder_color = FolderColor::from_str(&color).unwrap_or_default();
+                    let editor = FolderEditor::new(name, folder_color);
 
+                    if let Some(folder_id) = id {
+                        ctrl.dispatch_update_folder(folder_id, editor);
+                    } else {
+                        ctrl.dispatch_append_folder(editor.name, editor.color.to_string());
+                    }
+                }
                 ModalResult::Confirmed => {
                     log::debug!("Modal confirmed: action={:?}", modal_action);
                     match modal_action {
-                        ModalAction::Remove => ctrl.dispatch_remove(),
+                        ModalAction::Remove => ctrl.dispatch_remove_task(),
                         ModalAction::Clear => ctrl.dispatch_clear(),
+                        ModalAction::RemoveFolder(folder_id) => {
+                            ctrl.dispatch_remove_folder(folder_id);
+                        }
                         ModalAction::Save => {
                             ctrl.dispatch_save(storage);
                         }
@@ -170,6 +184,7 @@ impl EventHandler {
     ) {
         ctrl.ui.request_redraw();
         let focus: FocusArea = *ctrl.ui.focused;
+        let folders = ctrl.state.get_folders();
 
         match action {
             Action::Quit => {
@@ -198,7 +213,10 @@ impl EventHandler {
             Action::NextTheme => ctrl.ui.next_theme(),
             Action::PrevTheme => ctrl.ui.prev_theme(),
             Action::ToggleThemeMode => ctrl.ui.toggle_mode(),
-            Action::Add => ctrl.ui.show_modal(Popup::append_task(), ModalAction::None),
+            Action::AddTask => ctrl.ui.show_modal(Popup::append_task(), ModalAction::None),
+            Action::AddFolder => ctrl
+                .ui
+                .show_modal(Popup::append_folder(), ModalAction::None),
             Action::Search => {
                 ctrl.ui.show_search();
                 *mode = ApplicationMode::Search;
@@ -214,7 +232,7 @@ impl EventHandler {
             }
             Action::MoveUp => match *ctrl.ui.focused {
                 FocusArea::Sidebar => {
-                    ctrl.ui.prev_tab_filter();
+                    ctrl.ui.prev_tab_filter(&folders);
                     ctrl.stabilize(None);
                 }
                 FocusArea::Main => {
@@ -223,7 +241,7 @@ impl EventHandler {
             },
             Action::MoveDown => match *ctrl.ui.focused {
                 FocusArea::Sidebar => {
-                    ctrl.ui.next_tab_filter();
+                    ctrl.ui.next_tab_filter(&folders);
                     ctrl.stabilize(None);
                 }
                 FocusArea::Main => {
@@ -274,9 +292,9 @@ impl EventHandler {
                     Action::Complete => ctrl.dispatch_toggle(),
                     Action::Remove => {
                         if ctrl.config.behavior.confirm_before_remove {
-                            ctrl.ui.remove_confirm();
+                            ctrl.ui.remove_task_confirm();
                         } else {
-                            ctrl.dispatch_remove();
+                            ctrl.dispatch_remove_task();
                         }
                     }
                     Action::Sort => {
@@ -595,7 +613,7 @@ mod tests {
         state.tasks.push(Task::new("To be deleted"));
         state.select_state.select(Some(0));
 
-        ui.remove_confirm();
+        ui.remove_task_confirm();
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
         EventHandler::handle_modal(key_event(KeyCode::Char('y')), &mut ctrl, storage, running);
 

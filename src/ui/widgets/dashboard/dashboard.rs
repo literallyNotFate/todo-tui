@@ -34,7 +34,8 @@ impl<'a> Dashboard<'a> {
         let layout: MainLayout = MainLayout::split(area, ctx.config.show_sidebar);
 
         if show_sidebar {
-            SidebarWidget::new(self.ui, &self.state.tasks).render(ctx, layout.sidebar);
+            SidebarWidget::new(self.ui, &self.state.tasks, &self.state.folders)
+                .render(ctx, layout.sidebar);
         }
 
         ContentWidget::new(self.state, self.ui).render(ctx, layout.content);

@@ -1,9 +1,9 @@
 use crate::{
-    app::TaskService,
+    app::{FolderService, TaskService},
     config::{Config, KeyMaps},
     core::{Storage, TaskError},
-    models::{Priority, Task, task::TaskEditor},
-    state::{ApplicationState, Session, UIState},
+    models::{Filter, Folder, FolderEditor, Priority, Task, task::TaskEditor},
+    state::{ApplicationState, Session, TasksStateSave, UIState},
 };
 use uuid::Uuid;
 
@@ -31,33 +31,39 @@ impl<'a> ApplicationController<'a> {
     }
 
     /// Handle appending a task
-    pub fn dispatch_append(
+    pub fn dispatch_append_task<S: Into<String>>(
         &mut self,
-        title: impl Into<String>,
-        desc: impl Into<String>,
+        title: S,
+        desc: S,
         priority: Option<Priority>,
     ) {
         let title_string: String = title.into();
         log::debug!("Dispatching append for task: '{}'", title_string);
+
+        let current_folder_id = match &self.ui.filter.value {
+            Filter::InFolder(folder_id) => Some(*folder_id),
+            _ => None,
+        };
 
         let mut task: Task = Task::new(title_string).with_description(desc);
 
         if let Some(p) = priority {
             task = task.with_priority(p);
         }
-        let id: Uuid = task.id;
+        if let Some(fid) = current_folder_id {
+            task = task.with_folder(fid);
+        }
 
         match TaskService::append_task(&mut self.state.tasks, task, &self.state.sort) {
-            Ok(added) => {
-                self.stabilize(Some(id));
+            Ok(result) => {
+                let (_, task) = result.unwrap_task_created();
+
+                self.stabilize(Some(task.id));
                 self.state.mark_as_dirty();
 
                 self.ui.push_notification(
                     self.state,
-                    Ok(format!(
-                        "Task '{}' was added to the list!",
-                        added.task.title
-                    )),
+                    Ok(format!("Task '{}' was added to the list!", task.title)),
                 );
             }
             Err(e) => self.ui.push_notification(self.state, Err(e)),
@@ -65,14 +71,16 @@ impl<'a> ApplicationController<'a> {
     }
 
     /// Handle updating an existing task
-    pub fn dispatch_update(&mut self, id: Uuid, editor: TaskEditor) {
+    pub fn dispatch_update_task(&mut self, id: Uuid, editor: TaskEditor) {
         match TaskService::update_task(&mut self.state.tasks, &id, editor, &self.state.sort) {
             Ok(result) => {
                 log::debug!("Dispatching update for task (ID: {})", id);
+                let (_, old, new) = result.unwrap_task_updated();
+
                 self.stabilize(Some(id));
                 self.state.mark_as_dirty();
 
-                let msg = self.format_update_service_message(&result.old, &result.new);
+                let msg = self.format_update_task(&old, &new);
                 self.ui.push_notification(self.state, Ok(msg));
             }
             Err(e) => self.ui.push_notification(self.state, Err(e)),
@@ -80,17 +88,19 @@ impl<'a> ApplicationController<'a> {
     }
 
     /// Handle removing task
-    pub fn dispatch_remove(&mut self) {
+    pub fn dispatch_remove_task(&mut self) {
         if let Some(id) = self.ui.selected_id(self.state) {
             match TaskService::remove_task(&mut self.state.tasks, &id) {
-                Ok(removed) => {
-                    log::debug!("Dispatching remove for task '{}'", removed.task.title);
+                Ok(result) => {
+                    let task: Task = result.unwrap_task_removed();
+                    log::debug!("Dispatching remove for task '{}'", task.title);
+
                     self.stabilize(None);
                     self.state.mark_as_dirty();
 
                     self.ui.push_notification(
                         self.state,
-                        Ok(format!("Task '{}' was removed!", removed.task.title)),
+                        Ok(format!("Task '{}' was removed!", task.title)),
                     );
                 }
                 Err(e) => self.ui.push_notification(self.state, Err(e)),
@@ -98,6 +108,78 @@ impl<'a> ApplicationController<'a> {
         } else {
             self.ui
                 .push_notification(self.state, Err(TaskError::TaskNotFound.into()));
+        }
+    }
+
+    /// Handle appending a folder
+    pub fn dispatch_append_folder<S: Into<String>>(&mut self, name: S, color: S) {
+        let name_string: String = name.into();
+        log::debug!("Dispatching append for folder: '{}'", name_string);
+
+        let folder: Folder = Folder::new(name_string, color.into());
+        match FolderService::append_folder(&mut self.state.folders, folder) {
+            Ok(result) => {
+                let (_, folder) = result.unwrap_folder_created();
+                self.state.mark_as_dirty();
+
+                self.ui.push_notification(
+                    self.state,
+                    Ok(format!("Folder '{}' successfully created!", folder.name)),
+                );
+            }
+            Err(e) => self.ui.push_notification(self.state, Err(e)),
+        }
+    }
+
+    /// Handle updating an existing folder
+    pub fn dispatch_update_folder(&mut self, id: Uuid, editor: FolderEditor) {
+        log::debug!("Dispatching update for folder (ID: {})", id);
+
+        match FolderService::update_folder(&mut self.state.folders, &id, editor) {
+            Ok(result) => {
+                let (_, old, new) = result.unwrap_folder_updated();
+                self.state.mark_as_dirty();
+
+                let msg = self.format_update_folder(&old, &new);
+                self.ui.push_notification(self.state, Ok(msg));
+            }
+            Err(e) => self.ui.push_notification(self.state, Err(e)),
+        }
+    }
+
+    /// Handle removing folder (with cascading tasks deletion)
+    pub fn dispatch_remove_folder(&mut self, id: Uuid) {
+        match FolderService::remove_folder(&mut self.state.folders, &id) {
+            Ok(result) => {
+                let folder: Folder = result.unwrap_folder_removed();
+                log::info!(
+                    "Folder '{}' removed. Cleaning up associated tasks...",
+                    folder.name
+                );
+
+                let initial_tasks_count = self.state.tasks.len();
+                self.state.tasks.retain(|t| t.folder_id != Some(id));
+                let removed_tasks = initial_tasks_count - self.state.tasks.len();
+
+                if self.ui.filter.value == Filter::InFolder(id) {
+                    self.ui.filter.value = Filter::All;
+                }
+
+                self.stabilize(None);
+                self.state.mark_as_dirty();
+
+                let msg = if removed_tasks > 0 {
+                    format!(
+                        "Folder '{}' and its {} tasks were removed!",
+                        folder.name, removed_tasks
+                    )
+                } else {
+                    format!("Folder '{}' was removed!", folder.name)
+                };
+
+                self.ui.push_notification(self.state, Ok(msg));
+            }
+            Err(e) => self.ui.push_notification(self.state, Err(e)),
         }
     }
 
@@ -136,14 +218,14 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle clearing tasks by filter
     pub fn dispatch_clear(&mut self) {
-        let removed: usize = TaskService::clear(&mut self.state.tasks, &self.ui.filter);
+        let removed: usize = TaskService::clear_tasks(&mut self.state.tasks, &self.ui.filter.value);
 
         if removed > 0 {
             log::info!("Clear successful: {} tasks removed", removed);
             self.state.mark_as_dirty();
             self.stabilize(None);
 
-            let msg: String = format!("Cleared {} tasks from '{}'", removed, self.ui.filter);
+            let msg: String = format!("Cleared {} tasks from '{}'", removed, self.ui.filter.value);
             self.ui.push_notification(self.state, Ok(msg));
         } else {
             log::debug!("Clear skipped: no tasks matched current filter");
@@ -152,16 +234,21 @@ impl<'a> ApplicationController<'a> {
         }
     }
 
-    /// Handle saving all (tasks + config) on Ctrl+S
+    /// Handle saving all data on Ctrl+S
     pub fn dispatch_save(&mut self, storage: &mut Storage) -> bool {
         self.config.update_from_ui(&self.ui);
 
-        let current_id =
-            self.state
-                .selected_id(&self.state.tasks, &self.ui.filter, &self.ui.search_query());
-        let session: Session = Session::from_state(&self.ui, current_id);
+        let current_id = self.state.selected_id(
+            &self.state.tasks,
+            &self.ui.filter.value,
+            &self.ui.search_query(),
+        );
 
-        match storage.save(&self.state.tasks, session) {
+        let session: Session = Session::from_state(&self.ui, current_id);
+        let save_snapshot: TasksStateSave =
+            TasksStateSave::new(&self.state.tasks, &self.state.folders, &session);
+
+        match storage.save(&save_snapshot) {
             Ok(msg) => {
                 self.state.mark_saved();
                 let _ = self.config.save(None);
@@ -181,7 +268,11 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_sorting(&mut self) {
         let selected_id = self
             .state
-            .selected(&self.state.tasks, &self.ui.filter, &self.ui.search_query())
+            .selected(
+                &self.state.tasks,
+                &self.ui.filter.value,
+                &self.ui.search_query(),
+            )
             .map(|t| t.id);
 
         TaskService::sorting(&mut self.state.tasks, &self.state.sort);
@@ -226,7 +317,7 @@ impl<'a> ApplicationController<'a> {
     }
 
     /// Helper function to generate update task text based on diff between states
-    fn format_update_service_message(&self, old: &Task, new: &Task) -> String {
+    fn format_update_task(&self, old: &Task, new: &Task) -> String {
         if old.title != new.title {
             format!("Title: '{}' → '{}'", old.title, new.title)
         } else if old.priority != new.priority {
@@ -240,6 +331,17 @@ impl<'a> ApplicationController<'a> {
             format!("Saved '{}' without changes!", new.title)
         }
     }
+
+    /// Helper function to generate update folder text based on diff between states
+    fn format_update_folder(&self, old: &Folder, new: &Folder) -> String {
+        if old.name != new.name {
+            format!("Name: '{}' → '{}'", old.name, new.name)
+        } else if old.color != new.color {
+            format!("Color: {} → {} for '{}'", old.color, new.color, new.name)
+        } else {
+            format!("Saved '{}' without changes!", new.name)
+        }
+    }
 }
 
 /// Unit-tests for application controller
@@ -248,6 +350,7 @@ mod tests {
     use super::*;
     use crate::{
         core::{Selectable, Sort, SortBy, SortOrder},
+        models::FolderColor,
         ui::Notification,
     };
     use std::path::PathBuf;
@@ -267,7 +370,7 @@ mod tests {
         let (mut state, mut ui, mut config, keymaps) = setup();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
 
-        ctrl.dispatch_append("Test", "Desc", Some(Priority::High));
+        ctrl.dispatch_append_task("Test", "Desc", Some(Priority::High));
 
         assert_eq!(state.tasks.len(), 1);
         assert_eq!(state.tasks[0].title, "Test");
@@ -277,11 +380,24 @@ mod tests {
     }
 
     #[test]
+    fn should_auto_bind_folder_id_on_append_when_inside_folder_filter() {
+        let (mut state, mut ui, mut config, keymaps) = setup();
+        let folder_id = Uuid::new_v4();
+        ui.filter.value = Filter::InFolder(folder_id);
+
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
+        ctrl.dispatch_append_task("Folder Task", "", None);
+
+        assert_eq!(state.tasks.len(), 1);
+        assert_eq!(state.tasks[0].folder_id, Some(folder_id));
+    }
+
+    #[test]
     fn should_handle_empty_title_error_on_append() {
         let (mut state, mut ui, mut config, keymaps) = setup();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
 
-        ctrl.dispatch_append("  ", "Description", None);
+        ctrl.dispatch_append_task("  ", "Description", None);
         assert_eq!(state.tasks.len(), 0);
         assert!(state.notification.is_some());
 
@@ -305,10 +421,11 @@ mod tests {
             title: "Now High".into(),
             description: "".into(),
             priority: Selectable::new(Priority::High),
+            folder_id: None,
         };
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
-        ctrl.dispatch_update(low_id, editor);
+        ctrl.dispatch_update_task(low_id, editor);
 
         let new_pos = state
             .tasks
@@ -338,9 +455,10 @@ mod tests {
             title: "".into(),
             description: "".into(),
             priority: Selectable::default(),
+            folder_id: None,
         };
 
-        ctrl.dispatch_update(id, editor);
+        ctrl.dispatch_update_task(id, editor);
 
         let note: &Notification = state.notification.as_ref().unwrap();
         assert!(state.notification.is_some());
@@ -356,9 +474,10 @@ mod tests {
             title: "Title".into(),
             description: "".into(),
             priority: Selectable::default(),
+            folder_id: None,
         };
 
-        ctrl.dispatch_update(fake_id, editor);
+        ctrl.dispatch_update_task(fake_id, editor);
 
         let note: &Notification = state.notification.as_ref().unwrap();
         assert!(state.notification.is_some());
@@ -373,7 +492,7 @@ mod tests {
         state.select_state.select(Some(1));
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
-        ctrl.dispatch_remove();
+        ctrl.dispatch_remove_task();
 
         assert_eq!(state.tasks.len(), 1);
         assert_eq!(state.select_state.selected(), Some(0));
@@ -387,7 +506,7 @@ mod tests {
         state.select_state.select(Some(999));
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
-        ctrl.dispatch_remove();
+        ctrl.dispatch_remove_task();
 
         let note: &Notification = state.notification.as_ref().unwrap();
         assert!(state.notification.is_some());
@@ -467,6 +586,83 @@ mod tests {
         assert!(
             ui.modal.is_some(),
             "Modal popup should be triggered on successful save"
+        );
+    }
+
+    #[test]
+    fn should_append_folder_and_set_notification() {
+        let (mut state, mut ui, mut config, keymaps) = setup();
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
+
+        ctrl.dispatch_append_folder("Work", "Red");
+
+        assert_eq!(state.folders.len(), 1);
+        assert_eq!(state.folders[0].name, "Work");
+        assert_eq!(state.folders[0].color, "Red");
+        assert!(state.notification.is_some());
+        assert!(
+            state
+                .notification
+                .unwrap()
+                .message
+                .contains("successfully created")
+        );
+    }
+
+    #[test]
+    fn should_handle_duplicate_name_error_on_append_folder() {
+        let (mut state, mut ui, mut config, keymaps) = setup();
+        state.folders.push(Folder::new("Personal", "Blue"));
+
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
+        ctrl.dispatch_append_folder("Personal", "Blue");
+
+        assert_eq!(state.folders.len(), 1);
+        assert_eq!(
+            state.notification.unwrap().message,
+            "Folder with this name already exists!"
+        );
+    }
+
+    #[test]
+    fn should_update_folder_data() {
+        let (mut state, mut ui, mut config, keymaps) = setup();
+        let folder = Folder::new("Old", "Lavender");
+        let id = folder.id;
+        state.folders.push(folder);
+
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
+        let editor = FolderEditor::new("New", FolderColor::Green);
+
+        ctrl.dispatch_update_folder(id, editor);
+
+        assert_eq!(state.folders[0].name, "New");
+        assert_eq!(state.folders[0].color, "Green");
+    }
+
+    #[test]
+    fn should_remove_folder_and_perform_cascade_delete_on_tasks() {
+        let (mut state, mut ui, mut config, keymaps) = setup();
+        let folder = Folder::new("To Delete", "Red");
+        let folder_id = folder.id;
+        state.folders.push(folder);
+
+        let task_in_folder = Task::new("In Folder").with_folder(folder_id);
+        let task_outside = Task::new("Outside");
+        state.tasks = vec![task_in_folder, task_outside];
+
+        let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
+        ctrl.dispatch_remove_folder(folder_id);
+
+        assert!(state.folders.is_empty());
+        assert_eq!(state.tasks.len(), 1);
+        assert_eq!(state.tasks[0].title, "Outside");
+        assert!(
+            state
+                .notification
+                .unwrap()
+                .message
+                .contains("and its 1 tasks were removed")
         );
     }
 }

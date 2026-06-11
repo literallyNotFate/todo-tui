@@ -161,10 +161,12 @@ impl UIState {
     /// Return id of a task based on TableState selection
     pub fn selected_id(&self, state: &ApplicationState) -> Option<Uuid> {
         let index: usize = state.select_state.selected()?;
-        state
-            .filter(&self.filter)
-            .nth(index)
-            .map(|(_, task)| task.id)
+
+        self.filter
+            .value
+            .apply(&state.tasks, self.search_query())
+            .get(index)
+            .map(|task| task.id)
     }
 
     /// Toggle dark/light theme mode
@@ -270,15 +272,55 @@ impl UIState {
         self.request_redraw();
     }
 
-    /// Next filter tab (sidebar)
-    pub fn next_tab_filter(&mut self) {
-        self.filter.next();
+    /// Next filter tab (including dynamic folders)
+    pub fn next_tab_filter(&mut self, folder_ids: &[Uuid]) {
+        let mut all_filters = vec![
+            Filter::All,
+            Filter::Active,
+            Filter::Completed,
+            Filter::HighPriority,
+            Filter::Today,
+        ];
+        for id in folder_ids {
+            all_filters.push(Filter::InFolder(*id));
+        }
+
+        let current_filter = *self.filter;
+        if let Some(current_idx) = all_filters.iter().position(|f| f == &current_filter) {
+            let next_idx = (current_idx + 1) % all_filters.len();
+            self.filter.set(all_filters[next_idx]);
+        } else {
+            self.filter.set(Filter::All);
+        }
+
         log::trace!("Filter changed to: {:?}", self.filter);
     }
 
-    /// Previous filter tab (sidebar)
-    pub fn prev_tab_filter(&mut self) {
-        self.filter.prev();
+    /// Previous filter tab (including dynamic folders)
+    pub fn prev_tab_filter(&mut self, folder_ids: &[Uuid]) {
+        let mut all_filters = vec![
+            Filter::All,
+            Filter::Active,
+            Filter::Completed,
+            Filter::HighPriority,
+            Filter::Today,
+        ];
+        for id in folder_ids {
+            all_filters.push(Filter::InFolder(*id));
+        }
+
+        let current_filter = *self.filter;
+        if let Some(current_idx) = all_filters.iter().position(|f| f == &current_filter) {
+            let prev_idx = if current_idx == 0 {
+                all_filters.len() - 1
+            } else {
+                current_idx - 1
+            };
+            self.filter.set(all_filters[prev_idx]);
+        } else {
+            self.filter.set(Filter::All);
+        }
+
         log::trace!("Filter changed to: {:?}", self.filter);
     }
 
@@ -309,11 +351,21 @@ impl UIState {
         self.modal = None;
     }
 
-    /// Opens remove confirm widget
-    pub fn remove_confirm(&mut self) {
+    /// Opens remove confirm widget for a specific task
+    pub fn remove_task_confirm(&mut self) {
         self.show_modal(
             Confirm::new("Are you sure to remove selected task?"),
             ModalAction::Remove,
+        );
+    }
+
+    /// Opens remove confirm widget for a specific folder
+    pub fn remove_folder_confirm(&mut self, folder_id: Uuid) {
+        self.show_modal(
+            Confirm::new(
+                "Are you sure you want to remove this folder? All inner tasks will be deleted.",
+            ),
+            ModalAction::RemoveFolder(folder_id),
         );
     }
 
@@ -357,21 +409,42 @@ mod tests {
     };
 
     #[test]
-    fn should_navigate_through_filters() {
+    fn should_navigate_through_filters_and_dynamic_folders() {
         let mut ui = UIState::default();
         ui.filter.set(Filter::All);
 
-        ui.next_tab_filter();
-        assert_eq!(ui.filter, Filter::Active);
+        let folder_a = Uuid::new_v4();
+        let folder_b = Uuid::new_v4();
+        let folders_ids = vec![folder_a, folder_b];
 
-        ui.next_tab_filter();
-        assert_eq!(ui.filter, Filter::Completed);
+        ui.next_tab_filter(&folders_ids);
+        assert_eq!(*ui.filter, Filter::Active);
 
-        ui.prev_tab_filter();
-        assert_eq!(ui.filter, Filter::Active);
+        ui.next_tab_filter(&folders_ids);
+        assert_eq!(*ui.filter, Filter::Completed);
+
+        ui.prev_tab_filter(&folders_ids);
+        assert_eq!(*ui.filter, Filter::Active);
+
+        ui.next_tab_filter(&folders_ids);
+        ui.next_tab_filter(&folders_ids);
+        ui.next_tab_filter(&folders_ids);
+        assert_eq!(*ui.filter, Filter::Today);
+
+        ui.next_tab_filter(&folders_ids);
+        assert_eq!(*ui.filter, Filter::InFolder(folder_a));
+
+        ui.next_tab_filter(&folders_ids);
+        assert_eq!(*ui.filter, Filter::InFolder(folder_b));
+
+        ui.next_tab_filter(&folders_ids);
+        assert_eq!(*ui.filter, Filter::All);
+
+        ui.prev_tab_filter(&folders_ids);
+        assert_eq!(*ui.filter, Filter::InFolder(folder_b));
 
         ui.change_filter(Filter::HighPriority);
-        assert_eq!(ui.filter, Filter::HighPriority);
+        assert_eq!(*ui.filter, Filter::HighPriority);
     }
 
     #[test]
@@ -572,12 +645,25 @@ mod tests {
     }
 
     #[test]
-    fn should_open_remove_confirm() {
+    fn should_open_remove_task_confirm() {
         let mut ui = UIState::default();
-        ui.remove_confirm();
+        ui.remove_task_confirm();
 
         assert!(ui.modal.is_some());
         assert_eq!(ui.modal.unwrap().action, ModalAction::Remove);
+    }
+
+    #[test]
+    fn should_open_remove_folder_confirm() {
+        let mut ui = UIState::default();
+        let folder_id = Uuid::new_v4();
+        ui.remove_folder_confirm(folder_id);
+
+        assert!(ui.modal.is_some());
+        assert_eq!(
+            ui.modal.unwrap().action,
+            ModalAction::RemoveFolder(folder_id)
+        );
     }
 
     #[test]
@@ -605,5 +691,21 @@ mod tests {
 
         assert!(ui.modal.is_some());
         assert_eq!(ui.modal.unwrap().action, ModalAction::UnsavedExit);
+    }
+
+    #[test]
+    fn should_handle_infolder_filter_switching() {
+        let mut ui = UIState::default();
+        let folder_id = Uuid::new_v4();
+
+        ui.change_filter(Filter::InFolder(folder_id));
+        assert_eq!(*ui.filter, Filter::InFolder(folder_id));
+
+        ui.remove_folder_confirm(folder_id);
+        assert!(ui.modal.is_some());
+        assert_eq!(
+            ui.modal.unwrap().action,
+            ModalAction::RemoveFolder(folder_id)
+        );
     }
 }

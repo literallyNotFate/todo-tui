@@ -149,7 +149,7 @@ impl FeedbackWidget {
         let palette: ThemePalette = ctx.palette();
 
         spans.extend(ctx.key_hint(Action::ShowHelp, "help", palette.accent));
-        spans.extend(ctx.key_hint(Action::Add, "add", palette.secondary));
+        spans.extend(ctx.key_hint(Action::AddTask, "add", palette.secondary));
         spans.extend(ctx.key_hint(Action::MoveLeft, "sidebar", palette.success));
         spans.extend(ctx.key_hint(Action::Quit, "exit", palette.error));
 

@@ -130,7 +130,7 @@ mod tests {
         config::{KeyMaps, StorageConfig},
         core::Storage,
         models::Task,
-        state::{Session, UIState},
+        state::{Session, TasksStateSave, UIState},
     };
     use std::time::Duration;
     use tempdir::TempDir;
@@ -168,7 +168,7 @@ mod tests {
         let keymaps = KeyMaps::default();
         let mut autosave = Autosave::new(true);
 
-        state.tasks.push(Task::new("Test", "", None));
+        state.tasks.push(Task::new("Test"));
         state.mark_as_dirty();
         autosave.reset_timer();
 
@@ -187,7 +187,7 @@ mod tests {
         let keymaps = KeyMaps::default();
         let mut autosave = Autosave::new(true);
 
-        state.tasks.push(Task::new("Test", "", None));
+        state.tasks.push(Task::new("Test"));
         state.mark_as_dirty();
 
         autosave.interval = Duration::from_millis(0);
@@ -215,7 +215,8 @@ mod tests {
         let session = Session::from_state(&ui, None);
 
         let mut storage: Storage = Storage::init(Some(&path), &StorageConfig::default()).unwrap();
-        let _ = storage.save(&state.tasks, session);
+        let data = TasksStateSave::new(&state.tasks, &state.folders, &session);
+        let _ = storage.save(&data);
         state.mark_saved();
 
         let ctx = RenderContext::mock(&ui, &keymaps);

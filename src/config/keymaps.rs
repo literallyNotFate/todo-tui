@@ -370,13 +370,15 @@ impl Default for KeyMaps {
             (Action::FilterHigh, "4"),
             (Action::FilterToday, "5"),
             // Task Actions
-            (Action::Add, "a"),
+            (Action::AddTask, "a"),
             (Action::Complete, "enter"),
             (Action::Update, "e"),
             (Action::Remove, "d"),
             (Action::Details, "tab"),
             (Action::Search, "/"),
             (Action::ClearAll, "x"),
+            // Folder actions
+            (Action::AddFolder, "f"),
             // System & UI
             (Action::Sort, "s"),
             (Action::SortReverse, "r"),
@@ -497,7 +499,7 @@ mod tests {
 
         let toml_content = r#"
             [tasks]
-            add = ["a"]
+            add_task = ["a"]
             remove = ["a"]
         "#;
         std::fs::write(&path, toml_content).unwrap();

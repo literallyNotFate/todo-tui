@@ -1,6 +1,6 @@
 use crate::{
     core::FocusArea,
-    models::{Filter, Priority, Task},
+    models::{Filter, Folder, Priority, Task},
     state::UIState,
     theme::ThemePalette,
     ui::RenderContext,
@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span},
-    widgets::List,
+    widgets::{List, ListItem},
 };
 use strum::IntoEnumIterator;
 
@@ -18,11 +18,12 @@ use strum::IntoEnumIterator;
 pub struct SidebarWidget<'a> {
     ui: &'a UIState,
     tasks: &'a [Task],
+    folders: &'a [Folder],
 }
 
 impl<'a> SidebarWidget<'a> {
-    pub fn new(ui: &'a UIState, tasks: &'a [Task]) -> Self {
-        Self { ui, tasks }
+    pub fn new(ui: &'a UIState, tasks: &'a [Task], folders: &'a [Folder]) -> Self {
+        Self { ui, tasks, folders }
     }
 
     /// Sidebar rendering
@@ -47,11 +48,11 @@ impl<'a> SidebarWidget<'a> {
         let filter_tab_layout: std::rc::Rc<[Rect]> = self.filters_tab_layout(filters_inner_area);
 
         let query: &str = self.ui.search_query();
-        let list: List =
+        let (list, selected_index) =
             self.construct_list(&query, ctx.is_focused(focus_area), &palette, is_dimmed);
 
-        let mut state: ListState = ListState::default();
-        state.select(Some(self.ui.filter.index()));
+        let mut state = ListState::default();
+        state.select(Some(selected_index));
 
         ctx.render_widget(filters_block, sidebar_layout[1]);
         ctx.render_stateful_widget(list, filter_tab_layout[1], &mut state);
@@ -79,39 +80,70 @@ impl<'a> SidebarWidget<'a> {
         ctx.render_widget(Paragraph::new(chart_text), chart_inner_area);
     }
 
-    /// Construct a list based on filtered task values
+    /// Construct a list based on filtered task values and folders
     fn construct_list(
         &self,
         query: &str,
         focused: bool,
         palette: &ThemePalette,
         is_dimmed: bool,
-    ) -> List<'static> {
-        use ratatui::widgets::ListItem;
+    ) -> (List<'static>, usize) {
+        let mut items = Vec::new();
+        let mut selected_index = 0;
+        let mut current_idx = 0;
 
-        let items: Vec<ListItem> = Filter::iter()
-            .map(|tab| {
-                let count = tab.count(self.tasks, query);
-                let text = format!(" {} ({})", tab.to_string(), count);
+        for tab in Filter::iter() {
+            let is_selected = self.ui.filter.value == tab;
+            if is_selected {
+                selected_index = current_idx;
+            }
 
-                let style = if tab == self.ui.filter.value {
-                    if is_dimmed {
-                        Style::default().fg(palette.muted).bold()
-                    } else {
-                        Style::default().fg(palette.bg).bold()
-                    }
-                } else {
-                    let fg: Color = if is_dimmed || !focused {
-                        palette.muted
-                    } else {
-                        palette.fg
-                    };
-                    Style::default().fg(fg)
-                };
+            let count = tab.count(self.tasks, query);
+            let text = format!(" {} ({})", tab.to_string(), count);
+            items.push(self.create_list_item(text, is_selected, focused, palette, is_dimmed, None));
 
-                ListItem::new(Span::styled(text, style))
-            })
-            .collect();
+            current_idx += 1;
+        }
+
+        if !self.folders.is_empty() {
+            items.push(ListItem::new(Span::styled(
+                " ─── Folders ─────────────────",
+                Style::default().fg(palette.muted),
+            )));
+            current_idx += 1;
+        }
+
+        for folder in self.folders {
+            let count = self
+                .tasks
+                .iter()
+                .filter(|t| {
+                    t.folder_id == Some(folder.id)
+                        && (query.is_empty() || t.title_lower.contains(query))
+                })
+                .count();
+
+            let is_selected = match &self.ui.filter.value {
+                Filter::InFolder(id) => *id == folder.id,
+                _ => false,
+            };
+
+            if is_selected {
+                selected_index = current_idx;
+            }
+
+            let text = format!(" {} ({})", folder.name, count);
+            items.push(self.create_list_item(
+                text,
+                is_selected,
+                focused,
+                palette,
+                is_dimmed,
+                Some(&folder.color),
+            ));
+
+            current_idx += 1;
+        }
 
         let highlight_bg: Color = if is_dimmed {
             palette.bg
@@ -121,9 +153,41 @@ impl<'a> SidebarWidget<'a> {
             palette.muted
         };
 
-        List::new(items)
+        let list = List::new(items)
             .highlight_style(Style::default().bg(highlight_bg))
-            .highlight_symbol(if is_dimmed { "  " } else { "→ " })
+            .highlight_symbol(if is_dimmed { "  " } else { "→ " });
+
+        (list, selected_index)
+    }
+
+    /// Helper to generate list item
+    fn create_list_item(
+        &self,
+        text: String,
+        is_selected: bool,
+        focused: bool,
+        palette: &ThemePalette,
+        is_dimmed: bool,
+        custom_color: Option<&str>,
+    ) -> ListItem<'static> {
+        let style = if is_selected {
+            if is_dimmed {
+                Style::default().fg(palette.muted).bold()
+            } else {
+                Style::default().fg(palette.bg).bold()
+            }
+        } else {
+            let fg = if is_dimmed || !focused {
+                palette.muted
+            } else {
+                custom_color
+                    .and_then(|s| s.parse::<Color>().ok())
+                    .unwrap_or(palette.fg)
+            };
+            Style::default().fg(fg)
+        };
+
+        ListItem::new(Span::styled(text, style))
     }
 
     /// Focus text
@@ -349,8 +413,9 @@ mod tests {
             },
         ];
 
+        let folders = vec![];
         let ui = UIState::default();
-        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks);
+        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks, &folders);
 
         let summary: Vec<Line> = sidebar.progress_text(&ui.theme.palette(), false);
         let line_text: String = summary[1].to_string();
@@ -364,8 +429,9 @@ mod tests {
     fn should_generate_progress_with_empty_tasks() {
         let tasks: Vec<Task> = vec![];
 
+        let folders = vec![];
         let ui = UIState::default();
-        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks);
+        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks, &folders);
 
         let summary: Vec<Line> = sidebar.progress_text(&ui.theme.palette(), false);
         assert!(summary[1].to_string().contains("0%"));
@@ -376,12 +442,15 @@ mod tests {
     fn should_construct_list_with_highlighting() {
         let tasks = vec![];
 
+        let folders = vec![];
         let mut ui = UIState::default();
         ui.filter.value = Filter::All;
-        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks);
+        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks, &folders);
 
-        let list: List = sidebar.construct_list("", true, &ui.theme.palette(), false);
+        let (list, selected_index) = sidebar.construct_list("", true, &ui.theme.palette(), false);
+
         assert_eq!(list.len(), Filter::iter().len());
+        assert_eq!(selected_index, 0);
     }
 
     #[test]
@@ -401,8 +470,9 @@ mod tests {
             },
         ];
 
+        let folders = vec![];
         let ui = UIState::default();
-        let sidebar = SidebarWidget::new(&ui, &tasks);
+        let sidebar = SidebarWidget::new(&ui, &tasks, &folders);
         let summary = sidebar.focus_text(50, &ui.theme.palette(), false);
 
         let focus_text = summary[1].to_string();
@@ -420,8 +490,9 @@ mod tests {
             ..Default::default()
         }];
 
+        let folders = vec![];
         let ui = UIState::default();
-        let sidebar = SidebarWidget::new(&ui, &tasks);
+        let sidebar = SidebarWidget::new(&ui, &tasks, &folders);
         let summary = sidebar.focus_text(50, &ui.theme.palette(), false);
 
         let focus_text = summary[1].to_string();
@@ -459,7 +530,8 @@ mod tests {
             },
         ];
 
-        let sidebar = SidebarWidget::new(&ui, &tasks);
+        let folders = vec![];
+        let sidebar = SidebarWidget::new(&ui, &tasks, &folders);
         let lines = sidebar.priority_chart_text(&tasks, &ui.theme.palette(), 40, false);
 
         let high_line = lines[1].to_string();
@@ -468,5 +540,34 @@ mod tests {
         assert!(high_line.contains("HIGH"));
         assert!(high_line.contains(" 1"));
         assert!(low_line.contains(" 2"));
+    }
+
+    #[test]
+    fn should_append_folders_to_filter_list() {
+        let folder = Folder::new("Work", "Red");
+        let folders = vec![folder.clone()];
+
+        let tasks = vec![
+            Task {
+                title: "Task in folder".to_string(),
+                folder_id: Some(folder.id),
+                ..Default::default()
+            },
+            Task {
+                title: "Inbox Task".to_string(),
+                folder_id: None,
+                ..Default::default()
+            },
+        ];
+
+        let mut ui = UIState::default();
+        ui.filter.value = Filter::InFolder(folder.id);
+
+        let sidebar = SidebarWidget::new(&ui, &tasks, &folders);
+        let (list, selected_index) = sidebar.construct_list("", true, &ui.theme.palette(), false);
+
+        let expected_len = Filter::iter().len() + 1 + 1;
+        assert_eq!(list.len(), expected_len);
+        assert_eq!(selected_index, expected_len - 1);
     }
 }
