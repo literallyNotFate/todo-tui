@@ -10,7 +10,7 @@ pub use ui_state::UIState;
 use crate::{
     common::default_bool_is_true,
     core::{ApplicationError, FocusArea, Selectable},
-    models::{Filter, Task},
+    models::{Filter, Folder, Task},
     ui::{
         TextInput,
         widgets::modal::{Modal, ModalAction},
@@ -26,16 +26,39 @@ pub struct ActiveModal {
     pub action: ModalAction,
 }
 
-/// What is being stored in tasks.json (data with saved UI state)
-#[derive(Serialize, Deserialize, Default)]
+/// What is being deserialized from the database
+#[derive(Deserialize, Default)]
 pub struct TasksStateData {
     pub tasks: Vec<Task>,
+    pub folders: Vec<Folder>,
     pub session: Session,
 }
 
 impl TasksStateData {
-    pub fn new(tasks: Vec<Task>, session: Session) -> Self {
-        Self { tasks, session }
+    pub fn new(tasks: Vec<Task>, folders: Vec<Folder>, session: Session) -> Self {
+        Self {
+            tasks,
+            folders,
+            session,
+        }
+    }
+}
+
+/// What is being serialized to the database
+#[derive(Serialize)]
+pub struct TasksStateSave<'a> {
+    pub tasks: &'a [Task],
+    pub folders: &'a [Folder],
+    pub session: &'a Session,
+}
+
+impl<'a> TasksStateSave<'a> {
+    pub fn new(tasks: &'a [Task], folders: &'a [Folder], session: &'a Session) -> Self {
+        Self {
+            tasks,
+            folders,
+            session,
+        }
     }
 }
 

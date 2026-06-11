@@ -32,17 +32,19 @@ impl TaskRepository {
 
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO tasks (id, title, description, completed, priority, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-                 ON CONFLICT(id) DO UPDATE SET
+                "INSERT INTO tasks (id, title, description, completed, priority, created_at, updated_at, folder_id)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                ON CONFLICT(id) DO UPDATE SET
                     title = excluded.title,
                     description = excluded.description,
                     completed = excluded.completed,
                     priority = excluded.priority,
-                    updated_at = excluded.updated_at"
+                    updated_at = excluded.updated_at,
+                    folder_id = excluded.folder_id"
             ).map_err(|e| StorageError::Database { path: self.db_path.clone(), src: e.to_string() })?;
 
             for task in tasks {
+                let folder_id_str: Option<String> = task.folder_id.map(|id| id.to_string());
                 stmt.execute(params![
                     task.id.to_string(),
                     task.title,
@@ -51,6 +53,7 @@ impl TaskRepository {
                     task.priority.to_string(),
                     task.created_at.to_rfc3339(),
                     task.updated_at.to_rfc3339(),
+                    folder_id_str,
                 ])
                 .map_err(|e| StorageError::Database {
                     path: self.db_path.clone(),
@@ -90,8 +93,8 @@ impl TaskRepository {
     pub fn load(&self) -> ApplicationResult<Vec<Task>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
-            .prepare("SELECT id, title, description, completed, priority, created_at, updated_at FROM tasks")
-            .map_err(|e| StorageError::Database { path: self.db_path.clone(), src: e.to_string() })?;
+                .prepare("SELECT id, title, description, completed, priority, created_at, updated_at, folder_id FROM tasks")
+                .map_err(|e| StorageError::Database { path: self.db_path.clone(), src: e.to_string() })?;
 
         let task_iter = stmt
             .query_map([], |row| {
@@ -100,9 +103,11 @@ impl TaskRepository {
                 let priority_str: String = row.get(4)?;
                 let created_str: String = row.get(5)?;
                 let updated_str: String = row.get(6)?;
+                let folder_id_str: Option<String> = row.get(7)?;
 
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
-                let priority = priority_str.parse().unwrap_or(Priority::Low);
+                let priority: Priority = priority_str.parse().unwrap_or(Priority::Low);
+                let folder_id: Option<Uuid> = folder_id_str.and_then(|s| Uuid::parse_str(&s).ok());
 
                 let created_at = DateTime::parse_from_rfc3339(&created_str)
                     .map(|dt| dt.with_timezone(&Utc))
@@ -120,6 +125,7 @@ impl TaskRepository {
                     description: row.get(2)?,
                     completed: row.get(3)?,
                     priority,
+                    folder_id,
                     created_at,
                     updated_at,
                     title_lower,
@@ -156,7 +162,8 @@ mod tests {
                 completed BOOLEAN NOT NULL DEFAULT 0,
                 priority TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                folder_id TEXT
             );",
         )
         .unwrap();
@@ -169,9 +176,12 @@ mod tests {
         let conn = setup_tasks_db();
         let repo = TaskRepository::new(conn, PathBuf::from("memory.db"));
 
+        let folder_id = Uuid::new_v4();
         let task1: Task = Task::new("Repo Task 1")
             .with_description("Desc 1")
             .with_priority(Priority::High)
+            .with_folder(folder_id);
+
         let task2: Task = Task::new("Repo Task 2").with_description("Desc 2");
         let tasks: Vec<Task> = vec![task1.clone(), task2.clone()];
 
@@ -180,7 +190,9 @@ mod tests {
         let loaded: Vec<Task> = repo.load().unwrap();
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded[0].id, task1.id);
+        assert_eq!(loaded[0].folder_id, Some(folder_id));
         assert_eq!(loaded[1].title, "Repo Task 2");
+        assert_eq!(loaded[1].folder_id, None);
     }
 
     #[test]

@@ -81,6 +81,7 @@ mod tests {
             completed: false,
             created_at: Utc::now() - Duration::seconds(seconds_ago),
             updated_at: Utc::now(),
+            folder_id: None,
         }
     }
 

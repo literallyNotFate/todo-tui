@@ -6,7 +6,7 @@ pub mod storage;
 
 pub use actions::Action;
 pub use autosave::Autosave;
-pub use errors::{ApplicationError, KeyMapError, StorageError, TaskError};
+pub use errors::{ApplicationError, FolderError, KeyMapError, StorageError, TaskError};
 pub use sorting::{Sort, SortBy, SortOrder};
 pub use storage::{SessionRepository, Storage, TaskRepository};
 

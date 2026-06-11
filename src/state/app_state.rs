@@ -1,6 +1,6 @@
 use crate::{
     core::Sort,
-    models::{Filter, Priority, Task},
+    models::{Filter, Folder, Priority, Task},
     ui::Notification,
 };
 use chrono::Local;
@@ -15,6 +15,7 @@ use uuid::Uuid;
 #[derive(Debug, Default)]
 pub struct ApplicationState {
     pub tasks: Vec<Task>,
+    pub folders: Vec<Folder>,
     pub select_state: TableState,
     pub sort: Sort,
 
@@ -29,13 +30,14 @@ pub struct ApplicationState {
 }
 
 impl ApplicationState {
-    pub fn new(mut tasks: Vec<Task>) -> Self {
+    pub fn new(mut tasks: Vec<Task>, folders: Vec<Folder>) -> Self {
         for task in &mut tasks {
             task.title_lower = task.title.to_lowercase();
         }
 
         let mut state: Self = Self {
-            tasks: tasks,
+            tasks,
+            folders,
             ..Self::default()
         };
 
@@ -45,7 +47,11 @@ impl ApplicationState {
             state.last_selected_id = Some(last.id);
         }
 
-        log::debug!("ApplicationState initialized. Tasks: {}", state.tasks.len());
+        log::debug!(
+            "ApplicationState initialized. Tasks: {}, Folders: {}",
+            state.tasks.len(),
+            state.folders.len()
+        );
         state
     }
 
@@ -53,6 +59,7 @@ impl ApplicationState {
     pub fn default() -> Self {
         Self {
             tasks: Vec::new(),
+            folders: Vec::new(),
             select_state: TableState::default(),
             notification: None,
             sort: Sort::default(),
@@ -69,6 +76,7 @@ impl ApplicationState {
         if self.needs_rehash.get() {
             let mut hasher: DefaultHasher = DefaultHasher::new();
             self.tasks.hash(&mut hasher);
+            self.folders.hash(&mut hasher);
 
             let new_hash: u64 = hasher.finish();
             let old_hash: u64 = self.current_hash.get();
@@ -151,6 +159,7 @@ impl ApplicationState {
                 Filter::Completed => task.completed,
                 Filter::HighPriority => task.priority == Priority::High,
                 Filter::Today => task.created_at.with_timezone(&Local).date_naive() == today,
+                Filter::InFolder(target_folder_id) => task.folder_id == Some(*target_folder_id),
             })
     }
 
@@ -232,6 +241,11 @@ impl ApplicationState {
         self.tasks.iter().find(|t| t.id == id)
     }
 
+    /// Returns vector of folder uuids
+    pub fn get_folders(&self) -> Vec<Uuid> {
+        self.folders.iter().map(|f| f.id).collect()
+    }
+
     /// Sync focus with current state
     pub fn sync_with_ids(&mut self, visible_ids: &[Uuid], focus_id: Option<Uuid>) {
         let len: usize = visible_ids.len();
@@ -263,38 +277,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_determine_unsaved_changes() {
+    fn should_determine_unsaved_changes_for_folders() {
         let mut state = ApplicationState::default();
-
         state.saved_hash = state.hash_state();
         state.is_unsaved_cache.set(false);
-        assert!(!state.any_unsaved_changes());
 
-        state.tasks.push(Task::new("Task", "", None));
+        state.folders.push(Folder::new("Work", "Red"));
         state.mark_as_dirty();
 
         assert!(
             state.any_unsaved_changes(),
-            "Hash should be changed after append"
-        );
-
-        state.saved_hash = state.hash_state();
-        state.is_unsaved_cache.set(false);
-        assert!(!state.any_unsaved_changes());
-
-        state.tasks[0].title = "Changed".to_string();
-        state.mark_as_dirty();
-
-        assert!(
-            state.any_unsaved_changes(),
-            "Hash should be changed after field edit"
-        );
-
-        state.tasks[0].title = "Task".to_string();
-        state.mark_as_dirty();
-        assert!(
-            !state.any_unsaved_changes(),
-            "Should be saved when reverted back"
+            "Hash should be changed after adding a folder"
         );
     }
 

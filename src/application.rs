@@ -2,7 +2,9 @@ use crate::{
     config::{Config, KeyMaps},
     core::{ApplicationError, ApplicationMode, Autosave, FocusArea, Storage},
     events::EventHandler,
-    state::{ApplicationResult, ApplicationState, Session, TasksStateData, UIState},
+    state::{
+        ApplicationResult, ApplicationState, Session, TasksStateData, TasksStateSave, UIState,
+    },
     ui::Renderer,
 };
 use ratatui::{
@@ -48,7 +50,7 @@ impl Application {
         storage_data.session.apply_to(&mut ui);
 
         let mut app = Self {
-            data: ApplicationState::new(storage_data.tasks),
+            data: ApplicationState::new(storage_data.tasks, storage_data.folders),
             ui,
             autosave: Autosave::from(&config.storage),
             config,
@@ -173,13 +175,18 @@ impl Application {
 
     /// Saves current application state to SQLite database
     pub fn save_all(&mut self) -> ApplicationResult<()> {
-        let current_id =
-            self.data
-                .selected_id(&self.data.tasks, &self.ui.filter, &self.ui.search_query());
+        let current_id = self.data.selected_id(
+            &self.data.tasks,
+            &self.ui.filter.value,
+            &self.ui.search_query(),
+        );
 
         let session: Session = Session::from_state(&self.ui, current_id);
-        self.storage.save(&self.data.tasks, session)?;
-
+        self.storage.save(&TasksStateSave::new(
+            &self.data.tasks,
+            &self.data.folders,
+            &session,
+        ))?;
         self.data.mark_saved();
         Ok(())
     }
@@ -190,6 +197,7 @@ impl Application {
         let filtered_ids: Vec<uuid::Uuid> = self
             .ui
             .filter
+            .value
             .apply(&self.data.tasks, query)
             .iter()
             .map(|t| t.id)
@@ -215,7 +223,7 @@ impl Application {
 
         log::trace!(
             "UI Sync: Filter: {:?}, Query: '{}', Visible IDs: {}, Selected: {:?}",
-            self.ui.filter,
+            self.ui.filter.value,
             query,
             filtered_ids.len(),
             self.data.select_state.selected()
@@ -328,7 +336,15 @@ mod tests {
 
             let session = Session::from_state(&app.ui, None);
             if has_changes && app.autosave.should_save(has_changes) {
-                if app.storage.save(&app.data.tasks, session).is_ok() {
+                if app
+                    .storage
+                    .save(&TasksStateSave::new(
+                        &app.data.tasks,
+                        &app.data.folders,
+                        &session,
+                    ))
+                    .is_ok()
+                {
                     app.data.mark_saved();
                     app.autosave.reset_timer();
                 }
@@ -457,12 +473,11 @@ mod tests {
         let (mut app, _tmp) = create_test_app();
         app.autosave.enabled = true;
 
-        app.data.tasks.push(Task::new("Initial", "", None));
-        assert!(
-            app.storage
-                .save(&app.data.tasks, Session::default())
-                .is_ok()
-        );
+        app.data.tasks.push(Task::new("Initial"));
+
+        let session = Session::default();
+        let save_data = TasksStateSave::new(&app.data.tasks, &app.data.folders, &session);
+        assert!(app.storage.save(&save_data).is_ok());
         app.data.mark_saved();
         assert!(!app.data.any_unsaved_changes());
 

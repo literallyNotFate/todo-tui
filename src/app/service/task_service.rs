@@ -1,5 +1,5 @@
-use super::{TaskCreatedResult, TaskRemovedResult, TaskUpdatedResult};
 use crate::{
+    app::OperationResult,
     core::{Sort, TaskError},
     models::{Filter, Priority, Task, task::TaskEditor},
     state::ApplicationResult,
@@ -16,7 +16,7 @@ impl TaskService {
         tasks: &mut Vec<Task>,
         task: Task,
         sort: &Sort,
-    ) -> ApplicationResult<TaskCreatedResult> {
+    ) -> ApplicationResult<OperationResult> {
         if task.title.trim().is_empty() {
             log::debug!("Validation error on append: Task title is empty");
             return Err(TaskError::EmptyTitle.into());
@@ -27,9 +27,9 @@ impl TaskService {
 
         tasks.push(task.clone());
         Self::sorting(tasks, sort);
-        let index = tasks.iter().position(|t| t.id == task.id).unwrap();
+        let index: usize = tasks.iter().position(|t| t.id == task.id).unwrap();
 
-        Ok(TaskCreatedResult { index, task })
+        Ok(OperationResult::TaskCreated { index, task })
     }
 
     /// Update task by id using TaskEditor model
@@ -38,7 +38,7 @@ impl TaskService {
         id: &Uuid,
         editor: TaskEditor,
         sort: &Sort,
-    ) -> ApplicationResult<TaskUpdatedResult> {
+    ) -> ApplicationResult<OperationResult> {
         if editor.title.trim().is_empty() {
             log::debug!("Validation error on update: Task title is empty");
             return Err(TaskError::EmptyTitle.into());
@@ -72,7 +72,7 @@ impl TaskService {
             .position(|t| t.id == *id)
             .expect("Task must exist");
 
-        Ok(TaskUpdatedResult {
+        Ok(OperationResult::TaskUpdated {
             index: new_index,
             old,
             new,
@@ -80,7 +80,7 @@ impl TaskService {
     }
 
     /// Remove task by id
-    pub fn remove_task(tasks: &mut Vec<Task>, id: &Uuid) -> ApplicationResult<TaskRemovedResult> {
+    pub fn remove_task(tasks: &mut Vec<Task>, id: &Uuid) -> ApplicationResult<OperationResult> {
         let index: usize = tasks.iter().position(|t| t.id == *id).ok_or_else(|| {
             log::error!(
                 "Remove failed: Attempted to remove non-existent task ID {}",
@@ -91,7 +91,7 @@ impl TaskService {
 
         let task: Task = tasks.remove(index);
         log::info!("Task removed: '{}' (ID: {})", task.title, id);
-        Ok(TaskRemovedResult { task })
+        Ok(OperationResult::TaskRemoved { task })
     }
 
     /// Toggle completed/uncompleted by id
@@ -115,7 +115,7 @@ impl TaskService {
     }
 
     /// Clear tasks that being filtered by current filter
-    pub fn clear(tasks: &mut Vec<Task>, filter: &Filter) -> usize {
+    pub fn clear_tasks(tasks: &mut Vec<Task>, filter: &Filter) -> usize {
         let initial_len: usize = tasks.len();
 
         match filter {
@@ -127,6 +127,7 @@ impl TaskService {
                 let today = Local::now().date_naive();
                 tasks.retain(|t| t.created_at.with_timezone(&Local).date_naive() != today);
             }
+            Filter::InFolder(folder_id) => tasks.retain(|t| t.folder_id != Some(*folder_id)),
         }
 
         let removed: usize = initial_len - tasks.len();
@@ -188,20 +189,20 @@ mod tests {
             .with_description("Just buy stuff")
             .with_priority(Priority::High);
 
-        let result: ApplicationResult<TaskCreatedResult> =
+        let result: ApplicationResult<OperationResult> =
             TaskService::append_task(&mut tasks, task_to_add, &Sort::default());
         let added_task: &Task = &tasks[0];
 
         assert!(result.is_ok());
         assert_eq!(tasks.len(), 1);
-        assert_eq!(result.unwrap().task.title, added_task.title);
+        assert_eq!(result.unwrap().entity_title(), added_task.title);
     }
 
     #[test]
     fn should_fail_append_task_service_on_empty_title() {
         let mut tasks: Vec<Task> = Vec::new();
         let task_to_add: Task = Task::new("");
-        let result: ApplicationResult<TaskCreatedResult> =
+        let result: ApplicationResult<OperationResult> =
             TaskService::append_task(&mut tasks, task_to_add, &Sort::default());
 
         assert!(matches!(
@@ -223,17 +224,18 @@ mod tests {
             title: "New Title".into(),
             description: "Description".into(),
             priority: Selectable::new(Priority::High),
+            folder_id: None,
         };
 
         let result = TaskService::update_task(&mut tasks, &id, editor, &Sort::default());
         assert!(result.is_ok());
 
-        let res = result.unwrap();
+        let (index, old, new) = result.unwrap().unwrap_task_updated();
 
-        assert_eq!(res.index, 0);
-        assert_eq!(res.old.title, "Old title");
-        assert_eq!(res.new.title, "New Title");
-        assert_eq!(res.new.priority, Priority::High);
+        assert_eq!(index, 0);
+        assert_eq!(old.title, "Old title");
+        assert_eq!(new.title, "New Title");
+        assert_eq!(new.priority, Priority::High);
         assert_eq!(tasks[0].title, "New Title");
     }
 
@@ -245,9 +247,10 @@ mod tests {
             title: "".into(),
             description: "Desc".into(),
             priority: Selectable::new(Priority::Low),
+            folder_id: None,
         };
 
-        let result: ApplicationResult<TaskUpdatedResult> =
+        let result: ApplicationResult<OperationResult> =
             TaskService::update_task(&mut tasks, &id, editor, &Sort::default());
 
         assert!(result.is_err());
@@ -266,9 +269,10 @@ mod tests {
             title: "X".into(),
             description: "".into(),
             priority: Selectable::new(Priority::Low),
+            folder_id: None,
         };
 
-        let result: ApplicationResult<TaskUpdatedResult> =
+        let result: ApplicationResult<OperationResult> =
             TaskService::update_task(&mut tasks, &fake_id, editor, &Sort::default());
 
         assert!(result.is_err());
@@ -283,11 +287,11 @@ mod tests {
         let mut tasks: Vec<Task> = vec![Task::new("Task 1"), Task::new("Task 2")];
         let id_to_remove: Uuid = tasks[0].id;
 
-        let result: ApplicationResult<TaskRemovedResult> =
+        let result: ApplicationResult<OperationResult> =
             TaskService::remove_task(&mut tasks, &id_to_remove);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().task.title, "Task 1");
+        assert_eq!(result.unwrap().entity_title(), "Task 1");
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].title, "Task 2");
     }
@@ -297,7 +301,7 @@ mod tests {
         let mut tasks: Vec<Task> = vec![Task::new("Task")];
         let fake_id: Uuid = Uuid::new_v4();
 
-        let result: ApplicationResult<TaskRemovedResult> =
+        let result: ApplicationResult<OperationResult> =
             TaskService::remove_task(&mut tasks, &fake_id);
 
         assert!(result.is_err());
@@ -337,7 +341,7 @@ mod tests {
         let mut tasks: Vec<Task> = vec![Task::new("Active"), Task::new("Done")];
         tasks[1].completed = true;
 
-        let removed_count: usize = TaskService::clear(&mut tasks, &Filter::Completed);
+        let removed_count: usize = TaskService::clear_tasks(&mut tasks, &Filter::Completed);
 
         assert_eq!(removed_count, 1);
         assert_eq!(tasks.len(), 1);

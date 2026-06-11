@@ -1,5 +1,6 @@
 use super::Task;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Selected filter enum
 #[derive(
@@ -22,6 +23,8 @@ pub enum Filter {
     Completed,
     HighPriority,
     Today,
+
+    InFolder(Uuid),
 }
 
 impl Filter {
@@ -114,5 +117,32 @@ mod tests {
                 .iter()
                 .all(|t| matches!(t.priority, Priority::High))
         );
+    }
+
+    #[test]
+    fn should_filter_tasks_based_on_folder_id() {
+        let folder_a = Uuid::new_v4();
+        let folder_b = Uuid::new_v4();
+
+        let tasks = vec![
+            Task::new("Task in A").with_folder(folder_a),
+            Task::new("Another in A").with_folder(folder_a),
+            Task::new("Task in B").with_folder(folder_b),
+            Task::new("Task without folder"),
+        ];
+
+        let filter_a = Filter::InFolder(folder_a);
+        let results_a = filter_a.apply(&tasks, "");
+        assert_eq!(results_a.len(), 2);
+        assert!(results_a.iter().all(|t| t.folder_id == Some(folder_a)));
+
+        let filter_b = Filter::InFolder(folder_b);
+        let results_b = filter_b.apply(&tasks, "");
+        assert_eq!(results_b.len(), 1);
+        assert_eq!(results_b[0].title, "Task in B");
+
+        let search_results = filter_a.apply(&tasks, "Another");
+        assert_eq!(search_results.len(), 1);
+        assert_eq!(search_results[0].title, "Another in A");
     }
 }

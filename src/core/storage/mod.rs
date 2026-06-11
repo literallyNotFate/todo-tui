@@ -1,6 +1,8 @@
+pub mod folders;
 pub mod session;
 pub mod tasks;
 
+pub use folders::FolderRepository;
 pub use session::SessionRepository;
 pub use tasks::TaskRepository;
 
@@ -14,8 +16,8 @@ use std::{
 use crate::{
     config::StorageConfig,
     core::StorageError,
-    models::Task,
-    state::{ApplicationResult, Session, TasksStateData},
+    models::{Folder, Task},
+    state::{ApplicationResult, Session, TasksStateData, TasksStateSave},
 };
 
 /// Storage structure for all task SQLite database operations
@@ -87,6 +89,8 @@ impl Storage {
             path: p.clone(),
             src: e.to_string(),
         })?;
+
+        let _ = conn.execute("PRAGMA foreign_keys = ON;", []);
         let storage = Self {
             conn: Arc::new(Mutex::new(conn)),
             path: p,
@@ -106,18 +110,25 @@ impl Storage {
         SessionRepository::new(Arc::clone(&self.conn), self.path.clone())
     }
 
+    /// Method to get folders repository
+    pub fn folders(&self) -> FolderRepository {
+        FolderRepository::new(Arc::clone(&self.conn), self.path.clone())
+    }
+
     /// Save all data to the SQLite database using repositories
-    pub fn save(&mut self, tasks: &[Task], session: Session) -> ApplicationResult<String> {
+    pub fn save(&mut self, state: &TasksStateSave) -> ApplicationResult<String> {
         log::debug!("Delegating save operations to repositories");
 
-        self.tasks().save(tasks)?;
-        self.session().save(&session)?;
+        self.folders().save(&state.folders)?;
+        self.tasks().save(&state.tasks)?;
+        self.session().save(&state.session)?;
 
         log::info!(
-            "Successfully saved storage data: {} tasks, filter: {:?}, focus: {:?}",
-            tasks.len(),
-            session.last_filter,
-            session.last_focus
+            "Successfully saved storage data: {} folders, {} tasks, filter: {:?}, focus: {:?}",
+            state.folders.len(),
+            state.tasks.len(),
+            state.session.last_filter,
+            state.session.last_focus
         );
 
         Ok("Data was successfully saved to the database!".into())
@@ -126,45 +137,57 @@ impl Storage {
     /// Load all data from the SQLite database using repositories
     pub fn load(&self) -> ApplicationResult<TasksStateData> {
         log::debug!(
-            "Loading tasks and session from SQLite database at {:?}",
+            "Loading folders, tasks and session from SQLite database at {:?}",
             self.path
         );
 
+        let folders: Vec<Folder> = self.folders().load()?;
         let tasks: Vec<Task> = self.tasks().load()?;
         let session: Session = self.session().load()?.unwrap_or_default();
 
         log::info!(
-            "Loaded {} tasks and session memory from SQLite",
+            "Loaded {} folders, {} tasks and session memory from SQLite",
+            folders.len(),
             tasks.len()
         );
 
-        Ok(TasksStateData::new(tasks, session))
+        Ok(TasksStateData::new(tasks, folders, session))
     }
 
     /// Helper function to create db tables: tasks and session
     fn create_tables(&self) -> ApplicationResult<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS tasks (
-                    id TEXT PRIMARY KEY NOT NULL,
-                    title TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    completed BOOLEAN NOT NULL DEFAULT 0,
-                    priority TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
+            "CREATE TABLE IF NOT EXISTS folders (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                color TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
 
-                CREATE TABLE IF NOT EXISTS session (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
-                    last_selected_id TEXT,
-                    last_focus TEXT NOT NULL,
-                    last_filter TEXT NOT NULL,
-                    last_query TEXT NOT NULL,
-                    description_scroll_pos INTEGER NOT NULL,
-                    hotkeys_scroll_pos INTEGER NOT NULL,
-                    use_system_theme BOOLEAN NOT NULL
-                );",
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                completed BOOLEAN NOT NULL DEFAULT 0,
+                priority TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                folder_id TEXT,
+                FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS session (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_selected_id TEXT,
+                last_focus TEXT NOT NULL,
+                last_filter TEXT NOT NULL,
+                last_query TEXT NOT NULL,
+                description_scroll_pos INTEGER NOT NULL,
+                hotkeys_scroll_pos INTEGER NOT NULL,
+                use_system_theme BOOLEAN NOT NULL
+            );",
         )
         .map_err(|e| StorageError::Database {
             path: self.path.clone(),

@@ -1,5 +1,5 @@
 use crate::{config::UIConfig, core::Selectable, models::Filter, theme::ThemePalette};
-use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
+use chrono::{DateTime, Local, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use uuid::Uuid;
@@ -12,6 +12,7 @@ pub struct Task {
     pub description: String,
     pub completed: bool,
     pub priority: Priority,
+    pub folder_id: Option<Uuid>,
 
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -33,6 +34,7 @@ impl Task {
             description: String::new(),
             completed: false,
             priority: Priority::default(),
+            folder_id: None,
             created_at: now,
             updated_at: now,
             title_lower,
@@ -50,11 +52,19 @@ impl Task {
         self.priority = priority;
         self
     }
+
+    /// Add folder to task
+    pub fn with_folder(mut self, folder_id: Uuid) -> Self {
+        self.folder_id = Some(folder_id);
+        self
+    }
+
     /// Update task using editor model from form
     pub fn update_from_editor(&mut self, editor: TaskEditor) {
         self.title = editor.title;
         self.description = editor.description;
         self.priority = *editor.priority;
+        self.folder_id = editor.folder_id;
         self.title_lower = self.title.to_lowercase();
         self.updated_at = Utc::now();
     }
@@ -88,18 +98,19 @@ impl Task {
     }
 
     /// Checks whether specific task matches current filter conditions (for filter)
-    pub fn matches_filter(&self, filter: &Filter, today: &NaiveDate) -> bool {
+    pub fn matches_filter(&self, filter: &Filter, today: &chrono::NaiveDate) -> bool {
         match filter {
             Filter::All => true,
             Filter::Active => !self.completed,
             Filter::Completed => self.completed,
             Filter::HighPriority => self.priority == Priority::High,
             Filter::Today => self.created_at.with_timezone(&Local).date_naive() == *today,
+            Filter::InFolder(folder_id) => self.folder_id == Some(*folder_id),
         }
     }
 }
 
-/// Implementing hash for task excluding time fields (created_at/updated_at) for performance
+/// Implementing hash for task excluding time fields and dynamically changeable folders for consistency
 impl Hash for Task {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
@@ -107,6 +118,7 @@ impl Hash for Task {
         self.description.hash(state);
         self.completed.hash(state);
         self.priority.hash(state);
+        self.folder_id.hash(state);
     }
 }
 
@@ -117,6 +129,7 @@ pub struct TaskDetails {
     pub title: String,
     pub completed: bool,
     pub description: String,
+    pub folder_id: Option<Uuid>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -133,6 +146,7 @@ impl TaskDetails {
             title: task.title.clone(),
             completed: task.completed,
             description: task.description.clone(),
+            folder_id: task.folder_id,
             created_at: fmt(task.created_at),
             updated_at: fmt(task.updated_at),
         }
@@ -179,6 +193,7 @@ pub struct TaskEditor {
     pub title: String,
     pub description: String,
     pub priority: Selectable<Priority>,
+    pub folder_id: Option<Uuid>,
 }
 
 impl TaskEditor {
@@ -187,6 +202,7 @@ impl TaskEditor {
             title: task.title.clone(),
             description: task.description.clone(),
             priority: Selectable::new(task.priority),
+            folder_id: task.folder_id,
         }
     }
 
@@ -194,6 +210,7 @@ impl TaskEditor {
         task.title = self.title;
         task.description = self.description;
         task.priority = *self.priority;
+        task.folder_id = self.folder_id;
     }
 }
 
@@ -202,7 +219,7 @@ impl TaskEditor {
 mod tests {
     use super::*;
     use crate::theme::{ThemeName, ThemePalette};
-    use chrono::{Days, Duration, Months};
+    use chrono::{Days, Duration, Months, NaiveDate};
 
     #[test]
     fn should_create_task_item() {
@@ -211,7 +228,21 @@ mod tests {
         assert_eq!(task.title, "Test");
         assert_eq!(task.description, "");
         assert_eq!(task.priority, Priority::Low);
+        assert_eq!(task.folder_id, None);
         assert!(!task.completed);
+    }
+
+    #[test]
+    fn should_create_task_linked_to_folder() {
+        let folder_id = Uuid::new_v4();
+        let task = Task::new("Folder Task")
+            .with_description("Inside folder")
+            .with_priority(Priority::Medium)
+            .with_folder(folder_id);
+
+        assert_eq!(task.folder_id, Some(folder_id));
+        assert_eq!(task.priority, Priority::Medium);
+        assert_eq!(task.description, "Inside folder");
     }
 
     #[test]
@@ -232,26 +263,22 @@ mod tests {
     }
 
     #[test]
-    fn should_update_task_fields_using_editor() {
-        let mut task: Task = Task::new("Test", "Test", None);
-        task.completed = true;
-
-        assert_eq!(task.title, "Test");
-        assert_eq!(task.description, "Test");
-        assert_eq!(task.priority, Priority::Low);
-        assert!(task.completed);
+    fn should_update_task_fields_including_folder_using_editor() {
         let mut task: Task = Task::new("Test");
+        let new_folder_id = Uuid::new_v4();
 
         let editor: TaskEditor = TaskEditor {
             title: "Edit".into(),
             description: "Edit".into(),
             priority: Selectable::new(Priority::High),
+            folder_id: Some(new_folder_id),
         };
         task.update_from_editor(editor);
 
         assert_eq!(task.title, "Edit");
         assert_eq!(task.description, "Edit");
         assert_eq!(task.priority, Priority::High);
+        assert_eq!(task.folder_id, Some(new_folder_id));
     }
 
     #[test]
@@ -313,6 +340,7 @@ mod tests {
         assert_eq!(details.title, "Task 1");
         assert_eq!(details.description, "Desc 1");
         assert_eq!(details.id_short.len(), 8);
+        assert_eq!(details.folder_id, None);
         assert!(details.updated_at.contains(":"));
     }
 

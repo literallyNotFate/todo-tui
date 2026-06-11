@@ -1,11 +1,14 @@
 use std::path::PathBuf;
 use thiserror::Error;
 
-/// Errors in application (storage - refers to save/load, task - state methods, keymap - keymap configuration)
+/// Errors in application (storage - refers to save/load, task/folder - state methods, keymap - keymap configuration)
 #[derive(Error, Debug, PartialEq)]
 pub enum ApplicationError {
     #[error(transparent)]
     Task(#[from] TaskError),
+
+    #[error(transparent)]
+    Folder(#[from] FolderError),
 
     #[error(transparent)]
     Storage(#[from] StorageError),
@@ -27,6 +30,17 @@ pub enum TaskError {
     ListEmpty,
     #[error("Cannot move the tasks!")]
     MoveForbidden,
+}
+
+/// Errors related to folder operations only
+#[derive(Error, Debug, PartialEq)]
+pub enum FolderError {
+    #[error("Folder was not found by the provided id!")]
+    FolderNotFound,
+    #[error("Folder name cannot be empty!")]
+    EmptyName,
+    #[error("Folder with this name already exists!")]
+    DuplicateName,
 }
 
 /// Errors related to storage operations only
@@ -66,46 +80,61 @@ pub enum KeyMapError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fmt::Write;
 
     #[test]
     fn should_return_text_for_task_not_selected_error() {
         let error = TaskError::TaskNotSelected;
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
+        let s = format!("{}", error);
         assert_eq!(s, "No task was selected!");
     }
 
     #[test]
     fn should_return_text_for_task_not_found_error() {
         let error = TaskError::TaskNotFound;
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
+        let s = format!("{}", error);
         assert_eq!(s, "Task was not found by the provided id!");
     }
 
     #[test]
     fn should_return_text_for_empty_title_error() {
         let error = TaskError::EmptyTitle;
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
+        let s = format!("{}", error);
         assert_eq!(s, "Task title cannot be empty!");
     }
 
     #[test]
     fn should_return_text_for_list_empty_error() {
         let error = TaskError::ListEmpty;
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
+        let s = format!("{}", error);
         assert_eq!(s, "Cannot clear the tasks! The list is already empty!");
     }
 
     #[test]
     fn should_return_text_for_move_forbidden_error() {
         let error = TaskError::MoveForbidden;
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
+        let s = format!("{}", error);
         assert_eq!(s, "Cannot move the tasks!");
+    }
+
+    #[test]
+    fn should_return_text_for_folder_not_found_error() {
+        let error = FolderError::FolderNotFound;
+        let s = format!("{}", error);
+        assert_eq!(s, "Folder was not found by the provided id!");
+    }
+
+    #[test]
+    fn should_return_text_for_folder_empty_name_error() {
+        let error = FolderError::EmptyName;
+        let s = format!("{}", error);
+        assert_eq!(s, "Folder name cannot be empty!");
+    }
+
+    #[test]
+    fn should_return_text_for_folder_duplicate_name_error() {
+        let error = FolderError::DuplicateName;
+        let s = format!("{}", error);
+        assert_eq!(s, "Folder with this name already exists!");
     }
 
     #[test]
@@ -113,9 +142,7 @@ mod tests {
         let path = PathBuf::from("/test/path");
         let error = StorageError::PathNotFound { path: path.clone() };
 
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
-
+        let s = format!("{}", error);
         assert_eq!(s, "Requested path was not found: /test/path");
     }
 
@@ -127,9 +154,7 @@ mod tests {
             src: "permission denied".to_string(),
         };
 
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
-
+        let s = format!("{}", error);
         assert_eq!(s, "IO error at config.toml: permission denied");
     }
 
@@ -141,9 +166,7 @@ mod tests {
             src: "invalid color format".to_string(),
         };
 
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
-
+        let s = format!("{}", error);
         assert_eq!(
             s,
             "Failed to parse TOML at theme.toml: invalid color format"
@@ -158,9 +181,7 @@ mod tests {
             src: "cannot parse table".to_string(),
         };
 
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
-
+        let s = format!("{}", error);
         assert_eq!(s, "Database error at tasks.db: cannot parse table");
     }
 
@@ -169,8 +190,8 @@ mod tests {
         let error = StorageError::Environment {
             context: "config".to_string(),
         };
-        let mut s = String::new();
-        write!(&mut s, "{}", error).unwrap();
+
+        let s = format!("{}", error);
         assert_eq!(
             s,
             "Failed to determine config directory: check your OS environment variables"
