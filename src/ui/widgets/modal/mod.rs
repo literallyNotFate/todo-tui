@@ -26,6 +26,11 @@ pub enum ModalResult {
         description: String,
         priority: Priority,
     },
+    FolderSubmitted {
+        id: Option<Uuid>,
+        name: String,
+        color: String,
+    },
 }
 
 /// Actions that being performed after confirmation
@@ -36,6 +41,8 @@ pub enum ModalAction {
     Clear,
     Save,
     UnsavedExit,
+
+    RemoveFolder(Uuid),
 }
 
 /// Modal size

@@ -27,6 +27,23 @@ impl PopupComponent for TaskFormContext {
         }
     }
 }
+
+/// Component to render folder form
+impl PopupComponent for FolderFormContext {
+    fn render(&self, ctx: &mut RenderContext, area: Rect) {
+        self.form.render(ctx, area);
+    }
+
+    fn handle_key(&mut self, event: &KeyEvent) -> WidgetResponse {
+        self.form.handle_key(event)
+    }
+
+    fn to_modal_result(&self) -> ModalResult {
+        let (id, name, color) = self.parse_data();
+        ModalResult::FolderSubmitted { id, name, color }
+    }
+}
+
 impl Popup {
     /// Popup to create new task form
     pub fn append_task() -> Self {
@@ -47,7 +64,28 @@ impl Popup {
         )
         .with_size(ModalSize::Large)
     }
+
+    /// Popup to create new folder form
+    pub fn append_folder() -> Self {
+        Self::new(
+            " Create Folder ",
+            Box::new(FolderFormContext::append_folder()),
+            PopupKind::Info,
+        )
+        .with_size(ModalSize::Medium)
+    }
+
+    /// Popup to create update existing task form
+    pub fn update_folder(folder: &Folder) -> Self {
+        Self::new(
+            " Update Folder ",
+            Box::new(FolderFormContext::update_folder(folder)),
+            PopupKind::Info,
+        )
+        .with_size(ModalSize::Medium)
+    }
 }
+
 /// Unit-tests for form popup components
 #[cfg(test)]
 mod tests {
@@ -107,6 +145,40 @@ mod tests {
                 title: "Review PR".to_string(),
                 description: "Check architecture changes".to_string(),
                 priority: Priority::Medium,
+            }
+        );
+    }
+
+    #[test]
+    fn should_create_append_folder_popup_via_factory() {
+        let popup = Popup::append_folder();
+
+        assert_eq!(popup.kind, PopupKind::Info);
+        assert_eq!(popup.title, " Create Folder ");
+    }
+
+    #[test]
+    fn should_create_update_folder_popup_via_factory() {
+        let folder = Folder::new("Personal", "Blue");
+        let popup = Popup::update_folder(&folder);
+
+        assert_eq!(popup.kind, PopupKind::Info);
+        assert_eq!(folder.name, "Personal");
+    }
+
+    #[test]
+    fn should_folder_form_context_convert_to_result() {
+        let folder = Folder::new("Archive", "Lavender");
+        let folder_id = folder.id;
+        let context = FolderFormContext::update_folder(&folder);
+
+        let modal_result = context.to_modal_result();
+        assert_eq!(
+            modal_result,
+            ModalResult::FolderSubmitted {
+                id: Some(folder_id),
+                name: "Archive".to_string(),
+                color: "Lavender".to_string(),
             }
         );
     }
