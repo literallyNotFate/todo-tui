@@ -1,6 +1,6 @@
 use crate::{
     core::FocusArea,
-    models::{Folder, Priority, Task, TaskFilter},
+    models::{Folder, FolderColor, Priority, Task, TaskFilter},
     state::{SidebarTab, UIState},
     theme::ThemePalette,
     ui::RenderContext,
@@ -124,13 +124,14 @@ impl<'a> SidebarWidget<'a> {
             }
 
             let text = format!(" {} ({})", folder.name, count);
+            let folder_color: Color = FolderColor::from_string(&folder.color);
             items.push(self.create_list_item(
                 text,
                 is_selected,
                 focused,
                 palette,
                 is_dimmed,
-                Some(&folder.color),
+                Some(folder_color),
             ));
 
             current_idx += 1;
@@ -159,21 +160,22 @@ impl<'a> SidebarWidget<'a> {
         focused: bool,
         palette: &ThemePalette,
         is_dimmed: bool,
-        custom_color: Option<&str>,
+        custom_color: Option<Color>,
     ) -> ListItem<'static> {
         let style = if is_selected {
-            if is_dimmed {
-                Style::default().fg(palette.muted).bold()
-            } else {
-                Style::default().fg(palette.bg).bold()
-            }
+            Style::default()
+                .fg(palette.bg)
+                .bg(if is_dimmed {
+                    palette.muted
+                } else {
+                    palette.accent
+                })
+                .bold()
         } else {
             let fg = if is_dimmed || !focused {
                 palette.muted
             } else {
-                custom_color
-                    .and_then(|s| s.parse::<Color>().ok())
-                    .unwrap_or(palette.fg)
+                custom_color.unwrap_or(palette.fg)
             };
             Style::default().fg(fg)
         };

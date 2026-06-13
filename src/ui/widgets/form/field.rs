@@ -81,6 +81,12 @@ impl FieldType {
             }
             FieldType::ColorEnum { input } => {
                 input.render(ctx, area, is_focused);
+
+                let swatch_area: Rect = Rect::new(area.x + area.width - 2, area.y + 1, 1, 1);
+                let swatch = Paragraph::new("█")
+                    .style(Style::default().fg(input.selected.to_ratatui_color()));
+
+                ctx.render_widget(swatch, swatch_area);
             }
             FieldType::Multiline { input } => {
                 let mut input = input.clone();

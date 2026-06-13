@@ -82,42 +82,60 @@ impl Folder {
 )]
 pub enum FolderColor {
     #[default]
+    Neutral,
     Blue,
-    Red,
-    Green,
-    Yellow,
-    Orange,
-    Purple,
-    Pink,
-    Teal,
-    Mint,
-    Lavender,
-    Coral,
-    Peach,
-    Salmon,
+    Sky,
     Cyan,
+    Mint,
+    Green,
+    Lime,
+    Yellow,
+    Amber,
+    Orange,
+    Coral,
+    Red,
+    Rose,
+    Pink,
     Magenta,
+    Purple,
+    Violet,
+    Lavender,
+    Indigo,
+    Teal,
+    Olive,
+    Sand,
+    Peach,
+    Chocolate,
 }
 
 impl FolderColor {
-    /// Returns hex for every folder color
-    pub fn hex(&self) -> &'static str {
+    /// Returns ratatui::style::Color for every folder color
+    pub fn to_ratatui_color(&self) -> Color {
         match self {
-            Self::Blue => "#458588",
-            Self::Red => "#fb4934",
-            Self::Green => "#b8bb26",
-            Self::Yellow => "#fabd2f",
-            Self::Orange => "#fe8019",
-            Self::Purple => "#d3869b",
-            Self::Pink => "#ff75a0",
-            Self::Teal => "#83a598",
-            Self::Mint => "#8ec07c",
-            Self::Lavender => "#b16286",
-            Self::Coral => "#fe8019",
-            Self::Peach => "#f2e5bc",
-            Self::Salmon => "#fa1561",
-            Self::Cyan => "#076678",
-            Self::Magenta => "#8f3f71",
+            Self::Neutral => Color::Rgb(150, 150, 150),
+            Self::Blue => Color::Rgb(80, 140, 220),
+            Self::Sky => Color::Rgb(100, 180, 230),
+            Self::Cyan => Color::Rgb(80, 200, 200),
+            Self::Mint => Color::Rgb(120, 210, 170),
+            Self::Green => Color::Rgb(130, 190, 120),
+            Self::Lime => Color::Rgb(170, 210, 100),
+            Self::Yellow => Color::Rgb(230, 200, 100),
+            Self::Amber => Color::Rgb(240, 170, 80),
+            Self::Orange => Color::Rgb(230, 140, 80),
+            Self::Coral => Color::Rgb(230, 110, 90),
+            Self::Red => Color::Rgb(220, 90, 100),
+            Self::Rose => Color::Rgb(220, 110, 150),
+            Self::Pink => Color::Rgb(230, 130, 190),
+            Self::Magenta => Color::Rgb(200, 100, 200),
+            Self::Purple => Color::Rgb(180, 110, 230),
+            Self::Violet => Color::Rgb(150, 120, 230),
+            Self::Lavender => Color::Rgb(170, 160, 230),
+            Self::Indigo => Color::Rgb(110, 120, 220),
+            Self::Teal => Color::Rgb(90, 170, 160),
+            Self::Olive => Color::Rgb(160, 160, 100),
+            Self::Sand => Color::Rgb(200, 180, 150),
+            Self::Peach => Color::Rgb(230, 170, 140),
+            Self::Chocolate => Color::Rgb(160, 130, 110),
         }
     }
 
@@ -129,29 +147,21 @@ impl FolderColor {
             return color_enum.to_ratatui_color();
         }
 
-        if let Some(color) = Self::parse_hex(s) {
-            return color;
-        }
-
-        Self::default().to_ratatui_color()
-    }
-
-    /// Converts hex to ratatui rgb color
-    pub fn to_ratatui_color(&self) -> Color {
-        Self::parse_hex(self.hex()).unwrap_or(Color::Reset)
+        Self::parse_hex(s).unwrap_or(Self::default().to_ratatui_color())
     }
 
     /// Helper to parse hex color to rgb
     fn parse_hex(hex_str: &str) -> Option<Color> {
-        let clean_hex: &str = hex_str.trim_start_matches('#');
-        if let Ok(val) = u32::from_str_radix(clean_hex, 16) {
-            let r = ((val >> 16) & 0xFF) as u8;
-            let g = ((val >> 8) & 0xFF) as u8;
-            let b = (val & 0xFF) as u8;
-            Some(Color::Rgb(r, g, b))
-        } else {
-            None
-        }
+        let clean: &str = hex_str.trim_start_matches('#');
+        u32::from_str_radix(clean, 16)
+            .map(|v| {
+                Color::Rgb(
+                    ((v >> 16) & 0xFF) as u8,
+                    ((v >> 8) & 0xFF) as u8,
+                    (v & 0xFF) as u8,
+                )
+            })
+            .ok()
     }
 }
 
@@ -176,6 +186,10 @@ impl FolderEditor {
 mod tests {
     use super::*;
     use std::{thread::sleep, time::Duration};
+
+    fn create_folder(name: &str) -> Folder {
+        Folder::new(name.to_string(), "Red".into())
+    }
 
     #[test]
     fn should_create_folder_with_defaults() {
@@ -224,7 +238,7 @@ mod tests {
     #[test]
     fn should_convert_enum_to_ratatui_rgb() {
         let blue_tui = FolderColor::Blue.to_ratatui_color();
-        assert_eq!(blue_tui, Color::Rgb(69, 133, 136));
+        assert_eq!(blue_tui, Color::Rgb(80, 140, 220));
     }
 
     #[test]
@@ -233,10 +247,7 @@ mod tests {
         assert_eq!(color_from_name, FolderColor::Red.to_ratatui_color());
 
         let color_from_hex = FolderColor::from_string("#b8bb26");
-        assert_eq!(color_from_hex, FolderColor::Green.to_ratatui_color());
-
-        let invalid_color = FolderColor::from_string("NotAColor");
-        assert_eq!(invalid_color, FolderColor::default().to_ratatui_color());
+        assert_eq!(color_from_hex, Color::Rgb(184, 187, 38));
     }
 
     #[test]
@@ -244,5 +255,31 @@ mod tests {
         assert!(FolderColor::parse_hex("fb4934").is_some());
         assert!(FolderColor::parse_hex("#fb4934").is_some());
         assert!(FolderColor::parse_hex("invalid").is_none());
+    }
+
+    #[test]
+    fn should_validate_folder() {
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+
+        let folders = vec![
+            Folder {
+                id: id1,
+                name: "Inbox".to_string(),
+                ..create_folder("Inbox")
+            },
+            Folder {
+                id: id2,
+                name: "Work".to_string(),
+                ..create_folder("Work")
+            },
+        ];
+
+        assert!(Folder::validate("Personal", None, &folders).is_ok());
+        assert!(Folder::validate("", None, &folders).is_err());
+        assert!(Folder::validate("   ", None, &folders).is_err());
+        assert!(Folder::validate("Inbox", None, &folders).is_err());
+        assert!(Folder::validate("Inbox", Some(id1), &folders).is_ok());
+        assert!(Folder::validate("Work", Some(id1), &folders).is_err());
     }
 }
