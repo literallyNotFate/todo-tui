@@ -3,7 +3,7 @@ use crate::{
     app::ApplicationController,
     config::KeyMaps,
     core::{Action, ApplicationMode, Autosave, FocusArea, Selectable, Storage},
-    models::{FolderColor, FolderEditor, TaskDetails, TaskEditor},
+    models::{Folder, FolderColor, FolderEditor, TaskDetails, TaskEditor},
     state::SidebarTab,
     ui::{
         Popup, WidgetResponse, is_terminal_small,
@@ -267,19 +267,45 @@ impl EventHandler {
                 ctrl.stabilize(None);
             }
 
+            // For sidebar
+            Action::RemoveFolder | Action::UpdateFolder if focus == FocusArea::Sidebar => {
+                match action {
+                    Action::RemoveFolder => {
+                        if let Some(folder_id) = ctrl.ui.active_folder {
+                            if ctrl.config.behavior.confirm_before_remove {
+                                ctrl.ui.remove_folder_confirm(folder_id);
+                            } else {
+                                ctrl.dispatch_remove_folder(folder_id);
+                            }
+                        }
+                    }
+                    Action::UpdateFolder => {
+                        if let Some(folder_id) = ctrl.ui.active_folder {
+                            if let Some(folder) =
+                                Folder::find_by_id(&ctrl.state.folders, &folder_id)
+                            {
+                                ctrl.ui
+                                    .show_modal(Popup::update_folder(&folder), ModalAction::None);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
             // For main content
-            Action::Update
-            | Action::Remove
+            Action::UpdateTask
+            | Action::RemoveTask
             | Action::Complete
             | Action::Pin
-            | Action::Details
+            | Action::ShowDetails
             | Action::Sort
             | Action::SortReverse
-            | Action::ClearAll
+            | Action::Clear
                 if focus == FocusArea::Main =>
             {
                 match action {
-                    Action::Update => {
+                    Action::UpdateTask => {
                         if let Some(task) = ctrl
                             .ui
                             .selected_id(ctrl.state)
@@ -291,7 +317,7 @@ impl EventHandler {
                     }
                     Action::Complete => ctrl.dispatch_completed(),
                     Action::Pin => ctrl.dispatch_pinned(),
-                    Action::Remove => {
+                    Action::RemoveTask => {
                         if ctrl.config.behavior.confirm_before_remove {
                             ctrl.ui.remove_task_confirm();
                         } else {
@@ -306,7 +332,7 @@ impl EventHandler {
                         ctrl.state.sort.order.next();
                         ctrl.dispatch_sorting();
                     }
-                    Action::Details => {
+                    Action::ShowDetails => {
                         if let Some(id) = ctrl.ui.selected_id(ctrl.state) {
                             if let Some(task) = ctrl.state.find_by_id(id) {
                                 log::debug!("Opening task details popup");
@@ -322,7 +348,7 @@ impl EventHandler {
                             }
                         }
                     }
-                    Action::ClearAll => ctrl.ui.clear_confirm(),
+                    Action::Clear => ctrl.ui.clear_confirm(),
                     _ => {}
                 }
             }
@@ -734,7 +760,14 @@ mod tests {
         ui.focused.set(FocusArea::Main);
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
-        EventHandler::execute_action(Action::Update, &mut ctrl, storage, mode, autosave, running);
+        EventHandler::execute_action(
+            Action::UpdateTask,
+            &mut ctrl,
+            storage,
+            mode,
+            autosave,
+            running,
+        );
 
         assert_eq!(*mode, ApplicationMode::List);
         assert!(ctrl.ui.modal.is_some());
@@ -747,7 +780,14 @@ mod tests {
         state.select_state.select(None);
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
-        EventHandler::execute_action(Action::Update, &mut ctrl, storage, mode, autosave, running);
+        EventHandler::execute_action(
+            Action::UpdateTask,
+            &mut ctrl,
+            storage,
+            mode,
+            autosave,
+            running,
+        );
 
         assert_eq!(*mode, ApplicationMode::List);
         assert!(ctrl.ui.modal.is_none());
@@ -763,7 +803,14 @@ mod tests {
         state.select_state.select(Some(0));
 
         let mut ctrl = ApplicationController::new(state, ui, config, keymaps);
-        EventHandler::execute_action(Action::Remove, &mut ctrl, storage, mode, autosave, running);
+        EventHandler::execute_action(
+            Action::RemoveTask,
+            &mut ctrl,
+            storage,
+            mode,
+            autosave,
+            running,
+        );
 
         assert!(ctrl.ui.modal.is_some());
         assert_eq!(ctrl.ui.modal.as_ref().unwrap().action, ModalAction::Remove);

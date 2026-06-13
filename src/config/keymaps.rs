@@ -372,14 +372,16 @@ impl Default for KeyMaps {
             // Task Actions
             (Action::AddTask, "a"),
             (Action::Complete, "enter"),
-            (Action::Update, "e"),
-            (Action::Remove, "d"),
-            (Action::Details, "tab"),
+            (Action::UpdateTask, "e"),
+            (Action::RemoveTask, "d"),
+            (Action::ShowDetails, "tab"),
             (Action::Search, "/"),
             (Action::Pin, "p"),
-            (Action::ClearAll, "x"),
+            (Action::Clear, "x"),
             // Folder actions
             (Action::AddFolder, "f"),
+            (Action::RemoveFolder, "D"),
+            (Action::UpdateFolder, "E"),
             // System & UI
             (Action::Sort, "s"),
             (Action::SortReverse, "r"),

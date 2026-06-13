@@ -271,10 +271,10 @@ impl<'a> ListTasks<'a> {
             FocusArea::Main => {
                 spans.extend(ctx.key_hint(Action::MoveLeft, "sidebar", palette.accent));
                 spans.extend(ctx.key_hint(Action::AddTask, "add", palette.secondary));
-                spans.extend(ctx.key_hint(Action::Update, "edit", palette.warning));
-                spans.extend(ctx.key_hint(Action::Remove, "remove", palette.error));
+                spans.extend(ctx.key_hint(Action::UpdateTask, "edit", palette.warning));
+                spans.extend(ctx.key_hint(Action::RemoveTask, "remove", palette.error));
                 spans.extend(ctx.key_hint(Action::Complete, "done", palette.success));
-                spans.extend(ctx.key_hint(Action::Details, "details", palette.info));
+                spans.extend(ctx.key_hint(Action::ShowDetails, "details", palette.info));
             }
         }
 

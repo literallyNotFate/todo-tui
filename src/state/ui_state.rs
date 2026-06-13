@@ -391,9 +391,7 @@ impl UIState {
     /// Opens remove confirm widget for a specific folder
     pub fn remove_folder_confirm(&mut self, folder_id: Uuid) {
         self.show_modal(
-            Confirm::new(
-                "Are you sure you want to remove this folder? All inner tasks will be deleted.",
-            ),
+            Confirm::new("Are you sure remove folder with all its tasks?"),
             ModalAction::RemoveFolder(folder_id),
         );
     }
