@@ -17,17 +17,12 @@ impl TaskService {
         task: Task,
         sort: &Sort,
     ) -> ApplicationResult<OperationResult> {
-        if task.title.trim().is_empty() {
-            log::debug!("Validation error on append: Task title is empty");
-            return Err(TaskError::EmptyTitle.into());
-        }
-
-        let title: String = task.title.clone();
-        log::info!("Adding new task: '{}' (ID: {})", title, task.id);
+        task.validate()?;
+        log::info!("Adding new task: '{}' (ID: {})", task.title, task.id);
 
         tasks.push(task.clone());
         Self::sorting(tasks, sort);
-        let index: usize = tasks.iter().position(|t| t.id == task.id).unwrap();
+        let index: usize = Self::find_index(tasks, &task.id).unwrap();
 
         Ok(OperationResult::TaskCreated { index, task })
     }
@@ -39,22 +34,15 @@ impl TaskService {
         editor: TaskEditor,
         sort: &Sort,
     ) -> ApplicationResult<OperationResult> {
-        if editor.title.trim().is_empty() {
-            log::debug!("Validation error on update: Task title is empty");
-            return Err(TaskError::EmptyTitle.into());
-        }
+        let index: usize = Self::find_index(tasks, id)?;
 
-        let original_index: usize = tasks.iter().position(|t| t.id == *id).ok_or_else(|| {
-            log::warn!(
-                "Update failed: Task with ID {} not found in current list",
-                id
-            );
-            TaskError::TaskNotFound
-        })?;
+        let mut temp: Task = tasks[index].clone();
+        temp.update_from(editor.clone());
+        temp.validate()?;
 
-        let old: Task = tasks[original_index].clone();
-        tasks[original_index].update_from_editor(editor);
-        let new: Task = tasks[original_index].clone();
+        let old: Task = tasks[index].clone();
+        tasks[index] = temp;
+        let new: Task = tasks[index].clone();
 
         log::info!(
             "Task updated successfully: '{}' (ID: {}). Changes: [Title: '{}' -> '{}', Priority: {:?} -> {:?}]",
@@ -67,10 +55,7 @@ impl TaskService {
         );
 
         Self::sorting(tasks, sort);
-        let new_index: usize = tasks
-            .iter()
-            .position(|t| t.id == *id)
-            .expect("Task must exist");
+        let new_index: usize = Self::find_index(tasks, id)?;
 
         Ok(OperationResult::TaskUpdated {
             index: new_index,
@@ -81,36 +66,26 @@ impl TaskService {
 
     /// Remove task by id
     pub fn remove_task(tasks: &mut Vec<Task>, id: &Uuid) -> ApplicationResult<OperationResult> {
-        let index: usize = tasks.iter().position(|t| t.id == *id).ok_or_else(|| {
-            log::error!(
-                "Remove failed: Attempted to remove non-existent task ID {}",
-                id
-            );
-            TaskError::TaskNotFound
-        })?;
-
+        let index: usize = Self::find_index(tasks, id)?;
         let task: Task = tasks.remove(index);
+
         log::info!("Task removed: '{}' (ID: {})", task.title, id);
         Ok(OperationResult::TaskRemoved { task })
     }
 
     /// Toggle completed/uncompleted by id
-    pub fn toggle_task(tasks: &mut [Task], id: &Uuid) -> ApplicationResult<()> {
-        let task: &mut Task = tasks.iter_mut().find(|t| t.id == *id).ok_or_else(|| {
-            log::error!(
-                "Toggle failed: Attempted to toggle completed the non-existent task ID {}",
-                id
-            );
-            TaskError::TaskNotFound
-        })?;
-
+    pub fn toggle_completed(tasks: &mut [Task], id: &Uuid) -> ApplicationResult<()> {
+        let task: &mut Task = Self::find_task_mut(tasks, id)?;
         task.toggle_completed();
-        log::debug!(
-            "Task {} toggled. New state: completed={}",
-            id,
-            task.completed
-        );
+        log::debug!("Task {} status toggled (completed={})", id, task.completed);
+        Ok(())
+    }
 
+    /// Toggle pinned/unpinned by id
+    pub fn toggle_pinned(tasks: &mut [Task], id: &Uuid) -> ApplicationResult<()> {
+        let task: &mut Task = Self::find_task_mut(tasks, id)?;
+        task.toggle_pinned();
+        log::debug!("Task {} pin toggled (pinned={})", id, task.pinned);
         Ok(())
     }
 
@@ -153,12 +128,7 @@ impl TaskService {
     /// Move tasks by indices (change order of them)
     pub fn move_tasks(tasks: &mut [Task], a: usize, b: usize) -> ApplicationResult<()> {
         if a >= tasks.len() || b >= tasks.len() {
-            log::warn!(
-                "Move failed: Indices out of bounds (a: {}, b: {}, total len: {})",
-                a,
-                b,
-                tasks.len()
-            );
+            log::warn!("Move failed: indices out of bounds");
             return Err(TaskError::TaskNotFound.into());
         }
 
@@ -166,18 +136,35 @@ impl TaskService {
             return Ok(());
         }
 
+        if tasks[a].pinned || tasks[b].pinned {
+            log::warn!("Move forbidden: cannot move pinned tasks");
+            return Err(TaskError::MoveForbidden.into());
+        }
+
         if tasks[a].priority != tasks[b].priority {
-            log::warn!(
-                "Move forbidden: tasks have different priorities ({:?} vs {:?})",
-                tasks[a].priority,
-                tasks[b].priority
-            );
+            log::warn!("Move forbidden: tasks have different priorities");
             return Err(TaskError::MoveForbidden.into());
         }
 
         log::debug!("Swapping tasks at indices {} and {}", a, b);
         tasks.swap(a, b);
         Ok(())
+    }
+
+    /// Private method to return mutable task by id
+    fn find_task_mut<'a>(tasks: &'a mut [Task], id: &Uuid) -> ApplicationResult<&'a mut Task> {
+        tasks.iter_mut().find(|t| t.id == *id).ok_or_else(|| {
+            log::error!("Task with ID {} not found", id);
+            TaskError::TaskNotFound.into()
+        })
+    }
+
+    /// Private method to return task index by id
+    fn find_index(tasks: &[Task], id: &Uuid) -> ApplicationResult<usize> {
+        tasks
+            .iter()
+            .position(|t| t.id == *id)
+            .ok_or(TaskError::TaskNotFound.into())
     }
 }
 
@@ -317,16 +304,40 @@ mod tests {
     }
 
     #[test]
-    fn should_toggle_task_service() {
+    fn should_toggle_completed_and_pinned_task_service() {
         let mut tasks: Vec<Task> = vec![Task::new("Toggle Me")];
         let id: Uuid = tasks[0].id;
         assert!(!tasks[0].completed);
+        assert!(!tasks[0].pinned);
 
-        TaskService::toggle_task(&mut tasks, &id).unwrap();
+        TaskService::toggle_completed(&mut tasks, &id).unwrap();
         assert!(tasks[0].completed);
 
-        TaskService::toggle_task(&mut tasks, &id).unwrap();
+        TaskService::toggle_pinned(&mut tasks, &id).unwrap();
+        assert!(tasks[0].pinned);
+
+        TaskService::toggle_completed(&mut tasks, &id).unwrap();
         assert!(!tasks[0].completed);
+
+        TaskService::toggle_pinned(&mut tasks, &id).unwrap();
+        assert!(!tasks[0].pinned);
+    }
+
+    #[test]
+    fn should_fail_task_toggling_with_wrong_id() {
+        let mut tasks: Vec<Task> = vec![Task::new("Toggle Me")];
+        let fake_id: Uuid = Uuid::new_v4();
+        assert!(!tasks[0].completed);
+        assert!(!tasks[0].pinned);
+
+        let result: ApplicationResult<()> = TaskService::toggle_completed(&mut tasks, &fake_id);
+
+        assert!(!tasks[0].completed);
+        assert_eq!(result, Err(ApplicationError::Task(TaskError::TaskNotFound)));
+
+        let result: ApplicationResult<()> = TaskService::toggle_pinned(&mut tasks, &fake_id);
+        assert!(!tasks[0].pinned);
+        assert_eq!(result, Err(ApplicationError::Task(TaskError::TaskNotFound)))
     }
 
     #[test]
@@ -335,7 +346,7 @@ mod tests {
         let fake_id: Uuid = Uuid::new_v4();
         assert!(!tasks[0].completed);
 
-        let result: ApplicationResult<()> = TaskService::toggle_task(&mut tasks, &fake_id);
+        let result: ApplicationResult<()> = TaskService::toggle_completed(&mut tasks, &fake_id);
 
         assert!(!tasks[0].completed);
         assert_eq!(result, Err(ApplicationError::Task(TaskError::TaskNotFound)))
@@ -396,6 +407,24 @@ mod tests {
         );
         assert_eq!(tasks[0].title, "High Task");
         assert_eq!(tasks[1].title, "Medium Task");
+    }
+
+    #[test]
+    fn should_not_move_pinned_task() {
+        let mut tasks: Vec<Task> = vec![
+            Task::new("High Task").with_priority(Priority::High),
+            Task::new("Medium Task").with_priority(Priority::Medium),
+        ];
+
+        let mut pinned = Task::new("Pinned").with_priority(Priority::High);
+        pinned.toggle_pinned();
+        tasks.push(pinned);
+
+        let result: ApplicationResult<()> = TaskService::move_tasks(&mut tasks, 1, 2);
+        assert_eq!(
+            result,
+            Err(ApplicationError::Task(TaskError::MoveForbidden))
+        );
     }
 
     #[test]

@@ -293,6 +293,16 @@ impl ApplicationState {
             self.last_selected_id = visible_ids.get(new_idx).copied();
         }
     }
+
+    /// Function to get new index
+    pub fn get_new_index(&self, delta: i32) -> usize {
+        let current_index: usize = self.select_state.selected().unwrap_or(0);
+        if delta > 0 {
+            current_index + 1
+        } else {
+            current_index.saturating_sub(1)
+        }
+    }
 }
 
 /// Unit-tests for ApplicationState

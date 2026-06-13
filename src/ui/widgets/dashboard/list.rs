@@ -129,12 +129,20 @@ impl<'a> ListTasks<'a> {
 
         let rows = self.tasks.iter().map(|task| {
             let priority_color = task.priority.palette(&palette);
-            let icon = if task.completed {
+            let icon = if task.pinned {
+                "󰐃".into()
+            } else if task.completed {
                 ctx.config.symbols.completed.clone()
             } else {
                 ctx.config.symbols.pending.clone()
             };
+
             let icon_color = ctx.focused_color(palette.success, focus_area);
+            let icon_style: Style = if task.pinned {
+                Style::default().fg(palette.warning)
+            } else {
+                Style::default().fg(icon_color)
+            };
 
             let folder_label = task
                 .folder_id
@@ -180,7 +188,7 @@ impl<'a> ListTasks<'a> {
             };
 
             Row::new(vec![
-                Cell::from(icon).style(Style::default().fg(icon_color)),
+                Cell::from(icon).style(icon_style),
                 Cell::from(final_title_line),
                 Cell::from(Line::from(task.priority.to_string()).centered())
                     .style(Style::default().fg(ctx.focused_color(priority_color, focus_area))),

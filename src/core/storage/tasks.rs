@@ -32,13 +32,14 @@ impl TaskRepository {
 
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO tasks (id, title, description, completed, priority, created_at, updated_at, folder_id)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                "INSERT INTO tasks (id, title, description, completed, priority, pinned, created_at, updated_at, folder_id)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                 ON CONFLICT(id) DO UPDATE SET
                     title = excluded.title,
                     description = excluded.description,
                     completed = excluded.completed,
                     priority = excluded.priority,
+                    pinned = excluded.pinned,
                     updated_at = excluded.updated_at,
                     folder_id = excluded.folder_id"
             ).map_err(|e| StorageError::Database { path: self.db_path.clone(), src: e.to_string() })?;
@@ -51,6 +52,7 @@ impl TaskRepository {
                     task.description,
                     task.completed,
                     task.priority.to_string(),
+                    task.pinned,
                     task.created_at.to_rfc3339(),
                     task.updated_at.to_rfc3339(),
                     folder_id_str,
@@ -93,7 +95,7 @@ impl TaskRepository {
     pub fn load(&self) -> ApplicationResult<Vec<Task>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
-                .prepare("SELECT id, title, description, completed, priority, created_at, updated_at, folder_id FROM tasks")
+                .prepare("SELECT id, title, description, completed, priority, pinned, created_at, updated_at, folder_id FROM tasks")
                 .map_err(|e| StorageError::Database { path: self.db_path.clone(), src: e.to_string() })?;
 
         let task_iter = stmt
@@ -101,9 +103,9 @@ impl TaskRepository {
                 let id_str: String = row.get(0)?;
                 let title_str: String = row.get(1)?;
                 let priority_str: String = row.get(4)?;
-                let created_str: String = row.get(5)?;
-                let updated_str: String = row.get(6)?;
-                let folder_id_str: Option<String> = row.get(7)?;
+                let created_str: String = row.get(6)?;
+                let updated_str: String = row.get(7)?;
+                let folder_id_str: Option<String> = row.get(8)?;
 
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
                 let priority: Priority = priority_str.parse().unwrap_or(Priority::Low);
@@ -125,6 +127,7 @@ impl TaskRepository {
                     description: row.get(2)?,
                     completed: row.get(3)?,
                     priority,
+                    pinned: row.get(5)?,
                     folder_id,
                     created_at,
                     updated_at,
@@ -161,6 +164,7 @@ mod tests {
                 description TEXT NOT NULL,
                 completed BOOLEAN NOT NULL DEFAULT 0,
                 priority TEXT NOT NULL,
+                pinned BOOLEAN NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 folder_id TEXT

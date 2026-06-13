@@ -172,6 +172,7 @@ impl Storage {
                 description TEXT NOT NULL,
                 completed BOOLEAN NOT NULL DEFAULT 0,
                 priority TEXT NOT NULL,
+                pinned BOOLEAN NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 folder_id TEXT,

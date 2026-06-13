@@ -3,7 +3,7 @@ use crate::{
     config::{Config, KeyMaps},
     core::{Storage, TaskError},
     models::{Folder, FolderEditor, Priority, Task, task::TaskEditor},
-    state::{ApplicationState, Session, SidebarTab, TasksStateSave, UIState},
+    state::{ApplicationResult, ApplicationState, Session, SidebarTab, TasksStateSave, UIState},
 };
 use uuid::Uuid;
 
@@ -30,6 +30,22 @@ impl<'a> ApplicationController<'a> {
         }
     }
 
+    /// Helper function to perform certain action to prevent code duplicates
+    fn perform_action<T, F, S>(&mut self, action: F, success: S)
+    where
+        F: FnOnce() -> ApplicationResult<T>,
+        S: FnOnce(&mut Self, T) -> String,
+    {
+        match action() {
+            Ok(result) => {
+                self.state.mark_as_dirty();
+                let msg = success(self, result);
+                self.ui.push_notification(self.state, Ok(msg));
+            }
+            Err(e) => self.ui.push_notification(self.state, Err(e)),
+        }
+    }
+
     /// Handle appending a task
     pub fn dispatch_append_task<S: Into<String>>(
         &mut self,
@@ -39,68 +55,54 @@ impl<'a> ApplicationController<'a> {
     ) {
         let title_string: String = title.into();
         log::debug!("Dispatching append for task: '{}'", title_string);
-
-        let current_folder_id: Option<Uuid> = self.ui.active_folder;
-        let mut task: Task = Task::new(title_string).with_description(desc);
+        let mut task: Task = Task::new(title_string.clone()).with_description(desc.into());
 
         if let Some(p) = priority {
             task = task.with_priority(p);
         }
-        if let Some(fid) = current_folder_id {
+        if let Some(fid) = self.ui.active_folder {
             task = task.with_folder(fid);
         }
 
-        match TaskService::append_task(&mut self.state.tasks, task, &self.state.sort) {
-            Ok(result) => {
-                let (_, task) = result.unwrap_task_created();
-
-                self.stabilize(Some(task.id));
-                self.state.mark_as_dirty();
-
-                self.ui.push_notification(
-                    self.state,
-                    Ok(format!("Task '{}' was added to the list!", task.title)),
-                );
-            }
-            Err(e) => self.ui.push_notification(self.state, Err(e)),
-        }
+        let result = TaskService::append_task(&mut self.state.tasks, task, &self.state.sort);
+        self.perform_action(
+            || result,
+            |this, res| {
+                let (_, t) = res.unwrap_task_created();
+                this.stabilize(Some(t.id));
+                format!("Task '{}' was added!", t.title)
+            },
+        );
     }
 
     /// Handle updating an existing task
     pub fn dispatch_update_task(&mut self, id: Uuid, editor: TaskEditor) {
-        match TaskService::update_task(&mut self.state.tasks, &id, editor, &self.state.sort) {
-            Ok(result) => {
-                log::debug!("Dispatching update for task (ID: {})", id);
-                let (_, old, new) = result.unwrap_task_updated();
+        log::debug!("Dispatching update for task (ID: {})", id);
+        let result = TaskService::update_task(&mut self.state.tasks, &id, editor, &self.state.sort);
 
-                self.stabilize(Some(id));
-                self.state.mark_as_dirty();
-
-                let msg = self.format_update_task(&old, &new);
-                self.ui.push_notification(self.state, Ok(msg));
-            }
-            Err(e) => self.ui.push_notification(self.state, Err(e)),
-        }
+        self.perform_action(
+            || result,
+            |this, res| {
+                let (_, old, new) = res.unwrap_task_updated();
+                this.stabilize(Some(id));
+                this.format_update_task(&old, &new)
+            },
+        );
     }
 
     /// Handle removing task
     pub fn dispatch_remove_task(&mut self) {
         if let Some(id) = self.ui.selected_id(self.state) {
-            match TaskService::remove_task(&mut self.state.tasks, &id) {
-                Ok(result) => {
-                    let task: Task = result.unwrap_task_removed();
+            let result = TaskService::remove_task(&mut self.state.tasks, &id);
+            self.perform_action(
+                || result,
+                |this, res| {
+                    let task = res.unwrap_task_removed();
                     log::debug!("Dispatching remove for task '{}'", task.title);
-
-                    self.stabilize(None);
-                    self.state.mark_as_dirty();
-
-                    self.ui.push_notification(
-                        self.state,
-                        Ok(format!("Task '{}' was removed!", task.title)),
-                    );
-                }
-                Err(e) => self.ui.push_notification(self.state, Err(e)),
-            }
+                    this.stabilize(None);
+                    format!("Task '{}' was removed!", task.title)
+                },
+            );
         } else {
             self.ui
                 .push_notification(self.state, Err(TaskError::TaskNotFound.into()));
@@ -111,79 +113,76 @@ impl<'a> ApplicationController<'a> {
     pub fn dispatch_append_folder<S: Into<String>>(&mut self, name: S, color: S) {
         let name_string: String = name.into();
         log::debug!("Dispatching append for folder: '{}'", name_string);
-
         let folder: Folder = Folder::new(name_string, color.into());
-        match FolderService::append_folder(&mut self.state.folders, folder) {
-            Ok(result) => {
-                let (_, folder) = result.unwrap_folder_created();
-                self.state.mark_as_dirty();
 
-                self.ui.push_notification(
-                    self.state,
-                    Ok(format!("Folder '{}' successfully created!", folder.name)),
-                );
-            }
-            Err(e) => self.ui.push_notification(self.state, Err(e)),
-        }
+        let result = FolderService::append_folder(&mut self.state.folders, folder);
+        self.perform_action(
+            || result,
+            |_, res| {
+                let (_, f) = res.unwrap_folder_created();
+                format!("Folder '{}' successfully created!", f.name)
+            },
+        );
     }
 
     /// Handle updating an existing folder
     pub fn dispatch_update_folder(&mut self, id: Uuid, editor: FolderEditor) {
         log::debug!("Dispatching update for folder (ID: {})", id);
+        let result = FolderService::update_folder(&mut self.state.folders, &id, editor);
 
-        match FolderService::update_folder(&mut self.state.folders, &id, editor) {
-            Ok(result) => {
-                let (_, old, new) = result.unwrap_folder_updated();
-                self.state.mark_as_dirty();
-
-                let msg = self.format_update_folder(&old, &new);
-                self.ui.push_notification(self.state, Ok(msg));
-            }
-            Err(e) => self.ui.push_notification(self.state, Err(e)),
-        }
+        self.perform_action(
+            || result,
+            |this, res| {
+                let (_, old, new) = res.unwrap_folder_updated();
+                this.format_update_folder(&old, &new)
+            },
+        );
     }
 
     /// Handle removing folder (with cascading tasks deletion)
     pub fn dispatch_remove_folder(&mut self, id: Uuid) {
-        match FolderService::remove_folder(&mut self.state.folders, &id) {
-            Ok(result) => {
-                let folder: Folder = result.unwrap_folder_removed();
-                log::info!(
-                    "Folder '{}' removed. Cleaning up associated tasks...",
-                    folder.name
-                );
+        let result = FolderService::remove_folder(&mut self.state.folders, &id);
+        self.perform_action(
+            || result,
+            |this, res| {
+                let folder: Folder = res.unwrap_folder_removed();
+                let initial: usize = this.state.tasks.len();
+                this.state.tasks.retain(|t| t.folder_id != Some(id));
 
-                let initial_tasks_count = self.state.tasks.len();
-                self.state.tasks.retain(|t| t.folder_id != Some(id));
-                let removed_tasks = initial_tasks_count - self.state.tasks.len();
-
-                if self.ui.active_folder == Some(id) {
-                    self.ui.active_tab = SidebarTab::Inbox;
-                    self.ui.active_folder = None;
+                if this.ui.active_folder == Some(id) {
+                    this.ui.active_tab = SidebarTab::Inbox;
+                    this.ui.active_folder = None;
                 }
+                this.stabilize(None);
 
-                self.stabilize(None);
-                self.state.mark_as_dirty();
-
-                let msg = if removed_tasks > 0 {
+                let removed: usize = initial - this.state.tasks.len();
+                if removed > 0 {
                     format!(
                         "Folder '{}' and its {} tasks were removed!",
-                        folder.name, removed_tasks
+                        folder.name, removed
                     )
                 } else {
                     format!("Folder '{}' was removed!", folder.name)
-                };
-
-                self.ui.push_notification(self.state, Ok(msg));
-            }
-            Err(e) => self.ui.push_notification(self.state, Err(e)),
-        }
+                }
+            },
+        );
     }
 
     /// Handle task completion toggling
-    pub fn dispatch_toggle(&mut self) {
+    pub fn dispatch_completed(&mut self) {
         if let Some(id) = self.ui.selected_id(self.state) {
-            if TaskService::toggle_task(&mut self.state.tasks, &id).is_ok() {
+            if TaskService::toggle_completed(&mut self.state.tasks, &id).is_ok() {
+                self.stabilize(Some(id));
+                self.state.mark_as_dirty();
+            }
+        }
+    }
+
+    /// Handle task pin toggling
+    pub fn dispatch_pinned(&mut self) {
+        if let Some(id) = self.ui.selected_id(self.state) {
+            if TaskService::toggle_pinned(&mut self.state.tasks, &id).is_ok() {
+                TaskService::sorting(&mut self.state.tasks, &self.state.sort);
                 self.stabilize(Some(id));
                 self.state.mark_as_dirty();
             }
@@ -192,26 +191,21 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle moving a task
     pub fn dispatch_move_tasks(&mut self, delta: i32) {
-        if let Some((index_a, index_b)) = self.state.swap_indices(
+        if let Some((a, b)) = self.state.swap_indices(
             self.ui.active_tab,
             self.ui.active_folder,
             &self.ui.search_query(),
             delta,
         ) {
-            match TaskService::move_tasks(&mut self.state.tasks, index_a, index_b) {
-                Ok(_) => {
-                    let current_index: usize = self.state.select_state.selected().unwrap_or(0);
-                    let new_index: usize = if delta > 0 {
-                        current_index + 1
-                    } else {
-                        current_index.saturating_sub(1)
-                    };
-
-                    self.state.select_state.select(Some(new_index));
-                    self.state.mark_as_dirty();
-                }
-                Err(e) => self.ui.push_notification(self.state, Err(e)),
-            }
+            let result = TaskService::move_tasks(&mut self.state.tasks, a, b);
+            self.perform_action(
+                || result,
+                |this, _| {
+                    let new: usize = this.state.get_new_index(delta);
+                    this.state.select_state.select(Some(new));
+                    "Task moved".into()
+                },
+            );
         }
     }
 
@@ -338,17 +332,18 @@ impl<'a> ApplicationController<'a> {
 
     /// Helper function to generate update task text based on diff between states
     fn format_update_task(&self, old: &Task, new: &Task) -> String {
+        let mut changes = Vec::new();
         if old.title != new.title {
-            format!("Title: '{}' → '{}'", old.title, new.title)
-        } else if old.priority != new.priority {
-            format!(
-                "Priority: {:?} → {:?} for '{}'",
-                old.priority, new.priority, new.title
-            )
-        } else if old.description != new.description {
-            format!("Description updated for '{}'", new.title)
+            changes.push(format!("Title: '{}' → '{}'", old.title, new.title));
+        }
+        if old.priority != new.priority {
+            changes.push(format!("Priority: {:?} → {:?}", old.priority, new.priority));
+        }
+
+        if changes.is_empty() {
+            format!("Saved '{}' without changes", new.title)
         } else {
-            format!("Saved '{}' without changes!", new.title)
+            changes.join(", ")
         }
     }
 

@@ -364,7 +364,7 @@ impl Default for KeyMaps {
             (Action::MoveRight, "l"),
             (Action::MoveRight, "right"),
             // Filters
-            (Action::FilterAll, "1"),
+            (Action::FilterInbox, "1"),
             (Action::FilterActive, "2"),
             (Action::FilterCompleted, "3"),
             (Action::FilterHigh, "4"),
@@ -376,6 +376,7 @@ impl Default for KeyMaps {
             (Action::Remove, "d"),
             (Action::Details, "tab"),
             (Action::Search, "/"),
+            (Action::Pin, "p"),
             (Action::ClearAll, "x"),
             // Folder actions
             (Action::AddFolder, "f"),
@@ -405,9 +406,8 @@ impl Default for KeyMaps {
 /// Unit-tests for keymaps
 #[cfg(test)]
 mod tests {
-    use crate::theme::ThemeName;
-
     use super::*;
+    use crate::theme::ThemeName;
     use tempdir::TempDir;
 
     #[test]

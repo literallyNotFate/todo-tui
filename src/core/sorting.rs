@@ -39,6 +39,11 @@ impl Sort {
     }
 
     pub fn compare(&self, a: &Task, b: &Task) -> Ordering {
+        let pinned_cmp: Ordering = b.pinned.cmp(&a.pinned);
+        if pinned_cmp != Ordering::Equal {
+            return pinned_cmp;
+        }
+
         let cmp: Ordering = match *self.parameter {
             SortBy::Title => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
             SortBy::Priority => {
@@ -79,6 +84,7 @@ mod tests {
             description: String::new(),
             priority,
             completed: false,
+            pinned: false,
             created_at: Utc::now() - Duration::seconds(seconds_ago),
             updated_at: Utc::now(),
             folder_id: None,
@@ -128,5 +134,52 @@ mod tests {
         let new_task = task("New", Priority::Medium, 0);
 
         assert_eq!(sort.compare(&old_task, &new_task), Ordering::Less);
+    }
+
+    #[test]
+    fn should_always_place_pinned_tasks_on_top() {
+        let sort = Sort::new(SortBy::Priority, SortOrder::Asc);
+        let mut pinned_low = task("Pinned Low", Priority::Low, 100);
+        pinned_low.pinned = true;
+
+        let normal_high = task("Normal High", Priority::High, 0);
+        assert_eq!(sort.compare(&pinned_low, &normal_high), Ordering::Less);
+        assert_eq!(sort.compare(&normal_high, &pinned_low), Ordering::Greater);
+    }
+
+    #[test]
+    fn should_sort_between_two_pinned_tasks() {
+        let sort = Sort::new(SortBy::Priority, SortOrder::Asc);
+        let mut pinned_low = task("Low", Priority::Low, 0);
+        pinned_low.pinned = true;
+
+        let mut pinned_high = task("High", Priority::High, 0);
+        pinned_high.pinned = true;
+
+        let expected = pinned_high.priority.cmp(&pinned_low.priority);
+        assert_eq!(sort.compare(&pinned_high, &pinned_low), expected);
+    }
+
+    #[test]
+    fn should_keep_pinned_tasks_grouped_at_top() {
+        let sort = Sort::new(SortBy::Title, SortOrder::Asc);
+
+        let mut pinned1 = task("Z Pinned", Priority::Low, 0);
+        pinned1.pinned = true;
+
+        let mut normal1 = task("A Normal", Priority::High, 0);
+        normal1.pinned = false;
+
+        let mut normal2 = task("B Normal", Priority::High, 0);
+        normal2.pinned = false;
+
+        let tasks = vec![normal1, pinned1.clone(), normal2];
+        let mut sorted = tasks.clone();
+
+        sorted.sort_by(|a, b| sort.compare(a, b));
+
+        assert_eq!(sorted[0].id, pinned1.id);
+        assert_eq!(sorted[1].title, "A Normal");
+        assert_eq!(sorted[2].title, "B Normal");
     }
 }

@@ -34,7 +34,7 @@ fn should_save_and_load_data_successfully() {
     assert_eq!(loaded_data.tasks[0].title, "Task 1");
     assert_eq!(loaded_data.session.last_tab.value, SidebarTab::Inbox);
     assert_eq!(loaded_data.session.last_folder_id, None);
-    assert_eq!(loaded_data.session.last_focus.value, FocusArea::Main);
+    assert_eq!(loaded_data.session.last_focus.value, FocusArea::Sidebar);
 }
 
 #[test]

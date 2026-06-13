@@ -251,15 +251,13 @@ impl EventHandler {
             },
 
             // For filters
-            Action::FilterAll
+            Action::FilterInbox
             | Action::FilterActive
             | Action::FilterCompleted
             | Action::FilterHigh
-            | Action::FilterToday
-                if focus == FocusArea::Sidebar =>
-            {
+            | Action::FilterToday => {
                 match action {
-                    Action::FilterAll => ctrl.ui.change_filter(SidebarTab::Inbox, None),
+                    Action::FilterInbox => ctrl.ui.change_filter(SidebarTab::Inbox, None),
                     Action::FilterActive => ctrl.ui.change_filter(SidebarTab::Active, None),
                     Action::FilterCompleted => ctrl.ui.change_filter(SidebarTab::Completed, None),
                     Action::FilterHigh => ctrl.ui.change_filter(SidebarTab::HighPriority, None),
@@ -273,6 +271,7 @@ impl EventHandler {
             Action::Update
             | Action::Remove
             | Action::Complete
+            | Action::Pin
             | Action::Details
             | Action::Sort
             | Action::SortReverse
@@ -290,7 +289,8 @@ impl EventHandler {
                                 .show_modal(Popup::update_task(&task), ModalAction::None)
                         }
                     }
-                    Action::Complete => ctrl.dispatch_toggle(),
+                    Action::Complete => ctrl.dispatch_completed(),
+                    Action::Pin => ctrl.dispatch_pinned(),
                     Action::Remove => {
                         if ctrl.config.behavior.confirm_before_remove {
                             ctrl.ui.remove_task_confirm();
@@ -952,7 +952,7 @@ mod tests {
         assert_eq!(ctrl.ui.active_tab, SidebarTab::Today);
 
         EventHandler::execute_action(
-            Action::FilterAll,
+            Action::FilterInbox,
             &mut ctrl,
             storage,
             mode,

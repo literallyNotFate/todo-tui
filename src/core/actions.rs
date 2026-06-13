@@ -35,7 +35,7 @@ pub enum Action {
     MoveTaskUp,
     MoveTaskDown,
 
-    FilterAll,
+    FilterInbox,
     FilterActive,
     FilterCompleted,
     FilterHigh,
@@ -47,6 +47,7 @@ pub enum Action {
     Complete,
     Details,
     Search,
+    Pin,
     ClearAll,
 
     AddFolder,
@@ -79,7 +80,7 @@ impl Action {
             Self::MoveTaskUp => ("Move task up in list", "Navigation"),
             Self::MoveTaskDown => ("Move task down in list", "Navigation"),
 
-            Self::FilterAll => ("Filter: All", "Filters"),
+            Self::FilterInbox => ("Filter: Inbox", "Filters"),
             Self::FilterActive => ("Filter: Active", "Filters"),
             Self::FilterCompleted => ("Filter: Completed", "Filters"),
             Self::FilterHigh => ("Filter: High Priority", "Filters"),
@@ -91,6 +92,7 @@ impl Action {
             Self::Complete => ("Mark as Done/Undone", "Actions"),
             Self::Details => ("Show task details", "Actions"),
             Self::Search => ("Search tasks", "Actions"),
+            Self::Pin => ("Pin selected", "Actions"),
             Self::ClearAll => ("Clear all tasks", "Actions"),
 
             Self::AddFolder => ("Add new folder", "Actions"),

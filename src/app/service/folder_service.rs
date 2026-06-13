@@ -15,26 +15,15 @@ impl FolderService {
         folders: &mut Vec<Folder>,
         folder: Folder,
     ) -> ApplicationResult<OperationResult> {
-        if folder.name.trim().is_empty() {
-            log::debug!("Validation error on append: Folder name is empty");
-            return Err(FolderError::EmptyName.into());
-        }
+        Folder::validate(&folder.name, None, folders)?;
 
-        if folders.iter().any(|f| f.name.trim() == folder.name.trim()) {
-            log::debug!(
-                "Validation error on append: Folder name '{}' already exists",
-                folder.name
-            );
-            return Err(FolderError::DuplicateName.into());
-        }
-
-        let name = folder.name.clone();
-        log::info!("Adding new folder: '{}' (ID: {})", name, folder.id);
-
+        log::info!("Adding new folder: '{}'", folder.name);
         folders.push(folder.clone());
-        let index = folders.len() - 1;
 
-        Ok(OperationResult::FolderCreated { index, folder })
+        Ok(OperationResult::FolderCreated {
+            index: folders.len() - 1,
+            folder,
+        })
     }
 
     /// Update folder by id using FolderEditor model
@@ -43,31 +32,12 @@ impl FolderService {
         id: &Uuid,
         editor: FolderEditor,
     ) -> ApplicationResult<OperationResult> {
-        if editor.name.trim().is_empty() {
-            log::debug!("Validation error on update: Folder name is empty");
-            return Err(FolderError::EmptyName.into());
-        }
+        let index: usize = Self::find_index(folders, id)?;
+        Folder::validate(&editor.name, Some(*id), folders)?;
 
-        let original_index = folders.iter().position(|f| f.id == *id).ok_or_else(|| {
-            log::warn!("Update failed: Folder with ID {} not found", id);
-            FolderError::FolderNotFound
-        })?;
-
-        if folders
-            .iter()
-            .enumerate()
-            .any(|(i, f)| i != original_index && f.name.trim() == editor.name.trim())
-        {
-            log::debug!(
-                "Validation error on update: Folder name '{}' already exists",
-                editor.name
-            );
-            return Err(FolderError::DuplicateName.into());
-        }
-
-        let old = folders[original_index].clone();
-        folders[original_index].update_from_editor(editor);
-        let new = folders[original_index].clone();
+        let old: Folder = folders[index].clone();
+        folders[index].update_from(editor);
+        let new: Folder = folders[index].clone();
 
         log::info!(
             "Folder updated successfully: '{}' (ID: {}). Changes: [Name: '{}' -> '{}', Color: {:?} -> {:?}]",
@@ -78,12 +48,7 @@ impl FolderService {
             old.color,
             new.color
         );
-
-        Ok(OperationResult::FolderUpdated {
-            index: original_index,
-            old,
-            new,
-        })
+        Ok(OperationResult::FolderUpdated { index, old, new })
     }
 
     /// Remove folder by id
@@ -91,24 +56,25 @@ impl FolderService {
         folders: &mut Vec<Folder>,
         id: &Uuid,
     ) -> ApplicationResult<OperationResult> {
-        let index = folders.iter().position(|f| f.id == *id).ok_or_else(|| {
-            log::error!(
-                "Remove failed: Attempted to remove non-existent folder ID {}",
-                id
-            );
-            FolderError::FolderNotFound
-        })?;
+        let index: usize = Self::find_index(folders, id)?;
+        let folder: Folder = folders.remove(index);
 
-        let folder = folders.remove(index);
-        log::info!("Folder removed: '{}' (ID: {})", folder.name, id);
-
+        log::info!("Folder removed: '{}'", folder.name);
         Ok(OperationResult::FolderRemoved { folder })
+    }
+
+    /// Private method to return index by id
+    fn find_index(folders: &[Folder], id: &Uuid) -> ApplicationResult<usize> {
+        folders
+            .iter()
+            .position(|f| f.id == *id)
+            .ok_or(FolderError::FolderNotFound.into())
     }
 }
 
 /// Unit-tests for folder service
 #[cfg(test)]
-mod folder_tests {
+mod tests {
     use super::*;
     use crate::{core::ApplicationError, models::FolderColor};
 

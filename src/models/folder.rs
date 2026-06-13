@@ -1,3 +1,4 @@
+use crate::{core::FolderError, state::ApplicationResult};
 use chrono::{DateTime, Utc};
 use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
@@ -42,7 +43,7 @@ impl Folder {
     }
 
     /// Update folder from FolderEditor
-    pub fn update_from_editor(&mut self, editor: FolderEditor) {
+    pub fn update_from(&mut self, editor: FolderEditor) {
         self.name = editor.name;
         self.color = editor.color.to_string();
         self.name_lower = self.name.to_lowercase();
@@ -52,6 +53,26 @@ impl Folder {
     // Static method to find folder by ID
     pub fn find_by_id(folders: &[Folder], id: &Uuid) -> Option<Self> {
         folders.iter().find(|f| f.id == *id).cloned()
+    }
+
+    /// Validate folder
+    pub fn validate(
+        name: &str,
+        exclude_id: Option<Uuid>,
+        folders: &[Folder],
+    ) -> ApplicationResult<()> {
+        let name: &str = name.trim();
+        if name.is_empty() {
+            return Err(FolderError::EmptyName.into());
+        }
+
+        if folders
+            .iter()
+            .any(|f| f.name.trim() == name && Some(f.id) != exclude_id)
+        {
+            return Err(FolderError::DuplicateName.into());
+        }
+        Ok(())
     }
 }
 

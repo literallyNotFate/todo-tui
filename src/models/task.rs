@@ -1,4 +1,9 @@
-use crate::{config::UIConfig, core::Selectable, theme::ThemePalette};
+use crate::{
+    config::UIConfig,
+    core::{Selectable, TaskError},
+    state::ApplicationResult,
+    theme::ThemePalette,
+};
 use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
@@ -13,6 +18,8 @@ pub struct Task {
     pub completed: bool,
     pub priority: Priority,
     pub folder_id: Option<Uuid>,
+
+    pub pinned: bool,
 
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -59,6 +66,7 @@ pub enum Priority {
 }
 
 /// Model for updating task
+#[derive(Clone)]
 pub struct TaskEditor {
     pub title: String,
     pub description: String,
@@ -80,6 +88,7 @@ impl Task {
             completed: false,
             priority: Priority::default(),
             folder_id: None,
+            pinned: false,
             created_at: now,
             updated_at: now,
             title_lower,
@@ -105,7 +114,7 @@ impl Task {
     }
 
     /// Update task using editor model from form
-    pub fn update_from_editor(&mut self, editor: TaskEditor) {
+    pub fn update_from(&mut self, editor: TaskEditor) {
         self.title = editor.title;
         self.description = editor.description;
         self.priority = *editor.priority;
@@ -117,6 +126,20 @@ impl Task {
     /// Toggle completed on Enter
     pub fn toggle_completed(&mut self) {
         self.completed = !self.completed;
+    }
+
+    /// Toggle pin task
+    pub fn toggle_pinned(&mut self) {
+        self.pinned = !self.pinned;
+    }
+
+    /// Validate task
+    pub fn validate(&self) -> ApplicationResult<()> {
+        if self.title.trim().is_empty() {
+            return Err(TaskError::EmptyTitle.into());
+        }
+
+        Ok(())
     }
 
     /// Return created at string for table
@@ -155,6 +178,7 @@ impl Hash for Task {
         self.title.hash(state);
         self.description.hash(state);
         self.completed.hash(state);
+        self.pinned.hash(state);
         self.priority.hash(state);
         self.folder_id.hash(state);
     }
@@ -210,7 +234,10 @@ impl TaskEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::{ThemeName, ThemePalette};
+    use crate::{
+        core::ApplicationError,
+        theme::{ThemeName, ThemePalette},
+    };
     use chrono::{Days, Duration, Months, NaiveDate};
 
     #[test]
@@ -265,7 +292,7 @@ mod tests {
             priority: Selectable::new(Priority::High),
             folder_id: Some(new_folder_id),
         };
-        task.update_from_editor(editor);
+        task.update_from(editor);
 
         assert_eq!(task.title, "Edit");
         assert_eq!(task.description, "Edit");
@@ -283,6 +310,18 @@ mod tests {
 
         task.toggle_completed();
         assert!(!task.completed);
+    }
+
+    #[test]
+    fn should_toggle_pinned() {
+        let mut task: Task = Task::new("Test");
+        assert!(!task.pinned);
+
+        task.toggle_pinned();
+        assert!(task.pinned);
+
+        task.toggle_pinned();
+        assert!(!task.pinned);
     }
 
     #[test]
@@ -314,6 +353,21 @@ mod tests {
 
         task.created_at = Utc::now() - Duration::days(1);
         assert!(!task.is_due_today(&today));
+    }
+
+    #[test]
+    fn should_properly_validate_task() {
+        let task = Task::new("Title").with_description("Desc");
+        let result = task.validate();
+        assert!(result.is_ok());
+
+        let task = Task::new("").with_description("Desc");
+        let result = task.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Task(TaskError::EmptyTitle))
+        ));
     }
 
     #[test]

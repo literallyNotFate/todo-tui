@@ -86,6 +86,8 @@ impl PopupComponent for DetailsComponent {
                 Style::default().fg(palette.secondary).italic(),
             ),
             Span::raw(" • "),
+            Span::styled(" 󰐃 Pinned ", Style::default().fg(palette.warning).bold()),
+            Span::raw(" • "),
             Span::styled("Created ", Style::default().fg(palette.muted)),
             Span::styled(
                 &self.details.created_at,
