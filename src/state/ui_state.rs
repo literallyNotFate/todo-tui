@@ -58,6 +58,10 @@ pub enum SidebarTab {
 }
 
 impl UIState {
+    pub const MIN_SIDEBAR: u16 = 10;
+    pub const MAX_SIDEBAR: u16 = 100;
+    pub const DEFAULT_SIDEBAR: u16 = 30;
+
     pub fn new(mut config: UIConfig) -> Self {
         config
             .last_dark
@@ -374,6 +378,34 @@ impl UIState {
         self.config.show_sidebar = !self.config.show_sidebar;
     }
 
+    /// Toggle footer
+    pub fn toggle_footer(&mut self) {
+        self.config.show_footer = !self.config.show_footer;
+    }
+
+    /// Make sidebar bigger
+    pub fn increase_sidebar(&mut self) {
+        self.config.sidebar_width = (self.config.sidebar_width + 2).min(Self::MAX_SIDEBAR);
+        self.should_redraw = true;
+    }
+
+    /// Make sidebar smaller
+    pub fn decrease_sidebar(&mut self) {
+        self.config.sidebar_width = self
+            .config
+            .sidebar_width
+            .saturating_sub(2)
+            .max(Self::MIN_SIDEBAR);
+        self.should_redraw = true;
+    }
+
+    /// Fully reset UI state with theme
+    pub fn reset_ui(&mut self) {
+        self.config = UIConfig::default();
+        self.theme = Theme::default();
+        self.should_redraw = true;
+    }
+
     /// Closes existing modal widget
     pub fn close_modal(&mut self) {
         if let Some(m) = &self.modal {
@@ -640,14 +672,55 @@ mod tests {
     }
 
     #[test]
-    fn should_toggle_sidebar_showing() {
+    fn should_toggle_sidebar_and_footer_showing() {
         let mut ui = UIState::default();
         assert!(ui.config.show_sidebar);
+        assert!(ui.config.show_footer);
 
         ui.toggle_sidebar();
         assert!(!ui.config.show_sidebar);
+        ui.toggle_footer();
+        assert!(!ui.config.show_footer);
 
         ui.toggle_sidebar();
+        assert!(ui.config.show_sidebar);
+        ui.toggle_footer();
+        assert!(ui.config.show_footer);
+    }
+
+    #[test]
+    fn should_handle_sidebar_increase_limit() {
+        let mut ui = UIState::default();
+        ui.config.sidebar_width = 98;
+
+        ui.increase_sidebar();
+        assert_eq!(ui.config.sidebar_width, 100);
+
+        ui.increase_sidebar();
+        assert_eq!(ui.config.sidebar_width, 100);
+    }
+
+    #[test]
+    fn should_handle_sidebar_decrease_limit() {
+        let mut ui = UIState::default();
+        ui.config.sidebar_width = 12;
+
+        ui.decrease_sidebar();
+        assert_eq!(ui.config.sidebar_width, 10);
+
+        ui.decrease_sidebar();
+        assert_eq!(ui.config.sidebar_width, 10);
+    }
+
+    #[test]
+    fn should_handle_reset_ui() {
+        let mut ui = UIState::default();
+        ui.config.sidebar_width = 15;
+        ui.config.show_sidebar = false;
+
+        ui.reset_ui();
+
+        assert_eq!(ui.config.sidebar_width, UIConfig::default().sidebar_width);
         assert!(ui.config.show_sidebar);
     }
 

@@ -103,6 +103,8 @@ pub struct UIConfig {
     pub last_light: Option<ThemeID>,
 
     pub show_sidebar: bool,
+    pub show_footer: bool,
+    pub sidebar_width: u16,
 
     #[serde(skip_serializing_if = "is_default")]
     pub border_type: BorderTypeConfig,
@@ -130,6 +132,7 @@ pub struct SymbolsConfig {
     pub completed: String,
     pub pending: String,
     pub selection: String,
+    pub pinned: String,
 }
 
 impl Default for UIConfig {
@@ -140,6 +143,8 @@ impl Default for UIConfig {
             last_dark: Some(ThemeID::Builtin(ThemeName::default())),
             last_light: Some(ThemeID::Builtin(ThemeName::GruvboxLight)),
             show_sidebar: true,
+            show_footer: true,
+            sidebar_width: 30,
             border_type: BorderTypeConfig::default(),
             symbols: SymbolsConfig::default(),
             date_format: String::from("%d/%m/%Y"),
@@ -154,6 +159,7 @@ impl Default for SymbolsConfig {
             completed: "✓".to_string(),
             pending: "☐".to_string(),
             selection: "❯".to_string(),
+            pinned: "󰐃".to_string(),
         }
     }
 }

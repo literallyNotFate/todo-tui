@@ -61,6 +61,12 @@ pub enum Action {
     #[strum(serialize = "sidebar_toggle")]
     #[serde(rename = "sidebar_toggle")]
     ToggleSidebar,
+    #[strum(serialize = "footer_toggle")]
+    #[serde(rename = "footer_toggle")]
+    ToggleFooter,
+    IncreaseSidebar,
+    DecreaseSidebar,
+    ResetUI,
 
     Sort,
     SortReverse,
@@ -96,17 +102,20 @@ impl Action {
             Self::Search => ("Search tasks", "Actions"),
             Self::Pin => ("Pin selected task", "Actions"),
             Self::Clear => ("Clear all tasks", "Actions"),
-
             Self::AddFolder => ("Add new folder", "Actions"),
             Self::UpdateFolder => ("Update selected folder", "Actions"),
             Self::RemoveFolder => ("Remove selected folder", "Actions"),
+            Self::Sort => ("Sort list", "Actions"),
+            Self::SortReverse => ("Reverse sorting", "Actions"),
 
             Self::NextTheme => ("Next theme", "UI"),
             Self::PrevTheme => ("Previous theme", "UI"),
             Self::ToggleThemeMode => ("Light/Dark mode", "UI"),
             Self::ToggleSidebar => ("Show/Hide sidebar", "UI"),
-            Self::Sort => ("Sort list", "UI"),
-            Self::SortReverse => ("Reverse sorting", "UI"),
+            Self::ToggleFooter => ("Show/Hide footer", "UI"),
+            Self::IncreaseSidebar => ("Increase sidebar width", "UI"),
+            Self::DecreaseSidebar => ("Decrease sidebar width", "UI"),
+            Self::ResetUI => ("Reset UI", "UI"),
         }
     }
 }

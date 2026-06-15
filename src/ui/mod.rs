@@ -28,6 +28,7 @@ pub enum WidgetResponse {
     Cancel,
 }
 
+use crate::config::UIConfig;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 /// Main layout struct for convenience
@@ -39,17 +40,20 @@ pub struct MainLayout {
 
 impl MainLayout {
     /// Splits area into layouts for dashboard w/sidebar config toggling
-    pub fn split(area: Rect, show_sidebar: bool) -> Self {
+    pub fn split(area: Rect, config: &UIConfig) -> Self {
+        let footer_len = if config.show_footer { 2 } else { 0 };
+
         let [upper_area, footer] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(0), Constraint::Length(2)])
+            .constraints([Constraint::Min(0), Constraint::Length(footer_len)])
             .areas(area);
 
-        if show_sidebar {
+        if config.show_sidebar {
             let [sidebar, main] = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
+                .constraints([Constraint::Length(config.sidebar_width), Constraint::Min(0)])
                 .areas(upper_area);
+
             Self {
                 sidebar,
                 content: main,

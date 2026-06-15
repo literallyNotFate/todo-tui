@@ -210,7 +210,6 @@ impl EventHandler {
                     ModalAction::None,
                 );
             }
-            Action::ToggleSidebar => ctrl.ui.toggle_sidebar(),
             Action::NextTheme => ctrl.ui.next_theme(),
             Action::PrevTheme => ctrl.ui.prev_theme(),
             Action::ToggleThemeMode => ctrl.ui.toggle_mode(),
@@ -249,6 +248,13 @@ impl EventHandler {
                     ctrl.dispatch_move_selection(1);
                 }
             },
+
+            // UI
+            Action::ToggleSidebar => ctrl.ui.toggle_sidebar(),
+            Action::ToggleFooter => ctrl.ui.toggle_footer(),
+            Action::IncreaseSidebar => ctrl.ui.increase_sidebar(),
+            Action::DecreaseSidebar => ctrl.ui.decrease_sidebar(),
+            Action::ResetUI => ctrl.ui.reset_ui(),
 
             // For filters
             Action::FilterInbox

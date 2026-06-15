@@ -130,12 +130,10 @@ impl<'a> ListTasks<'a> {
         let rows = self.tasks.iter().map(|task| {
             let priority_color = task.priority.palette(&palette);
             let icon = if task.pinned {
-                "󰐃".into()
+                ctx.config.ui.symbols.pinned.clone()
             } else if task.completed {
-                ctx.config.symbols.completed.clone()
                 ctx.config.ui.symbols.completed.clone()
             } else {
-                ctx.config.symbols.pending.clone()
                 ctx.config.ui.symbols.pending.clone()
             };
 

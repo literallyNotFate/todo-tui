@@ -388,7 +388,11 @@ impl Default for KeyMaps {
             (Action::NextTheme, "t"),
             (Action::PrevTheme, "ctrl+t"),
             (Action::ToggleThemeMode, "m"),
-            (Action::ToggleSidebar, "b"),
+            (Action::ToggleSidebar, "ctrl+b"),
+            (Action::ToggleFooter, "ctrl+f"),
+            (Action::IncreaseSidebar, "]"),
+            (Action::DecreaseSidebar, "["),
+            (Action::ResetUI, "ctrl+r"),
             (Action::Save, "ctrl+s"),
             (Action::ToggleAutosave, "alt+a"),
             (Action::Quit, "q"),
@@ -486,7 +490,7 @@ mod tests {
             [navigation]
             move_up = ["k"]
         "#;
-        std::fs::write(&path, toml_content).unwrap();
+        fs::write(&path, toml_content).unwrap();
 
         let loaded = KeyMaps::load(Some(&path)).expect("Should load partial config");
 
@@ -502,9 +506,9 @@ mod tests {
         let toml_content = r#"
             [tasks]
             add_task = ["a"]
-            remove = ["a"]
+            remove_task = ["a"]
         "#;
-        std::fs::write(&path, toml_content).unwrap();
+        fs::write(&path, toml_content).unwrap();
 
         let result = KeyMaps::load(Some(&path));
 

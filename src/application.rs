@@ -36,7 +36,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(config: Config, config_error: Option<ApplicationError>) -> Self {
+    pub fn new(mut config: Config, config_error: Option<ApplicationError>) -> Self {
         let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
         let (keymaps, keymaps_error) = Self::load_keymaps();
 
@@ -46,7 +46,8 @@ impl Application {
         });
         let storage_data: TasksStateData = storage.load().unwrap_or_default();
 
-        let mut ui: UIState = UIState::new(config.ui.clone());
+        let ui_config = std::mem::take(&mut config.ui);
+        let mut ui: UIState = UIState::new(ui_config);
         storage_data.session.apply_to(&mut ui);
 
         let mut app = Self {
