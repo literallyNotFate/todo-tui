@@ -127,7 +127,7 @@ impl<'a> FooterWidget<'a> {
 mod tests {
     use super::*;
     use crate::{
-        config::{KeyMaps, StorageConfig},
+        config::{Config, KeyMaps, StorageConfig},
         core::Storage,
         models::Task,
         state::{Session, TasksStateSave, UIState},
@@ -147,8 +147,9 @@ mod tests {
         let keymaps = KeyMaps::default();
         let mut autosave = Autosave::new(true);
         let theme_name = "Gruvbox Dark";
+        let config = Config::default();
 
-        let ctx = RenderContext::mock(&ui, &keymaps);
+        let ctx = RenderContext::mock(&ui, &config, &keymaps);
 
         let widget = FooterWidget::new(&state, &autosave);
         let text = line_to_string(widget.left_info(&ctx));
@@ -167,12 +168,13 @@ mod tests {
         let ui = UIState::default();
         let keymaps = KeyMaps::default();
         let mut autosave = Autosave::new(true);
+        let config = Config::default();
 
         state.tasks.push(Task::new("Test"));
         state.mark_as_dirty();
         autosave.reset_timer();
 
-        let ctx = RenderContext::mock(&ui, &keymaps);
+        let ctx = RenderContext::mock(&ui, &config, &keymaps);
         let widget = FooterWidget::new(&state, &autosave);
         let text = line_to_string(widget.right_status(&ctx));
 
@@ -186,6 +188,7 @@ mod tests {
         let ui = UIState::default();
         let keymaps = KeyMaps::default();
         let mut autosave = Autosave::new(true);
+        let config = Config::default();
 
         state.tasks.push(Task::new("Test"));
         state.mark_as_dirty();
@@ -193,7 +196,7 @@ mod tests {
         autosave.interval = Duration::from_millis(0);
         autosave.register_activity();
 
-        let ctx = RenderContext::mock(&ui, &keymaps);
+        let ctx = RenderContext::mock(&ui, &config, &keymaps);
         let widget = FooterWidget::new(&state, &autosave);
         let text = line_to_string(widget.right_status(&ctx));
 
@@ -210,6 +213,7 @@ mod tests {
         let ui = UIState::default();
         let keymaps = KeyMaps::default();
         let autosave = Autosave::new(true);
+        let config = Config::default();
 
         state.tasks.clear();
         let session = Session::from_state(&ui, None);
@@ -219,7 +223,7 @@ mod tests {
         let _ = storage.save(&data);
         state.mark_saved();
 
-        let ctx = RenderContext::mock(&ui, &keymaps);
+        let ctx = RenderContext::mock(&ui, &config, &keymaps);
         let widget = FooterWidget::new(&state, &autosave);
         let text = line_to_string(widget.right_status(&ctx));
 

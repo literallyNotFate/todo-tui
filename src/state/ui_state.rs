@@ -1,5 +1,5 @@
 use crate::{
-    config::UIConfig,
+    config::{BehaviorConfig, UIConfig},
     core::{FocusArea, Selectable},
     models::TaskFilter,
     state::{ActiveModal, AdaptiveScroll, ApplicationResult, ApplicationState, Session},
@@ -177,10 +177,13 @@ impl UIState {
     }
 
     /// Return id of a task based on TableState selection
-    pub fn selected_id(&self, state: &ApplicationState) -> Option<Uuid> {
+    pub fn selected_id(&self, state: &ApplicationState, config: &BehaviorConfig) -> Option<Uuid> {
         let index: usize = state.select_state.selected()?;
         let filter = TaskFilter::new(self.active_tab, self.active_folder, self.search_query());
-        filter.apply(&state.tasks).get(index).map(|task| task.id)
+        filter
+            .apply(&state.tasks, config)
+            .get(index)
+            .map(|task| task.id)
     }
 
     /// Toggle dark/light theme mode
@@ -554,6 +557,7 @@ mod tests {
     fn should_return_id_of_selected_task() {
         let mut ui = UIState::default();
         let mut state = ApplicationState::default();
+        let config = BehaviorConfig::default();
 
         let tasks: Vec<Task> = vec![
             Task::new("Task 1"),
@@ -565,7 +569,7 @@ mod tests {
 
         ui.active_tab = SidebarTab::Inbox;
 
-        let expected_id: Uuid = ui.selected_id(&state).unwrap();
+        let expected_id: Uuid = ui.selected_id(&state, &config).unwrap();
         assert_eq!(last_id, expected_id);
     }
 

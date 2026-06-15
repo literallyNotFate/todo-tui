@@ -69,7 +69,7 @@ where
 
         let input_block = Block::bordered()
             .border_style(adapted_border_style)
-            .border_type(ctx.config.border_type.into())
+            .border_type(ctx.config.ui.border_type.into())
             .style(adapted_text_style)
             .title(self.title.as_str())
             .bg(palette.bg)

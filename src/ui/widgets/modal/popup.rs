@@ -155,7 +155,7 @@ impl Modal for Popup {
 
         let palette = ctx.palette();
         let popup_block: Block = Block::bordered()
-            .border_type(ctx.config.border_type.into())
+            .border_type(ctx.config.ui.border_type.into())
             .title_alignment(Alignment::Center)
             .title(self.title.as_str())
             .title_bottom(self.bottom_keys(ctx))

@@ -64,7 +64,7 @@ impl FieldType {
         };
 
         let palette = ctx.palette();
-        let border_type = ctx.config.border_type.into();
+        let border_type = ctx.config.ui.border_type.into();
 
         let focused_style = if is_focused {
             Style::default().fg(palette.accent)

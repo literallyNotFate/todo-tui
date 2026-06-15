@@ -90,7 +90,7 @@ impl<'a> ListTasks<'a> {
                 ])
                 .right_aligned(),
             )
-            .border_type(ctx.config.border_type.into())
+            .border_type(ctx.config.ui.border_type.into())
             .border_style(ctx.focused_color(palette.accent, focus_area))
             .bg(palette.bg);
 
@@ -133,8 +133,10 @@ impl<'a> ListTasks<'a> {
                 "󰐃".into()
             } else if task.completed {
                 ctx.config.symbols.completed.clone()
+                ctx.config.ui.symbols.completed.clone()
             } else {
                 ctx.config.symbols.pending.clone()
+                ctx.config.ui.symbols.pending.clone()
             };
 
             let icon_color = ctx.focused_color(palette.success, focus_area);
@@ -174,7 +176,7 @@ impl<'a> ListTasks<'a> {
             {
                 task.created_at
                     .with_timezone(&Local)
-                    .format(if ctx.config.use_24h {
+                    .format(if ctx.config.ui.use_24h {
                         "%H:%M"
                     } else {
                         "%I:%M %p"
@@ -203,7 +205,7 @@ impl<'a> ListTasks<'a> {
             .bg(palette.bg)
             .row_highlight_style(Style::default().bg(palette.selection))
             .highlight_symbol(Text::styled(
-                format!("{}  ", ctx.config.symbols.selection),
+                format!("{}  ", ctx.config.ui.symbols.selection),
                 Style::default().fg(ctx.focused_color(palette.secondary, focus_area)),
             ));
 

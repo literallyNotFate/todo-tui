@@ -13,6 +13,7 @@ use ratatui::{
     widgets::{List, ListItem},
 };
 use strum::IntoEnumIterator;
+use uuid::Uuid;
 
 /// Sidebar widget
 pub struct SidebarWidget<'a> {
@@ -47,9 +48,8 @@ impl<'a> SidebarWidget<'a> {
         let filters_inner_area: Rect = filters_block.inner(sidebar_layout[1]);
         let filter_tab_layout: std::rc::Rc<[Rect]> = self.filters_tab_layout(filters_inner_area);
 
-        let query: &str = self.ui.search_query();
         let (list, selected_index) =
-            self.construct_list(&query, ctx.is_focused(focus_area), &palette, is_dimmed);
+            self.construct_list(ctx, ctx.is_focused(focus_area), &palette, is_dimmed);
 
         let mut state = ListState::default();
         state.select(Some(selected_index));
@@ -83,7 +83,7 @@ impl<'a> SidebarWidget<'a> {
     /// Construct a list based on filtered task values and folders
     fn construct_list(
         &self,
-        query: &str,
+        ctx: &RenderContext,
         focused: bool,
         palette: &ThemePalette,
         is_dimmed: bool,
@@ -91,6 +91,7 @@ impl<'a> SidebarWidget<'a> {
         let mut items = Vec::new();
         let mut selected_index = 0;
         let mut current_idx = 0;
+        let query: String = ctx.filter().search_query.clone();
 
         for tab in SidebarTab::iter() {
             let is_selected = self.ui.active_tab == tab && self.ui.active_folder.is_none();
@@ -98,7 +99,9 @@ impl<'a> SidebarWidget<'a> {
                 selected_index = current_idx;
             }
 
-            let count = TaskFilter::new(tab, None, query).apply(self.tasks).len();
+            let count: usize = TaskFilter::new(tab, None, &query)
+                .apply(self.tasks, &ctx.config.behavior)
+                .len();
             let text = format!(" {} ({})", tab.to_string(), count);
             items.push(self.create_list_item(text, is_selected, focused, palette, is_dimmed, None));
 
@@ -114,8 +117,12 @@ impl<'a> SidebarWidget<'a> {
         }
 
         for folder in self.folders.iter() {
-            let count = TaskFilter::new(SidebarTab::Inbox, Some(folder.id), query)
-                .apply(self.tasks)
+            if !ctx.config.behavior.show_empty_folders && !self.folder_has_tasks(folder.id, ctx) {
+                continue;
+            }
+
+            let count = TaskFilter::new(SidebarTab::Inbox, Some(folder.id), &query)
+                .apply(self.tasks, &ctx.config.behavior)
                 .len();
 
             let is_selected = self.ui.active_folder == Some(folder.id);
@@ -386,12 +393,33 @@ impl<'a> SidebarWidget<'a> {
             ])
             .split(area)
     }
+
+    /// Helper function to check if folder has at least 1 task
+    fn folder_has_tasks(&self, folder_id: Uuid, ctx: &RenderContext) -> bool {
+        self.tasks.iter().any(|t| {
+            t.folder_id == Some(folder_id)
+                && ctx.filter().matches(
+                    t,
+                    &Local::now().date_naive(),
+                    ctx.config.behavior.case_insensitive_search,
+                )
+        })
+    }
 }
 
 /// Unit-tests for sidebar
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{Config, KeyMaps};
+
+    fn mock_ctx<'a>(
+        ui: &'a UIState,
+        config: &'a Config,
+        keymaps: &'a KeyMaps,
+    ) -> RenderContext<'a, 'static> {
+        RenderContext::mock(ui, config, keymaps)
+    }
 
     #[test]
     fn should_generate_progress_with_tasks() {
@@ -434,13 +462,16 @@ mod tests {
     #[test]
     fn should_construct_list_with_highlighting() {
         let tasks = vec![];
-
         let folders = vec![];
         let mut ui = UIState::default();
-        ui.active_tab = SidebarTab::Inbox;
-        let sidebar: SidebarWidget = SidebarWidget::new(&ui, &tasks, &folders);
+        let config = Config::default();
+        let keymaps = KeyMaps::default();
 
-        let (list, selected_index) = sidebar.construct_list("", true, &ui.theme.palette(), false);
+        ui.active_tab = SidebarTab::Inbox;
+        let sidebar = SidebarWidget::new(&ui, &tasks, &folders);
+        let ctx = mock_ctx(&ui, &config, &keymaps);
+
+        let (list, selected_index) = sidebar.construct_list(&ctx, true, &ui.theme.palette(), false);
 
         assert_eq!(list.len(), SidebarTab::iter().len());
         assert_eq!(selected_index, 0);
@@ -554,11 +585,16 @@ mod tests {
         ];
 
         let mut ui = UIState::default();
+        let config = Config::default();
+        let keymaps = KeyMaps::default();
+
         ui.active_tab = SidebarTab::Inbox;
         ui.active_folder = Some(folder.id);
 
         let sidebar = SidebarWidget::new(&ui, &tasks, &folders);
-        let (list, selected_index) = sidebar.construct_list("", true, &ui.theme.palette(), false);
+        let ctx = mock_ctx(&ui, &config, &keymaps);
+
+        let (list, selected_index) = sidebar.construct_list(&ctx, true, &ui.theme.palette(), false);
 
         let expected_len = SidebarTab::iter().count() + 1 + 1;
         assert_eq!(list.len(), expected_len);

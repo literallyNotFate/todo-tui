@@ -1,5 +1,5 @@
 use crate::{
-    models::{Task, TaskFilter},
+    models::Task,
     state::{ApplicationState, UIState},
     ui::{FeedbackKind, FeedbackWidget, RenderContext, widgets::dashboard::list::ListTasks},
 };
@@ -18,9 +18,8 @@ impl<'a> ContentWidget<'a> {
 
     /// Content rendering
     pub fn render(&mut self, ctx: &mut RenderContext, area: Rect) {
+        let filtered: Vec<&Task> = ctx.get_filtered_tasks(&self.state.tasks);
         let query: &str = self.ui.search_query();
-        let filter: TaskFilter = TaskFilter::new(self.ui.active_tab, self.ui.active_folder, &query);
-        let filtered: Vec<&Task> = filter.apply(&self.state.tasks);
 
         if filtered.is_empty() && query.is_empty() {
             FeedbackWidget::new(FeedbackKind::EmptyList).render(ctx, area);
@@ -31,7 +30,7 @@ impl<'a> ContentWidget<'a> {
             &self.ui,
             filtered,
             &self.state.folders,
-            &query,
+            query,
             &self.state.sort,
         )
         .render(ctx, area, &mut self.state.select_state);

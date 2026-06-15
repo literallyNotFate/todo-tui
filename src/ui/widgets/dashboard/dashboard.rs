@@ -32,6 +32,7 @@ impl<'a> Dashboard<'a> {
 
         let show_sidebar: bool = ctx.config.show_sidebar;
         let layout: MainLayout = MainLayout::split(area, ctx.config.show_sidebar);
+        let show_sidebar: bool = ctx.config.ui.show_sidebar;
 
         if show_sidebar {
             SidebarWidget::new(self.ui, &self.state.tasks, &self.state.folders)

@@ -126,7 +126,7 @@ impl Input for TextInput {
 
         let input_block = Block::bordered()
             .border_style(border_style)
-            .border_type(ctx.config.border_type.into())
+            .border_type(ctx.config.ui.border_type.into())
             .style(text_style)
             .title(self.title.as_str())
             .bg(palette.bg)

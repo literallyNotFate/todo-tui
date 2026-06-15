@@ -64,7 +64,7 @@ impl FeedbackWidget {
             )
             .title_bottom(hotkeys)
             .border_style(Style::default().fg(ctx.color(palette.warning)))
-            .border_type(ctx.config.border_type.into());
+            .border_type(ctx.config.ui.border_type.into());
 
         ctx.render_widget(block, area);
         ctx.render_widget(

@@ -92,7 +92,7 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle removing task
     pub fn dispatch_remove_task(&mut self) {
-        if let Some(id) = self.ui.selected_id(self.state) {
+        if let Some(id) = self.ui.selected_id(self.state, &self.config.behavior) {
             let result = TaskService::remove_task(&mut self.state.tasks, &id);
             self.perform_action(
                 || result,
@@ -170,7 +170,7 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle task completion toggling
     pub fn dispatch_completed(&mut self) {
-        if let Some(id) = self.ui.selected_id(self.state) {
+        if let Some(id) = self.ui.selected_id(self.state, &self.config.behavior) {
             if TaskService::toggle_completed(&mut self.state.tasks, &id).is_ok() {
                 self.stabilize(Some(id));
                 self.state.mark_as_dirty();
@@ -180,7 +180,7 @@ impl<'a> ApplicationController<'a> {
 
     /// Handle task pin toggling
     pub fn dispatch_pinned(&mut self) {
-        if let Some(id) = self.ui.selected_id(self.state) {
+        if let Some(id) = self.ui.selected_id(self.state, &self.config.behavior) {
             if TaskService::toggle_pinned(&mut self.state.tasks, &id).is_ok() {
                 TaskService::sorting(&mut self.state.tasks, &self.state.sort);
                 self.stabilize(Some(id));

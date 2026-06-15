@@ -123,6 +123,7 @@ impl Application {
             &self.ui,
             self.mode,
             &self.autosave,
+            &self.config,
             &self.keymaps,
         );
     }

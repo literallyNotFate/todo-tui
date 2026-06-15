@@ -308,7 +308,7 @@ impl EventHandler {
                     Action::UpdateTask => {
                         if let Some(task) = ctrl
                             .ui
-                            .selected_id(ctrl.state)
+                            .selected_id(ctrl.state, &ctrl.config.behavior)
                             .and_then(|id| ctrl.state.find_by_id(id))
                         {
                             ctrl.ui
@@ -333,7 +333,7 @@ impl EventHandler {
                         ctrl.dispatch_sorting();
                     }
                     Action::ShowDetails => {
-                        if let Some(id) = ctrl.ui.selected_id(ctrl.state) {
+                        if let Some(id) = ctrl.ui.selected_id(ctrl.state, &ctrl.config.behavior) {
                             if let Some(task) = ctrl.state.find_by_id(id) {
                                 log::debug!("Opening task details popup");
                                 ctrl.ui.show_modal(

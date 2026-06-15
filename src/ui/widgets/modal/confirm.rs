@@ -162,7 +162,7 @@ impl Modal for Confirm {
             .border_style(Style::default().fg(palette.info))
             .title_top(Line::from(" Action ").centered())
             .title_bottom(self.bottom_keys(ctx).centered())
-            .border_type(ctx.config.border_type.into());
+            .border_type(ctx.config.ui.border_type.into());
 
         let inner_area: Rect = confirm_block.inner(area);
         ctx.render_widget(confirm_block.clone(), area);

@@ -1,7 +1,7 @@
 use crate::{
-    config::{KeyMaps, UIConfig},
+    config::{Config, KeyMaps},
     core::{Action, ApplicationMode, FocusArea},
-    models::TaskFilter,
+    models::{Task, TaskFilter},
     state::UIState,
     theme::{Theme, ThemePalette},
     ui::is_terminal_small,
@@ -18,7 +18,7 @@ use ratatui::{
 pub struct RenderContext<'a, 'b> {
     pub frame: Option<&'a mut Frame<'b>>,
     pub theme: Theme,
-    pub config: &'a UIConfig,
+    pub config: &'a Config,
     pub keymaps: &'a KeyMaps,
     pub is_dimmed: bool,
 
@@ -32,6 +32,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
     pub fn new(
         frame: &'a mut Frame<'b>,
         ui: &'a UIState,
+        config: &'a Config,
         keymaps: &'a KeyMaps,
         mode: ApplicationMode,
     ) -> Self {
@@ -43,7 +44,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
             theme: ui.theme.clone(),
             mode,
             keymaps,
-            config: &ui.config,
+            config,
             focus: ui.focused.value,
             filter: TaskFilter::new(ui.active_tab, ui.active_folder, query),
             is_small: is_terminal_small(area.width, area.height),
@@ -53,7 +54,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
 
     /// Mock constructor for tests without frame
     #[cfg(test)]
-    pub fn mock(ui: &'a UIState, keymaps: &'a KeyMaps) -> Self {
+    pub fn mock(ui: &'a UIState, config: &'a Config, keymaps: &'a KeyMaps) -> Self {
         use crate::state::SidebarTab;
 
         Self {
@@ -61,7 +62,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
             theme: ui.theme.clone(),
             mode: ApplicationMode::Navigation,
             keymaps,
-            config: &ui.config,
+            config,
             focus: FocusArea::default(),
             filter: TaskFilter::new(SidebarTab::Inbox, None, ""),
             is_small: false,
@@ -152,6 +153,11 @@ impl<'a, 'b> RenderContext<'a, 'b> {
         }
     }
 
+    /// Access to filtered tasks
+    pub fn get_filtered_tasks<'t>(&self, tasks: &'t [Task]) -> Vec<&'t Task> {
+        self.filter.apply(tasks, &self.config.behavior)
+    }
+
     /// Helper: is that widget being focused on?
     pub fn is_focused(&self, area: FocusArea) -> bool {
         self.focus == area
@@ -197,7 +203,7 @@ impl<'a, 'b> RenderContext<'a, 'b> {
 
         Block::bordered()
             .title(format!(" {} ", title.into()))
-            .border_type(self.config.border_type.into())
+            .border_type(self.config.ui.border_type.into())
             .border_style(Style::default().fg(border_color))
     }
 

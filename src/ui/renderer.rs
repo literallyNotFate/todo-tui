@@ -1,5 +1,5 @@
 use crate::{
-    config::KeyMaps,
+    config::{Config, KeyMaps},
     core::{ApplicationMode, Autosave},
     state::{ApplicationState, UIState},
     ui::RenderContext,
@@ -17,6 +17,7 @@ impl Renderer {
         ui: &UIState,
         mode: ApplicationMode,
         autosave: &Autosave,
+        config: &Config,
         keymaps: &KeyMaps,
     ) {
         use crate::ui::{Dashboard, FeedbackKind, FeedbackWidget};
@@ -24,7 +25,7 @@ impl Renderer {
 
         let has_modal: bool = ui.modal.is_some();
         let mut ctx: RenderContext =
-            RenderContext::new(frame, ui, keymaps, mode).with_dimmed(has_modal);
+            RenderContext::new(frame, ui, config, keymaps, mode).with_dimmed(has_modal);
         let area: Rect = ctx.area();
 
         if ctx.is_small() {
