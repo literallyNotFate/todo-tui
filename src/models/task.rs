@@ -165,6 +165,19 @@ impl Task {
         format!("{} {}{} ago", count, unit, s)
     }
 
+    /// Format date
+    pub fn format_date(&self, use_24h: bool) -> String {
+        let local_dt: DateTime<Local> = self.created_at.with_timezone(&Local);
+        let today: NaiveDate = Local::now().date_naive();
+
+        if self.is_due_today(&today) {
+            let format = if use_24h { "%H:%M" } else { "%I:%M %p" };
+            local_dt.format(format).to_string()
+        } else {
+            local_dt.format("%d %b").to_string()
+        }
+    }
+
     /// Check whether task is created today
     pub fn is_due_today(&self, today: &NaiveDate) -> bool {
         self.created_at.with_timezone(&Local).date_naive() == *today
@@ -408,5 +421,21 @@ mod tests {
 
         priority = Priority::High;
         assert_eq!(priority.palette(&palette), palette.error);
+    }
+
+    #[test]
+    fn should_test_task_date_formatting() {
+        let now: DateTime<Utc> = Utc::now();
+        let task: Task = Task {
+            created_at: now,
+            ..Default::default()
+        };
+        assert!(task.format_date(true).contains(':'));
+
+        let past_task: Task = Task {
+            created_at: now - Duration::days(2),
+            ..Default::default()
+        };
+        assert!(!past_task.format_date(true).contains(':'));
     }
 }

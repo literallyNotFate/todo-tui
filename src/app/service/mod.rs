@@ -8,82 +8,47 @@ use crate::models::{Folder, Task};
 
 /// Enum to specify return value from the services
 pub enum OperationResult {
-    TaskCreated {
-        index: usize,
-        task: Task,
-    },
-    TaskUpdated {
-        index: usize,
-        old: Task,
-        new: Task,
-    },
-    TaskRemoved {
-        task: Task,
-    },
+    TaskCreated { task: Task },
+    TaskUpdated { old: Task, new: Task },
+    TaskRemoved { task: Task },
 
-    FolderCreated {
-        index: usize,
-        folder: Folder,
-    },
-    FolderUpdated {
-        index: usize,
-        old: Folder,
-        new: Folder,
-    },
-    FolderRemoved {
-        folder: Folder,
-    },
+    FolderCreated { folder: Folder },
+    FolderUpdated { old: Folder, new: Folder },
+    FolderRemoved { folder: Folder },
+}
+
+macro_rules! unwrap_variant {
+    ($name:ident, $variant:ident, $ret:ty, $($field:ident),+) => {
+        pub fn $name(self) -> $ret {
+            match self {
+                Self::$variant { $($field),+ } => ($($field),+),
+                _ => panic!(concat!("Expected ", stringify!($variant), ", but got another variant")),
+            }
+        }
+    };
 }
 
 impl OperationResult {
-    pub fn unwrap_task_created(self) -> (usize, Task) {
-        match self {
-            Self::TaskCreated { index, task } => (index, task),
-            _ => panic!("Expected OperationResult::TaskCreated, but got another variant"),
-        }
-    }
+    unwrap_variant!(unwrap_task_created, TaskCreated, Task, task);
+    unwrap_variant!(unwrap_task_updated, TaskUpdated, (Task, Task), old, new);
+    unwrap_variant!(unwrap_task_removed, TaskRemoved, Task, task);
+    unwrap_variant!(unwrap_folder_created, FolderCreated, Folder, folder);
+    unwrap_variant!(
+        unwrap_folder_updated,
+        FolderUpdated,
+        (Folder, Folder),
+        old,
+        new
+    );
+    unwrap_variant!(unwrap_folder_removed, FolderRemoved, Folder, folder);
 
-    pub fn unwrap_task_updated(self) -> (usize, Task, Task) {
-        match self {
-            Self::TaskUpdated { index, old, new } => (index, old, new),
-            _ => panic!("Expected OperationResult::TaskUpdated, but got another variant"),
-        }
-    }
-
-    pub fn unwrap_task_removed(self) -> Task {
-        match self {
-            Self::TaskRemoved { task } => task,
-            _ => panic!("Expected OperationResult::TaskRemoved, but got another variant"),
-        }
-    }
-
-    pub fn unwrap_folder_created(self) -> (usize, Folder) {
-        match self {
-            Self::FolderCreated { index, folder } => (index, folder),
-            _ => panic!("Expected OperationResult::FolderCreated, but got another variant"),
-        }
-    }
-
-    pub fn unwrap_folder_updated(self) -> (usize, Folder, Folder) {
-        match self {
-            Self::FolderUpdated { index, old, new } => (index, old, new),
-            _ => panic!("Expected OperationResult::FolderUpdated, but got another variant"),
-        }
-    }
-
-    pub fn unwrap_folder_removed(self) -> Folder {
-        match self {
-            Self::FolderRemoved { folder } => folder,
-            _ => panic!("Expected OperationResult::FolderRemoved, but got another variant"),
-        }
-    }
-
+    /// Get entity title from result
     pub fn entity_title(&self) -> &str {
         match self {
-            Self::TaskCreated { task, .. } => &task.title,
+            Self::TaskCreated { task } => &task.title,
             Self::TaskRemoved { task } => &task.title,
             Self::TaskUpdated { new, .. } => &new.title,
-            Self::FolderCreated { folder, .. } => &folder.name,
+            Self::FolderCreated { folder } => &folder.name,
             Self::FolderUpdated { new, .. } => &new.name,
             Self::FolderRemoved { folder } => &folder.name,
         }

@@ -17,6 +17,7 @@ pub struct Config {
     pub storage: StorageConfig,
     pub log: LogConfig,
     pub behavior: BehaviorConfig,
+    pub task: TaskConfig,
 }
 
 impl Config {

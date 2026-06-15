@@ -31,15 +31,20 @@ impl<'a> ApplicationController<'a> {
     }
 
     /// Helper function to perform certain action to prevent code duplicates
-    fn perform_action<T, F, S>(&mut self, action: F, success: S)
+    fn perform_action<T, F, S>(&mut self, action: F, success: S, allow_sort: bool)
     where
         F: FnOnce() -> ApplicationResult<T>,
-        S: FnOnce(&mut Self, T) -> String,
+        S: FnOnce(&mut Self, T) -> (String, Option<Uuid>),
     {
         match action() {
             Ok(result) => {
+                let (msg, focus_id) = success(self, result);
+                if allow_sort && self.config.task.auto_sort {
+                    TaskService::sorting(&mut self.state.tasks, &self.state.sort);
+                }
+
+                self.stabilize(focus_id);
                 self.state.mark_as_dirty();
-                let msg = success(self, result);
                 self.ui.push_notification(self.state, Ok(msg));
             }
             Err(e) => self.ui.push_notification(self.state, Err(e)),
@@ -64,29 +69,29 @@ impl<'a> ApplicationController<'a> {
             task = task.with_folder(fid);
         }
 
-        let result = TaskService::append_task(&mut self.state.tasks, task, &self.state.sort);
+        let result = TaskService::append_task(&mut self.state.tasks, task);
         self.perform_action(
             || result,
-            |this, res| {
-                let (_, t) = res.unwrap_task_created();
-                this.stabilize(Some(t.id));
-                format!("Task '{}' was added!", t.title)
+            |_, res| {
+                let t: Task = res.unwrap_task_created();
+                (format!("Task '{}' was added!", t.title), Some(t.id))
             },
+            true,
         );
     }
 
     /// Handle updating an existing task
     pub fn dispatch_update_task(&mut self, id: Uuid, editor: TaskEditor) {
         log::debug!("Dispatching update for task (ID: {})", id);
-        let result = TaskService::update_task(&mut self.state.tasks, &id, editor, &self.state.sort);
+        let result = TaskService::update_task(&mut self.state.tasks, &id, editor);
 
         self.perform_action(
             || result,
             |this, res| {
-                let (_, old, new) = res.unwrap_task_updated();
-                this.stabilize(Some(id));
-                this.format_update_task(&old, &new)
+                let (old, new) = res.unwrap_task_updated();
+                (this.format_update_task(&old, &new), Some(old.id))
             },
+            true,
         );
     }
 
@@ -96,12 +101,12 @@ impl<'a> ApplicationController<'a> {
             let result = TaskService::remove_task(&mut self.state.tasks, &id);
             self.perform_action(
                 || result,
-                |this, res| {
-                    let task = res.unwrap_task_removed();
-                    log::debug!("Dispatching remove for task '{}'", task.title);
-                    this.stabilize(None);
-                    format!("Task '{}' was removed!", task.title)
+                |_, res| {
+                    let t: Task = res.unwrap_task_removed();
+                    log::debug!("Dispatching remove for task '{}'", t.title);
+                    (format!("Task '{}' was removed!", t.title), None)
                 },
+                false,
             );
         } else {
             self.ui
@@ -119,9 +124,10 @@ impl<'a> ApplicationController<'a> {
         self.perform_action(
             || result,
             |_, res| {
-                let (_, f) = res.unwrap_folder_created();
-                format!("Folder '{}' successfully created!", f.name)
+                let f: Folder = res.unwrap_folder_created();
+                (format!("Folder '{}' successfully created!", f.name), None)
             },
+            false,
         );
     }
 
@@ -133,9 +139,10 @@ impl<'a> ApplicationController<'a> {
         self.perform_action(
             || result,
             |this, res| {
-                let (_, old, new) = res.unwrap_folder_updated();
-                this.format_update_folder(&old, &new)
+                let (old, new) = res.unwrap_folder_updated();
+                (this.format_update_folder(&old, &new), None)
             },
+            false,
         );
     }
 
@@ -156,15 +163,17 @@ impl<'a> ApplicationController<'a> {
                 this.stabilize(None);
 
                 let removed: usize = initial - this.state.tasks.len();
-                if removed > 0 {
+                let res = if removed > 0 {
                     format!(
                         "Folder '{}' and its {} tasks were removed!",
                         folder.name, removed
                     )
                 } else {
                     format!("Folder '{}' was removed!", folder.name)
-                }
+                };
+                (res, None)
             },
+            false,
         );
     }
 
@@ -203,8 +212,9 @@ impl<'a> ApplicationController<'a> {
                 |this, _| {
                     let new: usize = this.state.get_new_index(delta);
                     this.state.select_state.select(Some(new));
-                    "Task moved".into()
+                    ("Task moved".into(), None)
                 },
+                false,
             );
         }
     }

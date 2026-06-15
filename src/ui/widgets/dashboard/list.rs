@@ -5,7 +5,6 @@ use crate::{
     theme::ThemePalette,
     ui::{FeedbackKind, FeedbackWidget, RenderContext, scrollable, widgets::input::Input},
 };
-use chrono::Local;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
@@ -55,8 +54,25 @@ impl<'a> ListTasks<'a> {
             }
         }
 
+        let filter_name: &str = if let Some(id) = self.ui.active_folder {
+            self.folders
+                .iter()
+                .find(|f| f.id == id)
+                .map(|f| f.name.as_str())
+                .unwrap_or("?")
+        } else {
+            &self.ui.active_tab.to_string()
+        };
+
+        let auto_label: &str = ctx
+            .config
+            .task
+            .auto_sort
+            .then(|| " [auto-sorted]")
+            .unwrap_or("");
+
         let main_block = Block::bordered()
-            .title(format!(" Tasks: ({}) ", ctx.filter_name()).bold())
+            .title(format!(" Tasks: {} {} ", filter_name.bold(), auto_label))
             .title_top(
                 Line::styled(
                     " toodles ",
@@ -119,8 +135,8 @@ impl<'a> ListTasks<'a> {
         };
 
         let palette = ctx.palette();
-        let title_column_width = (area.width as usize).saturating_sub(40);
         let focus_area = FocusArea::Main;
+        let title_width: usize = (area.width as usize).saturating_sub(40);
 
         let [_, table_area] = Layout::default()
             .direction(Direction::Vertical)
@@ -128,23 +144,25 @@ impl<'a> ListTasks<'a> {
             .areas(area);
 
         let rows = self.tasks.iter().map(|task| {
-            let priority_color = task.priority.palette(&palette);
-            let icon = if task.pinned {
-                ctx.config.ui.symbols.pinned.clone()
+            let icon: &String = if task.pinned {
+                &ctx.config.ui.symbols.pinned
             } else if task.completed {
-                ctx.config.ui.symbols.completed.clone()
+                &ctx.config.ui.symbols.completed
             } else {
-                ctx.config.ui.symbols.pending.clone()
+                &ctx.config.ui.symbols.pending
             };
 
-            let icon_color = ctx.focused_color(palette.success, focus_area);
             let icon_style: Style = if task.pinned {
                 Style::default().fg(palette.warning)
             } else {
-                Style::default().fg(icon_color)
+                Style::default().fg(ctx.focused_color(palette.success, focus_area))
             };
 
-            let folder_label = task
+            let truncated: String = RenderContext::truncate(&task.title, title_width);
+            let title_spans =
+                self.highlight_search(&truncated, &self.query, &palette, ctx.is_dimmed);
+
+            let folder_span = task
                 .folder_id
                 .and_then(|id| Folder::find_by_id(self.folders, &id))
                 .map(|f| {
@@ -153,45 +171,18 @@ impl<'a> ListTasks<'a> {
                         Style::default().fg(FolderColor::from_string(&f.color)),
                     )
                 })
-                .unwrap_or_else(|| Span::raw(""));
+                .unwrap_or_default();
 
-            let truncated_title: String = RenderContext::truncate(&task.title, title_column_width);
-            let title_spans = if !self.query.is_empty() {
-                self.highlight_search(&truncated_title, self.query, &palette, ctx.is_dimmed)
-                    .spans
-            } else {
-                vec![Span::styled(
-                    truncated_title,
-                    Style::default().fg(ctx.focused_color(palette.fg, focus_area)),
-                )]
-            };
-
-            let mut final_title_spans = vec![folder_label];
-            final_title_spans.extend(title_spans);
-            let final_title_line = Line::from(final_title_spans);
-
-            let display_date: String = if task.created_at.date_naive() == Local::now().date_naive()
-            {
-                task.created_at
-                    .with_timezone(&Local)
-                    .format(if ctx.config.ui.use_24h {
-                        "%H:%M"
-                    } else {
-                        "%I:%M %p"
-                    })
-                    .to_string()
-            } else {
-                task.created_at
-                    .with_timezone(&Local)
-                    .format("%d %b")
-                    .to_string()
-            };
+            let final_title_line: Line = ctx.config.task.build(task, title_spans, folder_span);
+            let display_date: String = task.format_date(ctx.config.ui.use_24h);
 
             Row::new(vec![
-                Cell::from(icon).style(icon_style),
+                Cell::from(icon.clone()).style(icon_style),
                 Cell::from(final_title_line),
-                Cell::from(Line::from(task.priority.to_string()).centered())
-                    .style(Style::default().fg(ctx.focused_color(priority_color, focus_area))),
+                Cell::from(Line::from(task.priority.to_string()).centered()).style(
+                    Style::default()
+                        .fg(ctx.focused_color(task.priority.palette(&palette), focus_area)),
+                ),
                 Cell::from(Line::from(display_date).centered())
                     .style(Style::default().fg(palette.muted)),
             ])
@@ -207,17 +198,17 @@ impl<'a> ListTasks<'a> {
                 Style::default().fg(ctx.focused_color(palette.secondary, focus_area)),
             ));
 
-        let current_selected = select_state.selected().unwrap_or(0);
         let temp_scroll = AdaptiveScroll::default();
-        temp_scroll.current.set(current_selected as u16);
-        let dummy_content = vec![Line::from(""); self.tasks.len()];
+        temp_scroll
+            .current
+            .set(select_state.selected().unwrap_or(0) as u16);
 
         scrollable(
             ctx,
             table_area,
             Block::default(),
             &temp_scroll,
-            &dummy_content,
+            &vec![Line::from(""); self.tasks.len()],
             true,
             Style::default().fg(ctx.focused_color(palette.accent, focus_area)),
             |f, rect| f.render_stateful_widget(tasks_table, rect, select_state),
@@ -231,7 +222,7 @@ impl<'a> ListTasks<'a> {
         query: &str,
         palette: &ThemePalette,
         is_dimmed: bool,
-    ) -> Line<'_> {
+    ) -> Vec<Span<'static>> {
         let query_lower = query.to_lowercase();
         let title_lower = title.to_lowercase();
 
@@ -243,16 +234,16 @@ impl<'a> ListTasks<'a> {
 
         if let Some(start) = title_lower.find(&query_lower) {
             let end = start + query.len();
-            Line::from(vec![
+            vec![
                 Span::raw(title[..start].to_string()),
                 Span::styled(
                     title[start..end].to_string(),
                     Style::default().fg(highlight_color).bold(),
                 ),
                 Span::raw(title[end..].to_string()),
-            ])
+            ]
         } else {
-            Line::from(title.to_string())
+            vec![Span::raw(title.to_string())]
         }
     }
 

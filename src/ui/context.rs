@@ -144,15 +144,6 @@ impl<'a, 'b> RenderContext<'a, 'b> {
         &self.filter
     }
 
-    /// Returns current filter name for tasks
-    pub fn filter_name(&self) -> String {
-        if let Some(_id) = self.filter.folder_id {
-            "Folder".to_string()
-        } else {
-            self.filter.tab.to_string()
-        }
-    }
-
     /// Access to filtered tasks
     pub fn get_filtered_tasks<'t>(&self, tasks: &'t [Task]) -> Vec<&'t Task> {
         self.filter.apply(tasks, &self.config.behavior)

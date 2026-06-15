@@ -6,6 +6,7 @@ pub use keymaps::KeyMaps;
 
 use crate::{
     common::{is_default, is_default_dark, is_default_light},
+    models::Task,
     theme::{ThemeID, ThemeName},
 };
 use serde::{Deserialize, Serialize};
@@ -173,5 +174,53 @@ impl From<BorderTypeConfig> for ratatui::widgets::BorderType {
             BorderTypeConfig::Double => Self::Double,
             BorderTypeConfig::Thick => Self::Thick,
         }
+    }
+}
+
+/// All task related configuration
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct TaskConfig {
+    pub auto_sort: bool,
+    pub max_title_length: usize,
+    pub display_format: String,
+}
+
+impl Default for TaskConfig {
+    fn default() -> Self {
+        Self {
+            auto_sort: true,
+            max_title_length: 50,
+            display_format: "{folder} {title}".to_string(),
+        }
+    }
+}
+
+use ratatui::text::{Line, Span};
+
+impl TaskConfig {
+    pub fn build(
+        &self,
+        task: &Task,
+        title_spans: Vec<Span<'static>>,
+        folder_span: Span<'static>,
+    ) -> Line<'static> {
+        let mut final_spans = Vec::new();
+        let mut text = self.display_format.clone();
+
+        text = text.replace("{folder}", "&F&");
+        text = text.replace("{id}", "&I&");
+        text = text.replace("{title}", "&T&");
+
+        for part in text.split('&') {
+            match part {
+                "F" => final_spans.push(folder_span.clone()),
+                "T" => final_spans.extend(title_spans.clone()),
+                "I" => final_spans.push(Span::raw(format!("#{} ", task.id))),
+                "" => {}
+                _ => final_spans.push(Span::raw(part.to_string())),
+            }
+        }
+
+        Line::from(final_spans)
     }
 }

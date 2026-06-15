@@ -12,19 +12,12 @@ pub struct TaskService;
 
 impl TaskService {
     /// Append new task to the end of list
-    pub fn append_task(
-        tasks: &mut Vec<Task>,
-        task: Task,
-        sort: &Sort,
-    ) -> ApplicationResult<OperationResult> {
+    pub fn append_task(tasks: &mut Vec<Task>, task: Task) -> ApplicationResult<OperationResult> {
         task.validate()?;
         log::info!("Adding new task: '{}' (ID: {})", task.title, task.id);
-
         tasks.push(task.clone());
-        Self::sorting(tasks, sort);
-        let index: usize = Self::find_index(tasks, &task.id).unwrap();
 
-        Ok(OperationResult::TaskCreated { index, task })
+        Ok(OperationResult::TaskCreated { task })
     }
 
     /// Update task by id using TaskEditor model
@@ -32,7 +25,6 @@ impl TaskService {
         tasks: &mut [Task],
         id: &Uuid,
         editor: TaskEditor,
-        sort: &Sort,
     ) -> ApplicationResult<OperationResult> {
         let index: usize = Self::find_index(tasks, id)?;
 
@@ -54,14 +46,7 @@ impl TaskService {
             new.priority
         );
 
-        Self::sorting(tasks, sort);
-        let new_index: usize = Self::find_index(tasks, id)?;
-
-        Ok(OperationResult::TaskUpdated {
-            index: new_index,
-            old,
-            new,
-        })
+        Ok(OperationResult::TaskUpdated { old, new })
     }
 
     /// Remove task by id
@@ -182,7 +167,7 @@ mod tests {
             .with_priority(Priority::High);
 
         let result: ApplicationResult<OperationResult> =
-            TaskService::append_task(&mut tasks, task_to_add, &Sort::default());
+            TaskService::append_task(&mut tasks, task_to_add);
         let added_task: &Task = &tasks[0];
 
         assert!(result.is_ok());
@@ -195,7 +180,7 @@ mod tests {
         let mut tasks: Vec<Task> = Vec::new();
         let task_to_add: Task = Task::new("");
         let result: ApplicationResult<OperationResult> =
-            TaskService::append_task(&mut tasks, task_to_add, &Sort::default());
+            TaskService::append_task(&mut tasks, task_to_add);
 
         assert!(matches!(
             result,
@@ -219,12 +204,11 @@ mod tests {
             folder_id: None,
         };
 
-        let result = TaskService::update_task(&mut tasks, &id, editor, &Sort::default());
+        let result = TaskService::update_task(&mut tasks, &id, editor);
         assert!(result.is_ok());
 
-        let (index, old, new) = result.unwrap().unwrap_task_updated();
+        let (old, new) = result.unwrap().unwrap_task_updated();
 
-        assert_eq!(index, 0);
         assert_eq!(old.title, "Old title");
         assert_eq!(new.title, "New Title");
         assert_eq!(new.priority, Priority::High);
@@ -243,7 +227,7 @@ mod tests {
         };
 
         let result: ApplicationResult<OperationResult> =
-            TaskService::update_task(&mut tasks, &id, editor, &Sort::default());
+            TaskService::update_task(&mut tasks, &id, editor);
 
         assert!(result.is_err());
         assert!(matches!(
@@ -265,7 +249,7 @@ mod tests {
         };
 
         let result: ApplicationResult<OperationResult> =
-            TaskService::update_task(&mut tasks, &fake_id, editor, &Sort::default());
+            TaskService::update_task(&mut tasks, &fake_id, editor);
 
         assert!(result.is_err());
         assert!(matches!(

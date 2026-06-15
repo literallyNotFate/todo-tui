@@ -20,10 +20,7 @@ impl FolderService {
         log::info!("Adding new folder: '{}'", folder.name);
         folders.push(folder.clone());
 
-        Ok(OperationResult::FolderCreated {
-            index: folders.len() - 1,
-            folder,
-        })
+        Ok(OperationResult::FolderCreated { folder })
     }
 
     /// Update folder by id using FolderEditor model
@@ -48,7 +45,7 @@ impl FolderService {
             old.color,
             new.color
         );
-        Ok(OperationResult::FolderUpdated { index, old, new })
+        Ok(OperationResult::FolderUpdated { old, new })
     }
 
     /// Remove folder by id
@@ -131,9 +128,8 @@ mod tests {
         let result = FolderService::update_folder(&mut folders, &id, editor);
         assert!(result.is_ok());
 
-        let (index, old, new) = result.unwrap().unwrap_folder_updated();
+        let (old, new) = result.unwrap().unwrap_folder_updated();
 
-        assert_eq!(index, 0);
         assert_eq!(old.name, "Old Name");
         assert_eq!(new.name, "New Name");
         assert_eq!(new.color, FolderColor::Green.to_string());
