@@ -100,16 +100,17 @@ impl TaskRepository {
 
         let task_iter = stmt
             .query_map([], |row| {
-                let id_str: String = row.get(0)?;
-                let title_str: String = row.get(1)?;
-                let priority_str: String = row.get(4)?;
-                let created_str: String = row.get(6)?;
-                let updated_str: String = row.get(7)?;
-                let folder_id_str: Option<String> = row.get(8)?;
+                let id_str = row.get_ref(0)?.as_str()?;
+                let title_str = row.get_ref(1)?.as_str()?;
+                let priority_str = row.get_ref(4)?.as_str()?;
+                let created_str = row.get_ref(6)?.as_str()?;
+                let updated_str = row.get_ref(7)?.as_str()?;
 
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
                 let priority: Priority = priority_str.parse().unwrap_or(Priority::Low);
-                let folder_id: Option<Uuid> = folder_id_str.and_then(|s| Uuid::parse_str(&s).ok());
+                let folder_id = row
+                    .get::<_, Option<String>>(8)?
+                    .and_then(|s| Uuid::parse_str(&s).ok());
 
                 let created_at = DateTime::parse_from_rfc3339(&created_str)
                     .map(|dt| dt.with_timezone(&Utc))
@@ -120,10 +121,11 @@ impl TaskRepository {
                     .unwrap_or_else(|_| Utc::now());
 
                 let title_lower: String = title_str.to_lowercase();
+                let id_formatted = format!("#{}", id.to_string().split('-').next().unwrap_or(""));
 
                 Ok(Task {
                     id,
-                    title: title_str,
+                    title: title_str.to_string(),
                     description: row.get(2)?,
                     completed: row.get(3)?,
                     priority,
@@ -132,6 +134,7 @@ impl TaskRepository {
                     created_at,
                     updated_at,
                     title_lower,
+                    id_formatted,
                 })
             })
             .map_err(|e| StorageError::Database {
@@ -139,13 +142,14 @@ impl TaskRepository {
                 src: e.to_string(),
             })?;
 
-        let mut tasks = Vec::new();
-        for task in task_iter {
-            tasks.push(task.map_err(|e| StorageError::Database {
-                path: self.db_path.clone(),
-                src: e.to_string(),
-            })?);
-        }
+        let tasks: Vec<Task> = task_iter
+            .map(|t| {
+                t.map_err(|e| StorageError::Database {
+                    path: self.db_path.clone(),
+                    src: e.to_string(),
+                })
+            })
+            .collect::<Result<Vec<Task>, StorageError>>()?;
         Ok(tasks)
     }
 }

@@ -293,14 +293,13 @@ impl<'a> ApplicationController<'a> {
         self.state.mark_as_dirty();
 
         if let Some(id) = selected_id {
-            let filtered: Vec<&Task> = ApplicationState::filter(
+            let new_pos = ApplicationState::filter(
                 &self.state.tasks,
                 self.ui.active_tab,
                 self.ui.active_folder,
                 &self.ui.search_query(),
             )
-            .collect();
-            let new_pos = filtered.iter().position(|t| t.id == id);
+            .position(|t| t.id == id);
 
             self.state.select_state.select(new_pos);
         }
@@ -379,6 +378,7 @@ mod tests {
         state::SidebarTab,
         ui::Notification,
     };
+    use chrono::Utc;
     use std::path::PathBuf;
     use tempdir::TempDir;
 
@@ -546,16 +546,23 @@ mod tests {
         let (mut state, mut ui, mut config, keymaps) = setup();
         let id_a = Uuid::new_v4();
         let id_b = Uuid::new_v4();
+        let now = Utc::now();
 
         state.tasks = vec![
             Task {
                 id: id_a,
                 title: "B".into(),
+                title_lower: "b".into(),
+                created_at: now,
+                pinned: false,
                 ..Default::default()
             },
             Task {
                 id: id_b,
                 title: "A".into(),
+                title_lower: "a".into(),
+                created_at: now,
+                pinned: false,
                 ..Default::default()
             },
         ];

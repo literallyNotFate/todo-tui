@@ -11,12 +11,14 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Cell, Row, TableState},
 };
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// List widget for tasks
 pub struct ListTasks<'a> {
     ui: &'a UIState,
     tasks: Vec<&'a Task>,
-    folders: &'a [Folder],
+    folders_map: &'a HashMap<Uuid, Folder>,
     query: &'a str,
     sort: &'a Sort,
 }
@@ -25,14 +27,14 @@ impl<'a> ListTasks<'a> {
     pub fn new(
         ui: &'a UIState,
         tasks: Vec<&'a Task>,
-        folders: &'a [Folder],
+        folders_map: &'a HashMap<Uuid, Folder>,
         query: &'a str,
         sort: &'a Sort,
     ) -> Self {
         Self {
             ui,
             tasks,
-            folders,
+            folders_map,
             sort,
             query,
         }
@@ -55,9 +57,8 @@ impl<'a> ListTasks<'a> {
         }
 
         let filter_name: &str = if let Some(id) = self.ui.active_folder {
-            self.folders
-                .iter()
-                .find(|f| f.id == id)
+            self.folders_map
+                .get(&id)
                 .map(|f| f.name.as_str())
                 .unwrap_or("?")
         } else {
@@ -136,7 +137,9 @@ impl<'a> ListTasks<'a> {
 
         let palette = ctx.palette();
         let focus_area = FocusArea::Main;
-        let title_width: usize = (area.width as usize).saturating_sub(40);
+        let max_config_width: usize = ctx.config.task.max_title_length as usize;
+        let title_width: usize = (area.width as usize).min(max_config_width);
+        let query_lower: String = self.query.to_lowercase();
 
         let [_, table_area] = Layout::default()
             .direction(Direction::Vertical)
@@ -145,13 +148,9 @@ impl<'a> ListTasks<'a> {
 
         let rows = self.tasks.iter().map(|task| {
             let (icon, color) = task.get_display_info(&ctx.config.ui, &palette);
-            let truncated: String = RenderContext::truncate(&task.title, title_width);
-            let title_spans =
-                self.highlight_search(&truncated, &self.query, &palette, ctx.is_dimmed);
-
             let folder_span = task
                 .folder_id
-                .and_then(|id| Folder::find_by_id(self.folders, &id))
+                .and_then(|id| self.folders_map.get(&id))
                 .map(|f| {
                     Span::styled(
                         format!("[{}] ", f.name),
@@ -160,20 +159,23 @@ impl<'a> ListTasks<'a> {
                 })
                 .unwrap_or_default();
 
-            let final_title = ctx.config.task.build(task, title_spans, folder_span);
+            let truncated_title = RenderContext::truncate(&task.title, title_width);
+            let title_spans =
+                self.highlight_search(&truncated_title, &query_lower, &palette, ctx.is_dimmed);
             let display_date: String = task.format_date(ctx.config.ui.use_24h);
+            let final_title = ctx.config.task.build(task, title_spans, folder_span);
 
-            Row::new(vec![
+            let cells = [
                 Cell::from(icon).style(Style::default().fg(ctx.focused_color(color, focus_area))),
                 Cell::from(final_title),
-                Cell::from(Line::from(task.priority.to_string()).centered()).style(
+                Cell::from(Line::from(task.priority.as_str()).centered()).style(
                     Style::default()
                         .fg(ctx.focused_color(task.priority.palette(&palette), focus_area)),
                 ),
                 Cell::from(Line::from(display_date).centered())
                     .style(Style::default().fg(palette.muted)),
-            ])
-            .height(1)
+            ];
+            Row::new(cells).height(1)
         });
 
         let tasks_table = Table::new(rows, self.table_measurements())
@@ -210,16 +212,13 @@ impl<'a> ListTasks<'a> {
         palette: &ThemePalette,
         is_dimmed: bool,
     ) -> Vec<Span<'static>> {
-        let query_lower = query.to_lowercase();
-        let title_lower = title.to_lowercase();
-
         let highlight_color = if is_dimmed {
             palette.muted
         } else {
             palette.warning
         };
 
-        if let Some(start) = title_lower.find(&query_lower) {
+        if let Some(start) = title.to_lowercase().find(&query.to_lowercase()) {
             let end = start + query.len();
             vec![
                 Span::raw(title[..start].to_string()),

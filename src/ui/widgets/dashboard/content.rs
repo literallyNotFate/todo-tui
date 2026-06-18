@@ -29,7 +29,7 @@ impl<'a> ContentWidget<'a> {
         ListTasks::new(
             &self.ui,
             filtered,
-            &self.state.folders,
+            &self.state.folders_map,
             query,
             &self.state.sort,
         )

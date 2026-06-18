@@ -27,12 +27,14 @@ pub struct Task {
 
     #[serde(skip)]
     pub title_lower: String,
+    #[serde(skip)]
+    pub id_formatted: String,
 }
 
 /// Task details to be shown
 #[derive(Debug, Clone)]
 pub struct TaskDetails {
-    pub id_short: String,
+    pub id_display: String,
     pub title: String,
     pub completed: bool,
     pub description: String,
@@ -78,12 +80,14 @@ pub struct TaskEditor {
 impl Task {
     /// Create new task object
     pub fn new(title: impl Into<String>) -> Self {
-        let now = Utc::now();
+        let now: DateTime<Utc> = Utc::now();
+        let id: Uuid = Uuid::new_v4();
         let title: String = title.into();
         let title_lower: String = title.to_lowercase();
+        let id_formatted: String = format!("#{}", &id.to_string()[..8]);
 
         Self {
-            id: Uuid::new_v4(),
+            id,
             title,
             description: String::new(),
             completed: false,
@@ -93,6 +97,7 @@ impl Task {
             created_at: now,
             updated_at: now,
             title_lower,
+            id_formatted,
         }
     }
 
@@ -147,9 +152,10 @@ impl Task {
     pub fn time_ago(&self) -> String {
         let now: DateTime<Utc> = Utc::now();
         let diff: TimeDelta = now.signed_duration_since(self.created_at);
+        let secs: i64 = diff.num_seconds();
 
-        if diff.num_seconds() <= 0 {
-            return "just now".into();
+        if secs <= 0 {
+            return "just now".to_string();
         }
 
         let (count, unit) = match diff {
@@ -159,11 +165,14 @@ impl Task {
             d if d.num_days() >= 1 => (d.num_days(), "day"),
             d if d.num_hours() >= 1 => (d.num_hours(), "hour"),
             d if d.num_minutes() >= 1 => (d.num_minutes(), "minute"),
-            _ => return "just now".into(),
+            _ => return "just now".to_string(),
         };
 
-        let s = if count == 1 { "" } else { "s" };
-        format!("{} {}{} ago", count, unit, s)
+        if count == 1 {
+            format!("1 {} ago", unit)
+        } else {
+            format!("{} {}s ago", count, unit)
+        }
     }
 
     /// Format date
@@ -220,7 +229,7 @@ impl TaskDetails {
         let fmt = |dt: DateTime<Utc>| dt.with_timezone(&Local).format(&full_fmt).to_string();
 
         Self {
-            id_short: task.id.to_string()[..8].to_string(),
+            id_display: task.id_formatted.clone(),
             title: task.title.clone(),
             completed: task.completed,
             description: task.description.clone(),
@@ -237,6 +246,14 @@ impl Priority {
             Priority::High => palette.error,
             Priority::Medium => palette.warning,
             Priority::Low => palette.success,
+        }
+    }
+
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Priority::Low => "Low",
+            Priority::Medium => "Medium",
+            Priority::High => "High",
         }
     }
 }
@@ -407,7 +424,7 @@ mod tests {
 
         assert_eq!(details.title, "Task 1");
         assert_eq!(details.description, "Desc 1");
-        assert_eq!(details.id_short.len(), 8);
+        assert_eq!(details.id_display.len(), 9);
         assert_eq!(details.folder_id, None);
         assert!(details.updated_at.contains(":"));
     }

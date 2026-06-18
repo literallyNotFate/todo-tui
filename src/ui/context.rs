@@ -13,6 +13,7 @@ use ratatui::{
     text::Span,
     widgets::{Block, StatefulWidget, Widget},
 };
+use std::borrow::Cow;
 
 /// A render context provider for widgets
 pub struct RenderContext<'a, 'b> {
@@ -222,22 +223,23 @@ impl<'a, 'b> RenderContext<'a, 'b> {
     }
 
     /// Truncates text if too long (for notifications/summary)
-    pub fn truncate(text: &str, max_width: usize) -> String {
-        let char_count = text.chars().count();
+    pub fn truncate(text: &str, max_width: usize) -> Cow<'_, str> {
         if max_width == 0 {
-            return String::new();
+            return Cow::Borrowed("");
         }
 
+        let char_count: usize = text.chars().count();
         if char_count > max_width {
-            let truncated: String = text.chars().take(max_width.saturating_sub(1)).collect();
-            format!("{}…", truncated)
+            let mut truncated: String = text.chars().take(max_width.saturating_sub(1)).collect();
+            truncated.push('…');
+            Cow::Owned(truncated)
         } else {
-            text.to_string()
+            Cow::Borrowed(text)
         }
     }
 
     /// Truncates text based on area width
-    pub fn truncate_to_area(&self, text: &str) -> String {
+    pub fn truncate_to_area(&self, text: &'a str) -> Cow<'a, str> {
         Self::truncate(text, self.area().width as usize)
     }
 }

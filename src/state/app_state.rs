@@ -8,6 +8,7 @@ use chrono::Local;
 use ratatui::widgets::TableState;
 use std::{
     cell::Cell,
+    collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
 };
 use uuid::Uuid;
@@ -26,6 +27,7 @@ pub struct ApplicationState {
     current_hash: Cell<u64>,
     needs_rehash: Cell<bool>,
     is_unsaved_cache: Cell<bool>,
+    pub folders_map: HashMap<Uuid, Folder>,
 
     pub last_selected_id: Option<Uuid>,
 }
@@ -36,9 +38,13 @@ impl ApplicationState {
             task.title_lower = task.title.to_lowercase();
         }
 
+        let folders_map: HashMap<Uuid, Folder> =
+            folders.iter().map(|f| (f.id, f.clone())).collect();
+
         let mut state: Self = Self {
             tasks,
             folders,
+            folders_map,
             ..Self::default()
         };
 
@@ -61,6 +67,7 @@ impl ApplicationState {
         Self {
             tasks: Vec::new(),
             folders: Vec::new(),
+            folders_map: HashMap::new(),
             select_state: TableState::default(),
             notification: None,
             sort: Sort::default(),

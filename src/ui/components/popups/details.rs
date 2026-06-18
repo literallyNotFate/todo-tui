@@ -73,7 +73,7 @@ impl PopupComponent for DetailsComponent {
             Span::styled(&self.details.title, Style::default().fg(palette.fg).bold()),
             Span::raw(" "),
             Span::styled(
-                format!("#{}", self.details.id_short),
+                self.details.id_display.as_str(),
                 Style::default().fg(palette.muted).italic(),
             ),
         ]);

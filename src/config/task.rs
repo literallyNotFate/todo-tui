@@ -1,4 +1,4 @@
-use crate::{models::Task, ui::RenderContext};
+use crate::models::Task;
 use ratatui::text::{Line, Span};
 use serde::{Deserialize, Serialize};
 
@@ -46,24 +46,23 @@ impl TaskConfig {
     }
 
     /// Build line
-    pub fn build(
+    pub fn build<'a>(
         &self,
-        task: &Task,
-        title_spans: Vec<Span<'static>>,
-        folder_span: Span<'static>,
-    ) -> Line<'static> {
+        task: &'a Task,
+        title_spans: Vec<Span<'a>>,
+        folder_span: Span<'a>,
+    ) -> Line<'a> {
         let mut final_spans = Vec::new();
 
         for token in &self.compiled_format {
             match token {
                 TaskTemplate::Folder => final_spans.push(folder_span.clone()),
                 TaskTemplate::Title => {
-                    let full: String = title_spans.iter().map(|s| s.content.as_ref()).collect();
-                    let truncated = RenderContext::truncate(&full, self.max_title_length);
-                    let style = title_spans.first().map(|s| s.style).unwrap_or_default();
-                    final_spans.push(Span::styled(truncated, style));
+                    for span in &title_spans {
+                        final_spans.push(span.clone());
+                    }
                 }
-                TaskTemplate::ID => final_spans.push(Span::raw(format!("#{} ", task.id))),
+                TaskTemplate::ID => final_spans.push(Span::raw(&task.id_formatted)),
                 TaskTemplate::Text(text) => final_spans.push(Span::raw(text.clone())),
             }
         }
@@ -172,19 +171,5 @@ mod tests {
 
         let line = config.build(&task, title_spans, folder_span);
         assert_eq!(line.spans.len(), 3);
-    }
-
-    #[test]
-    fn should_handle_max_title_length_clamping() {
-        let mut config = TaskConfig::default();
-        config.max_title_length = 2;
-        config.compile();
-
-        let task: Task = Task::new("Long Title");
-        let title_spans = vec![Span::raw("Long Title")];
-        let folder_span = Span::raw("");
-
-        let line = config.build(&task, title_spans, folder_span);
-        assert_eq!(line.spans.last().unwrap().content, "L…");
     }
 }

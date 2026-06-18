@@ -45,7 +45,7 @@ impl Sort {
         }
 
         let cmp: Ordering = match *self.parameter {
-            SortBy::Title => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
+            SortBy::Title => a.title_lower.cmp(&b.title_lower),
             SortBy::Priority => {
                 let result: Ordering = a.priority.cmp(&b.priority);
                 if result == Ordering::Equal {
@@ -88,6 +88,7 @@ mod tests {
             created_at: Utc::now() - Duration::seconds(seconds_ago),
             updated_at: Utc::now(),
             folder_id: None,
+            id_formatted: String::new(),
         }
     }
 

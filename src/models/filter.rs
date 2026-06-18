@@ -26,24 +26,6 @@ impl TaskFilter {
 
     /// Checks whether specific task matches current filter conditions (for filter)
     pub fn matches(&self, task: &Task, today: &NaiveDate, case_insensitive: bool) -> bool {
-        if !self.raw_search_query.is_empty() {
-            let title: &String = if case_insensitive {
-                &task.title_lower
-            } else {
-                &task.title
-            };
-
-            let query: &String = if case_insensitive {
-                &self.search_query
-            } else {
-                &self.raw_search_query
-            };
-
-            if !title.contains(query) {
-                return false;
-            }
-        }
-
         if let Some(f_id) = self.folder_id {
             if task.folder_id != Some(f_id) {
                 return false;
@@ -54,13 +36,36 @@ impl TaskFilter {
             }
         }
 
-        match self.tab {
+        let tab_match: bool = match self.tab {
             SidebarTab::Inbox => true,
             SidebarTab::Active => !task.completed,
             SidebarTab::Completed => task.completed,
             SidebarTab::HighPriority => task.priority == Priority::High,
             SidebarTab::Today => task.is_due_today(today),
+        };
+
+        if !tab_match {
+            return false;
         }
+
+        if !self.raw_search_query.is_empty() {
+            let title = if case_insensitive {
+                &task.title_lower
+            } else {
+                &task.title
+            };
+            let query = if case_insensitive {
+                &self.search_query
+            } else {
+                &self.raw_search_query
+            };
+
+            if !title.contains(query) {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Applies filter to tasks vector
