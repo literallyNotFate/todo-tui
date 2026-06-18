@@ -144,20 +144,7 @@ impl<'a> ListTasks<'a> {
             .areas(area);
 
         let rows = self.tasks.iter().map(|task| {
-            let icon: &String = if task.pinned {
-                &ctx.config.ui.symbols.pinned
-            } else if task.completed {
-                &ctx.config.ui.symbols.completed
-            } else {
-                &ctx.config.ui.symbols.pending
-            };
-
-            let icon_style: Style = if task.pinned {
-                Style::default().fg(palette.warning)
-            } else {
-                Style::default().fg(ctx.focused_color(palette.success, focus_area))
-            };
-
+            let (icon, color) = task.get_display_info(&ctx.config.ui, &palette);
             let truncated: String = RenderContext::truncate(&task.title, title_width);
             let title_spans =
                 self.highlight_search(&truncated, &self.query, &palette, ctx.is_dimmed);
@@ -173,12 +160,12 @@ impl<'a> ListTasks<'a> {
                 })
                 .unwrap_or_default();
 
-            let final_title_line: Line = ctx.config.task.build(task, title_spans, folder_span);
+            let final_title = ctx.config.task.build(task, title_spans, folder_span);
             let display_date: String = task.format_date(ctx.config.ui.use_24h);
 
             Row::new(vec![
-                Cell::from(icon.clone()).style(icon_style),
-                Cell::from(final_title_line),
+                Cell::from(icon).style(Style::default().fg(ctx.focused_color(color, focus_area))),
+                Cell::from(final_title),
                 Cell::from(Line::from(task.priority.to_string()).centered()).style(
                     Style::default()
                         .fg(ctx.focused_color(task.priority.palette(&palette), focus_area)),

@@ -5,6 +5,7 @@ use crate::{
     theme::ThemePalette,
 };
 use chrono::{DateTime, Local, NaiveDate, TimeDelta, Utc};
+use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use uuid::Uuid;
@@ -175,6 +176,21 @@ impl Task {
             local_dt.format(format).to_string()
         } else {
             local_dt.format("%d %b").to_string()
+        }
+    }
+
+    /// Get display info based on UI config
+    pub fn get_display_info<'a>(
+        &self,
+        config: &'a UIConfig,
+        palette: &'a ThemePalette,
+    ) -> (&'a str, Color) {
+        if self.pinned {
+            (config.symbols.pinned.as_str(), palette.warning)
+        } else if self.completed {
+            (config.symbols.completed.as_str(), palette.success)
+        } else {
+            (config.symbols.pending.as_str(), palette.muted)
         }
     }
 

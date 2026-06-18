@@ -10,7 +10,7 @@ use std::{
 };
 
 /// Main application config
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(default)]
 pub struct Config {
     pub ui: UIConfig,
@@ -37,18 +37,26 @@ impl Config {
             None => Self::get_config_path(),
         };
 
-        if !p.exists() {
-            return Ok(Self::default());
-        }
+        let mut config: Self = if !p.exists() {
+            Self::default()
+        } else {
+            let content: String = fs::read_to_string(&p).map_err(|e| StorageError::IO {
+                path: p.clone(),
+                src: e.to_string(),
+            })?;
+            toml::from_str::<Self>(&content).map_err(|e| StorageError::TOML {
+                path: p.clone(),
+                src: e.to_string(),
+            })?
+        };
 
-        let content: String = fs::read_to_string(&p).map_err(|e| StorageError::IO {
-            path: p.clone(),
-            src: e.to_string(),
-        })?;
-        let config: Self = toml::from_str::<Self>(&content).map_err(|e| StorageError::TOML {
-            path: p,
-            src: e.to_string(),
-        })?;
+        let original: Self = config.clone();
+        config.finalize();
+
+        if config != original {
+            log::info!("Configuration auto-fixed. Saving to disk.");
+            config.save(Some(&p))?;
+        }
         Ok(config)
     }
 
@@ -84,13 +92,22 @@ impl Config {
     pub fn update_from_ui(&mut self, ui: &UIState) {
         self.ui = ui.config.clone();
     }
+
+    /// Validates whole config and compiles output format for tasks
+    pub fn finalize(&mut self) {
+        self.ui.validate();
+        self.task.validate();
+        self.storage.validate();
+
+        self.task.compile();
+    }
 }
 
 /// Unit-tests for config
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::{Theme, ThemeName};
+    use crate::theme::{Theme, ThemeID, ThemeName};
     use tempdir::TempDir;
 
     #[test]
@@ -137,7 +154,6 @@ mod tests {
     #[test]
     fn should_create_directories_on_config_save() {
         let temp_dir = TempDir::new("config_test").unwrap();
-
         let path = temp_dir
             .path()
             .join("deep")
@@ -158,7 +174,6 @@ mod tests {
         let path = temp_dir.path().join("broken_config.toml");
 
         fs::write(&path, "ui = { theme = NotAStringWithoutQuotes }").unwrap();
-
         let result = Config::load(Some(&path));
 
         assert!(result.is_err());
@@ -208,5 +223,20 @@ mod tests {
         assert_eq!(config_to_update.ui.last_dark, Some(new_theme_id));
         assert!(!config_to_update.ui.show_sidebar);
         assert_eq!(config_to_update.ui.symbols.completed, "DONE");
+    }
+
+    #[test]
+    fn should_auto_fix_invalid_values_in_config() {
+        let temp_dir = TempDir::new("auto_fix_test").unwrap();
+        let path = temp_dir.path().join("config.toml");
+        let mut config = Config::default();
+        config.task.max_title_length = 3;
+
+        config.save(Some(&path)).unwrap();
+        let loaded = Config::load(Some(&path)).unwrap();
+        assert_eq!(loaded.task.max_title_length, 10);
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("max_title_length = 10"));
     }
 }

@@ -16,7 +16,7 @@ pub struct Autosave {
 impl Autosave {
     /// Create new autosave with 30 second interval
     pub fn new(enabled: bool) -> Self {
-        let interval_secs = 30;
+        let interval_secs: u64 = 30;
         let now: Instant = Instant::now();
 
         Self {
@@ -32,13 +32,12 @@ impl Autosave {
 
     /// Setup autosave from config
     pub fn from(config: &StorageConfig) -> Self {
-        let interval_secs = config.safe_interval();
         let now: Instant = Instant::now();
 
         Self {
             enabled: config.autosave_enabled,
-            interval: std::time::Duration::from_secs(interval_secs),
-            last_tick_secs: interval_secs,
+            interval: Duration::from_secs(config.autosave_interval),
+            last_tick_secs: config.autosave_interval,
             debounce: Duration::from_secs(5),
             last_tick_had_changes: false,
             last_save: now,
