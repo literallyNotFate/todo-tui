@@ -1,18 +1,9 @@
 fn main() -> color_eyre::Result<()> {
-    use toodles::{Application, core::Storage};
-
+    use toodles::Application;
     color_eyre::install()?;
+
     let (config, config_error) = Application::load_config();
-
-    if config.log.enabled {
-        if let Ok(log_path) = Storage::get_log_path() {
-            if let Some(parent) = log_path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-
-            toodles::core::init_logger(&log_path, config.log.level);
-        }
-    }
+    toodles::core::init_logger(&config.log);
 
     log::info!(
         "Starting application (version: {})",
