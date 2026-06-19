@@ -3,6 +3,7 @@
 ///
 pub mod app;
 pub mod application;
+pub mod cli;
 pub mod common;
 pub mod config;
 pub mod core;

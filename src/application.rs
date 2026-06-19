@@ -1,4 +1,5 @@
 use crate::{
+    cli::{self, Commands},
     config::{Config, KeyMaps},
     core::{ApplicationError, ApplicationMode, Autosave, FocusArea, Storage},
     events::EventHandler,
@@ -36,6 +37,7 @@ pub struct Application {
 }
 
 impl Application {
+    /// Creates new application instance
     pub fn new(mut config: Config, config_error: Option<ApplicationError>) -> Self {
         let size: (u16, u16) = terminal::size().unwrap_or((100, 100));
         let (keymaps, keymaps_error) = Self::load_keymaps();
@@ -79,8 +81,9 @@ impl Application {
         app
     }
 
-    pub fn run(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
-        log::info!("Run: Entering main event loop, tick rate 100 ms");
+    /// Run toodles TUI
+    pub fn run_tui(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
+        log::info!("Run TUI: Entering main event loop, tick rate 100 ms");
         let mut last_tick = std::time::Instant::now();
         self.ui.request_redraw();
 
@@ -113,6 +116,22 @@ impl Application {
         }
 
         log::info!("Run: Exiting main event loop");
+        Ok(())
+    }
+
+    /// Run toodles CLI
+    pub fn run_cli(&self, command: Commands) -> color_eyre::Result<()> {
+        log::info!("Run CLI: Entering CLI mode");
+
+        match command {
+            Commands::List {
+                filter,
+                limit,
+                query,
+            } => {
+                cli::list_tasks(&self.data.tasks, filter, limit, query);
+            }
+        }
         Ok(())
     }
 

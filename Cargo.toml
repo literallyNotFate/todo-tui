@@ -10,6 +10,7 @@ categories = ["command-line-utilities", "productivity"]
 
 [dependencies]
 ratatui = {version = "0.29.0", features = ["all-widgets"]}
+clap = { version = "4.0", features = ["derive"] }
 color-eyre = "0.6.3"
 dirs = "5.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -24,6 +25,7 @@ log = "0.4"
 simplelog = "0.12"
 strum = { version = "0.28", features = ["derive"] }
 rusqlite = { version = "0.32.0", features = ["bundled"] }
+comfy-table = "7.2.2"
 
 [features]
 default = ["serde"]

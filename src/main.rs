@@ -1,6 +1,9 @@
 fn main() -> color_eyre::Result<()> {
-    use toodles::Application;
+    use clap::Parser;
+    use toodles::{Application, cli::Cli};
+
     color_eyre::install()?;
+    let cli: Cli = Cli::parse();
 
     let (config, config_error) = Application::load_config();
     toodles::core::init_logger(&config.log);
@@ -13,9 +16,14 @@ fn main() -> color_eyre::Result<()> {
         log::warn!("Config not found or corrupted, using defaults");
     }
 
-    let mut app = Application::new(config, config_error);
+    let mut app: Application = Application::new(config, config_error);
+
+    if let Some(command) = cli.command {
+        return app.run_cli(command);
+    }
+
     let terminal = ratatui::init();
-    let result = app.run(terminal);
+    let result = app.run_tui(terminal);
     ratatui::restore();
 
     if let Err(ref e) = result {
