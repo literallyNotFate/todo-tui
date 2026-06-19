@@ -1,4 +1,5 @@
 use crate::{core::Selectable, models::Task};
+use clap::ValueEnum;
 use std::cmp::Ordering;
 use strum::{Display, EnumIter};
 
@@ -10,7 +11,7 @@ pub struct Sort {
 }
 
 /// Sorting by specific parameter-field
-#[derive(Default, Debug, Clone, Copy, PartialEq, EnumIter, Display)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, EnumIter, Display, ValueEnum)]
 #[strum(serialize_all = "title_case")]
 pub enum SortBy {
     #[default]
@@ -21,7 +22,7 @@ pub enum SortBy {
 }
 
 /// Sort order (descending by default)
-#[derive(Default, Debug, Copy, Clone, PartialEq, EnumIter, Display)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, EnumIter, Display, ValueEnum)]
 pub enum SortOrder {
     #[default]
     #[strum(to_string = "▼")]

@@ -2,7 +2,10 @@ pub mod list;
 
 pub use list::list_tasks;
 
-use crate::state::SidebarTab;
+use crate::{
+    core::{SortBy, SortOrder},
+    state::SidebarTab,
+};
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -21,6 +24,14 @@ pub enum Commands {
         /// Filter mode
         #[arg(short, long, value_enum, default_value_t = FilterMode::All)]
         filter: FilterMode,
+
+        /// Sort tasks by specific parameter
+        #[arg(long, value_enum, default_value_t = SortBy::Priority)]
+        sort_by: SortBy,
+
+        /// Sorting order
+        #[arg(long, value_enum, default_value_t = SortOrder::Desc)]
+        order: SortOrder,
 
         /// Task search query
         #[arg(short, long, value_name = "QUERY")]

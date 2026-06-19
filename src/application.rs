@@ -1,7 +1,7 @@
 use crate::{
     cli::{self, Commands},
     config::{Config, KeyMaps},
-    core::{ApplicationError, ApplicationMode, Autosave, FocusArea, Storage},
+    core::{ApplicationError, ApplicationMode, Autosave, FocusArea, Sort, Storage},
     events::EventHandler,
     state::{
         ApplicationResult, ApplicationState, Session, TasksStateData, TasksStateSave, UIState,
@@ -128,8 +128,11 @@ impl Application {
                 filter,
                 limit,
                 query,
+                sort_by,
+                order,
             } => {
-                cli::list_tasks(&self.data.tasks, filter, limit, query);
+                let sort: Sort = Sort::new(sort_by, order);
+                cli::list_tasks(&self.data.tasks, filter, limit, query, sort);
             }
         }
         Ok(())
