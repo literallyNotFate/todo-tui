@@ -1,6 +1,6 @@
 use crate::{
     Application,
-    cli::commands::{add, list},
+    cli::commands::{add, list, pin},
     core::{ApplicationError, Sort},
 };
 
@@ -25,6 +25,8 @@ pub fn run_cli(app: &mut Application, command: Commands) -> color_eyre::Result<(
             list::run(&app.data.tasks, filter, limit, query, sort)
         }
         Commands::Add { title, priority } => add::run(app, title, priority),
+        Commands::Pin { id } => pin::run(app, id, true),
+        Commands::Unpin { id } => pin::run(app, id, false),
     };
 
     if let Err(e) = result {

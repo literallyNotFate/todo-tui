@@ -1,5 +1,6 @@
 pub mod add;
 pub mod list;
+pub mod pin;
 
 use crate::{
     cli::types::FilterMode,
@@ -50,5 +51,17 @@ pub enum Commands {
         /// Limit the output
         #[arg(short, long, value_name = "LIMIT")]
         limit: Option<usize>,
+    },
+
+    /// Pin a task
+    Pin {
+        /// UUID of a task
+        id: String,
+    },
+
+    /// Unpin a task
+    Unpin {
+        /// UUID of a task
+        id: String,
     },
 }
