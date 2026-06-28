@@ -15,9 +15,11 @@ impl TaskService {
     pub fn append_task(tasks: &mut Vec<Task>, task: Task) -> ApplicationResult<OperationResult> {
         task.validate()?;
         log::info!("Adding new task: '{}' (ID: {})", task.title, task.id);
-        tasks.push(task.clone());
 
-        Ok(OperationResult::TaskCreated { task })
+        let t: Task = task;
+        tasks.push(t.clone());
+
+        Ok(OperationResult::TaskCreated { task: t })
     }
 
     /// Update task by id using TaskEditor model

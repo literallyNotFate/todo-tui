@@ -1,66 +1,39 @@
-pub mod list;
-
-pub use list::list_tasks;
-
 use crate::{
-    core::{SortBy, SortOrder},
-    state::SidebarTab,
+    Application,
+    cli::commands::{add, list},
+    core::{ApplicationError, Sort},
 };
-use clap::{Parser, Subcommand, ValueEnum};
 
-#[derive(Parser)]
-#[command(name = "toodles")]
-#[command(version = "1.0")]
-#[command(about = "CLI version of Toodles TUI application", long_about = None)]
-pub struct Cli {
-    #[command(subcommand)]
-    pub command: Option<Commands>,
-}
+pub mod commands;
+pub mod types;
 
-#[derive(Subcommand)]
-pub enum Commands {
-    /// Shows the list of all tasks
-    List {
-        /// Filter mode
-        #[arg(short, long, value_enum, default_value_t = FilterMode::All)]
-        filter: FilterMode,
+pub use commands::{Cli, Commands};
 
-        /// Sort tasks by specific parameter
-        #[arg(long, value_enum, default_value_t = SortBy::Priority)]
-        sort_by: SortBy,
+/// Run toodles CLI
+pub fn run_cli(app: &mut Application, command: Commands) -> color_eyre::Result<()> {
+    log::info!("Run CLI: Entering CLI mode");
 
-        /// Sorting order
-        #[arg(long, value_enum, default_value_t = SortOrder::Desc)]
-        order: SortOrder,
+    let result = match command {
+        Commands::List {
+            filter,
+            limit,
+            query,
+            sort_by,
+            order,
+        } => {
+            let sort: Sort = Sort::new(sort_by, order);
+            list::run(&app.data.tasks, filter, limit, query, sort)
+        }
+        Commands::Add { title, priority } => add::run(app, title, priority),
+    };
 
-        /// Task search query
-        #[arg(short, long, value_name = "QUERY")]
-        query: Option<String>,
-
-        /// Limit the output
-        #[arg(short, long, value_name = "LIMIT")]
-        limit: Option<usize>,
-    },
-}
-
-/// Enum to filter tasks via CLI
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
-pub enum FilterMode {
-    Active,
-    Completed,
-    High,
-    Today,
-    All,
-}
-
-impl From<FilterMode> for SidebarTab {
-    fn from(filter: FilterMode) -> Self {
-        match filter {
-            FilterMode::Active => SidebarTab::Active,
-            FilterMode::Completed => SidebarTab::Completed,
-            FilterMode::High => SidebarTab::HighPriority,
-            FilterMode::All => SidebarTab::Inbox,
-            FilterMode::Today => SidebarTab::Today,
+    if let Err(e) = result {
+        if let Some(app_err) = e.downcast_ref::<ApplicationError>() {
+            eprintln!("CLI error occurred: {}", app_err);
+        } else {
+            return Err(e);
         }
     }
+
+    Ok(())
 }

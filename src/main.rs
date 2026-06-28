@@ -1,6 +1,9 @@
 fn main() -> color_eyre::Result<()> {
     use clap::Parser;
-    use toodles::{Application, cli::Cli};
+    use toodles::{
+        Application,
+        cli::{self, Cli},
+    };
 
     color_eyre::install()?;
     let cli: Cli = Cli::parse();
@@ -19,7 +22,7 @@ fn main() -> color_eyre::Result<()> {
     let mut app: Application = Application::new(config, config_error);
 
     if let Some(command) = cli.command {
-        return app.run_cli(command);
+        return cli::run_cli(&mut app, command);
     }
 
     let terminal = ratatui::init();

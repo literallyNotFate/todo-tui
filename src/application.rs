@@ -1,7 +1,6 @@
 use crate::{
-    cli::{self, Commands},
     config::{Config, KeyMaps},
-    core::{ApplicationError, ApplicationMode, Autosave, FocusArea, Sort, Storage},
+    core::{ApplicationError, ApplicationMode, Autosave, FocusArea, Storage},
     events::EventHandler,
     state::{
         ApplicationResult, ApplicationState, Session, TasksStateData, TasksStateSave, UIState,
@@ -116,25 +115,6 @@ impl Application {
         }
 
         log::info!("Run: Exiting main event loop");
-        Ok(())
-    }
-
-    /// Run toodles CLI
-    pub fn run_cli(&self, command: Commands) -> color_eyre::Result<()> {
-        log::info!("Run CLI: Entering CLI mode");
-
-        match command {
-            Commands::List {
-                filter,
-                limit,
-                query,
-                sort_by,
-                order,
-            } => {
-                let sort: Sort = Sort::new(sort_by, order);
-                cli::list_tasks(&self.data.tasks, filter, limit, query, sort);
-            }
-        }
         Ok(())
     }
 

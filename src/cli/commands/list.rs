@@ -1,18 +1,18 @@
 use crate::{
-    cli::FilterMode,
+    cli::types::FilterMode,
     core::Sort,
     models::{Priority, Task},
 };
 use comfy_table::{Cell, Color, ContentArrangement, Table, presets};
 
 /// `list` command implementation
-pub fn list_tasks(
+pub fn run(
     all_tasks: &[Task],
     filter: FilterMode,
     limit: Option<usize>,
     query: Option<String>,
     sort: Sort,
-) {
+) -> color_eyre::Result<()> {
     let mut table: Table = Table::new();
 
     table
@@ -29,7 +29,7 @@ pub fn list_tasks(
     let display_tasks: Vec<&Task> = get_filtered_tasks(all_tasks, filter, query, limit, sort);
     if display_tasks.is_empty() {
         println!("No tasks to be shown!");
-        return;
+        return Ok(());
     }
 
     for task in display_tasks {
@@ -47,6 +47,7 @@ pub fn list_tasks(
     }
 
     println!("{table}");
+    Ok(())
 }
 
 /// Helper to filter tasks (w/query, limit)

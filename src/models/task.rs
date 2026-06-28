@@ -59,6 +59,7 @@ pub struct TaskDetails {
     strum::EnumIter,
     strum::Display,
     strum::EnumString,
+    clap::ValueEnum,
 )]
 #[strum(serialize_all = "PascalCase")]
 pub enum Priority {
