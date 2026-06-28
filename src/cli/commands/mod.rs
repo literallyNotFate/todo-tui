@@ -1,6 +1,8 @@
 pub mod add;
+pub mod details;
 pub mod list;
 pub mod pin;
+pub mod remove;
 pub mod update;
 
 use crate::{
@@ -50,6 +52,14 @@ pub enum Commands {
         #[arg(short, long)]
         priority: Option<Priority>,
     },
+
+    /// Remove selected task by ID
+    #[command(alias = "d")]
+    Rm {
+        /// UUID of a task
+        id: String,
+    },
+
     /// Shows the list of all tasks
     #[command(alias = "ls")]
     List {
@@ -83,6 +93,13 @@ pub enum Commands {
     /// Unpin a task
     Unpin {
         /// UUID of a task
+        id: String,
+    },
+
+    /// Show detailed info about a task
+    #[command(alias = "det")]
+    Details {
+        /// ID of the task
         id: String,
     },
 }

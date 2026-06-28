@@ -33,6 +33,8 @@ pub fn run_cli(app: &mut Application, command: Commands) -> color_eyre::Result<(
             desc,
             priority,
         } => update::run(app, id, title, desc, priority),
+        Commands::Rm { id } => remove::run(app, id),
+        Commands::Details { id } => details::run(app, id),
     };
 
     if let Err(e) = result {
