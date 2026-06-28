@@ -10,6 +10,28 @@ pub enum FindResult {
 }
 
 impl FindResult {
+    /// Handler for find task by ID via CLI
+    pub fn execute<F>(self, id_query: &str, mut action: F) -> color_eyre::Result<()>
+    where
+        F: FnMut(Uuid) -> color_eyre::Result<()>,
+    {
+        match self {
+            FindResult::NotFound => {
+                eprintln!("Task with ID starting with '{}' not found", id_query);
+            }
+            FindResult::Ambiguous(list) => {
+                eprintln!("ID '{}' is ambiguous. Matches:", id_query);
+                list.iter()
+                    .for_each(|(id, title)| println!("  {} - {}", id, title));
+            }
+            FindResult::Found(id) => {
+                action(id)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Find task by starting UUID
     pub fn find(tasks: &[Task], id_query: &str) -> Self {
         let matches: Vec<(Uuid, String)> = tasks
             .iter()

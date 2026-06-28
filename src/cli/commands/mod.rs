@@ -1,6 +1,7 @@
 pub mod add;
 pub mod list;
 pub mod pin;
+pub mod update;
 
 use crate::{
     cli::types::FilterMode,
@@ -21,6 +22,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Adds task to the list
+    #[command(alias = "a")]
     Add {
         /// Title of the task
         title: String,
@@ -30,7 +32,26 @@ pub enum Commands {
         priority: Priority,
     },
 
+    /// Update selected task by ID
+    #[command(alias = "u")]
+    Update {
+        /// UUID of a task
+        id: String,
+
+        /// New title
+        #[arg(short, long)]
+        title: Option<String>,
+
+        /// New description
+        #[arg(short, long)]
+        desc: Option<String>,
+
+        /// New priority
+        #[arg(short, long)]
+        priority: Option<Priority>,
+    },
     /// Shows the list of all tasks
+    #[command(alias = "ls")]
     List {
         /// Filter mode
         #[arg(short, long, value_enum, default_value_t = FilterMode::All)]
