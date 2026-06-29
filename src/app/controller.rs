@@ -2,7 +2,7 @@ use crate::{
     app::{FolderService, TaskService},
     config::{Config, KeyMaps},
     core::{Storage, TaskError},
-    models::{Folder, FolderEditor, Priority, Task, task::TaskEditor},
+    models::{Folder, FolderColor, FolderEditor, Priority, Task, task::TaskEditor},
     state::{ApplicationResult, ApplicationState, Session, SidebarTab, TasksStateSave, UIState},
 };
 use uuid::Uuid;
@@ -115,10 +115,10 @@ impl<'a> ApplicationController<'a> {
     }
 
     /// Handle appending a folder
-    pub fn dispatch_append_folder<S: Into<String>>(&mut self, name: S, color: S) {
+    pub fn dispatch_append_folder(&mut self, name: impl Into<String>, color: FolderColor) {
         let name_string: String = name.into();
         log::debug!("Dispatching append for folder: '{}'", name_string);
-        let folder: Folder = Folder::new(name_string, color.into());
+        let folder: Folder = Folder::new(name_string, color);
 
         let result = FolderService::append_folder(&mut self.state.folders, folder);
         self.perform_action(
@@ -629,11 +629,11 @@ mod tests {
         let (mut state, mut ui, mut config, keymaps) = setup();
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
 
-        ctrl.dispatch_append_folder("Work", "Red");
+        ctrl.dispatch_append_folder("Work", FolderColor::Red);
 
         assert_eq!(state.folders.len(), 1);
         assert_eq!(state.folders[0].name, "Work");
-        assert_eq!(state.folders[0].color, "Red");
+        assert_eq!(state.folders[0].color, FolderColor::Red);
         assert!(state.notification.is_some());
         assert!(
             state
@@ -647,10 +647,12 @@ mod tests {
     #[test]
     fn should_handle_duplicate_name_error_on_append_folder() {
         let (mut state, mut ui, mut config, keymaps) = setup();
-        state.folders.push(Folder::new("Personal", "Blue"));
+        state
+            .folders
+            .push(Folder::new("Personal", FolderColor::Red));
 
         let mut ctrl = ApplicationController::new(&mut state, &mut ui, &mut config, &keymaps);
-        ctrl.dispatch_append_folder("Personal", "Blue");
+        ctrl.dispatch_append_folder("Personal", FolderColor::Red);
 
         assert_eq!(state.folders.len(), 1);
         assert_eq!(
@@ -662,7 +664,7 @@ mod tests {
     #[test]
     fn should_update_folder_data() {
         let (mut state, mut ui, mut config, keymaps) = setup();
-        let folder = Folder::new("Old", "Lavender");
+        let folder = Folder::new("Old", FolderColor::Lavender);
         let id = folder.id;
         state.folders.push(folder);
 
@@ -672,13 +674,13 @@ mod tests {
         ctrl.dispatch_update_folder(id, editor);
 
         assert_eq!(state.folders[0].name, "New");
-        assert_eq!(state.folders[0].color, "Green");
+        assert_eq!(state.folders[0].color, FolderColor::Green);
     }
 
     #[test]
     fn should_remove_folder_and_perform_cascade_delete_on_tasks() {
         let (mut state, mut ui, mut config, keymaps) = setup();
-        let folder = Folder::new("To Delete", "Red");
+        let folder = Folder::new("To Delete", FolderColor::Red);
         let folder_id = folder.id;
         state.folders.push(folder);
 

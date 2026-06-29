@@ -17,7 +17,7 @@ impl FolderFormContext {
             folder_id: None,
             form: Form::new(vec![
                 Field::new("name", FieldType::text(" Folder Name ", "")),
-                Field::new("color", FieldType::color("Blue")),
+                Field::new("color", FieldType::color(FolderColor::Neutral)),
                 Field::new("save", FieldType::Button),
             ]),
         }
@@ -29,7 +29,7 @@ impl FolderFormContext {
             folder_id: Some(folder.id),
             form: Form::new(vec![
                 Field::new("name", FieldType::text(" Folder Name ", &folder.name)),
-                Field::new("color", FieldType::color(&folder.color)),
+                Field::new("color", FieldType::color(folder.color)),
                 Field::new("save", FieldType::Button),
             ]),
         }
@@ -75,12 +75,12 @@ mod tests {
         assert_eq!(context.form.get_text_value("name"), "");
 
         assert_eq!(context.form.fields[1].name, "color");
-        assert_eq!(context.get_color_value(), FolderColor::Blue);
+        assert_eq!(context.get_color_value(), FolderColor::Neutral);
     }
 
     #[test]
     fn should_populate_folder_form_fields_for_update() {
-        let folder = Folder::new("Work", "Red");
+        let folder = Folder::new("Work", FolderColor::Red);
         let context = FolderFormContext::update_folder(&folder);
 
         assert_eq!(context.folder_id, Some(folder.id));

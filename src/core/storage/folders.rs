@@ -1,8 +1,13 @@
-use crate::{core::StorageError, models::Folder, state::ApplicationResult};
+use crate::{
+    core::StorageError,
+    models::{Folder, FolderColor},
+    state::ApplicationResult,
+};
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, params};
 use std::{
     path::PathBuf,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
@@ -38,7 +43,7 @@ impl FolderRepository {
             stmt.execute(params![
                 folder.id.to_string(),
                 folder.name,
-                folder.color,
+                folder.color.to_string(),
                 folder.created_at.to_rfc3339(),
                 folder.updated_at.to_rfc3339(),
             ])
@@ -65,11 +70,13 @@ impl FolderRepository {
             .query_map([], |row| {
                 let id_str: String = row.get(0)?;
                 let name: String = row.get(1)?;
-                let color: String = row.get(2)?;
+                let color_str: String = row.get(2)?;
                 let created_str: String = row.get(3)?;
                 let updated_str: String = row.get(4)?;
 
                 let id: Uuid = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
+                let color = FolderColor::from_str(&color_str).unwrap_or(FolderColor::Neutral);
+
                 let created_at = DateTime::parse_from_rfc3339(&created_str)
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(|_| Utc::now());
@@ -92,13 +99,12 @@ impl FolderRepository {
                 src: e.to_string(),
             })?;
 
-        let mut folders = Vec::new();
-        for folder in folder_iter {
-            folders.push(folder.map_err(|e| StorageError::Database {
+        let folders = folder_iter
+            .collect::<Result<Vec<Folder>, _>>()
+            .map_err(|e| StorageError::Database {
                 path: self.db_path.clone(),
                 src: e.to_string(),
-            })?);
-        }
+            })?;
         Ok(folders)
     }
 }
@@ -129,8 +135,8 @@ mod tests {
         let conn = setup_folders_db();
         let repo = FolderRepository::new(conn, PathBuf::from("memory.db"));
 
-        let folder1 = Folder::new("Work", "Red");
-        let folder2 = Folder::new("Personal", "Blue");
+        let folder1 = Folder::new("Work", FolderColor::Red);
+        let folder2 = Folder::new("Personal", FolderColor::Blue);
         let folders = vec![folder1.clone(), folder2.clone()];
 
         assert!(repo.save(&folders).is_ok());
@@ -138,8 +144,8 @@ mod tests {
 
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded[0].id, folder1.id);
-        assert_eq!(loaded[0].color, "Red");
+        assert_eq!(loaded[0].color, FolderColor::Red);
         assert_eq!(loaded[1].name, "Personal");
-        assert_eq!(loaded[1].color, "Blue");
+        assert_eq!(loaded[1].color, FolderColor::Blue);
     }
 }

@@ -78,7 +78,7 @@ mod tests {
     #[test]
     fn should_append_folder_service() {
         let mut folders: Vec<Folder> = Vec::new();
-        let folder_to_add = Folder::new("Work", &FolderColor::Red.to_string());
+        let folder_to_add = Folder::new("Work", FolderColor::Red);
         let new_title = folder_to_add.name.clone();
 
         let result = FolderService::append_folder(&mut folders, folder_to_add);
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn should_fail_append_folder_on_empty_name() {
         let mut folders: Vec<Folder> = Vec::new();
-        let folder_to_add = Folder::new("   ", "Blue");
+        let folder_to_add = Folder::new("   ", FolderColor::Blue);
 
         let result = FolderService::append_folder(&mut folders, folder_to_add);
 
@@ -103,8 +103,8 @@ mod tests {
 
     #[test]
     fn should_fail_append_folder_on_duplicate_name() {
-        let mut folders: Vec<Folder> = vec![Folder::new("Personal", "Red")];
-        let duplicate = Folder::new("Personal", "Red");
+        let mut folders: Vec<Folder> = vec![Folder::new("Personal", FolderColor::Blue)];
+        let duplicate = Folder::new("Personal", FolderColor::Blue);
 
         let result = FolderService::append_folder(&mut folders, duplicate);
 
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn should_update_folder_service() {
-        let mut folders = vec![Folder::new("Old Name", "Blue")];
+        let mut folders = vec![Folder::new("Old Name", FolderColor::Blue)];
         let id = folders[0].id;
 
         let editor = FolderEditor {
@@ -132,15 +132,15 @@ mod tests {
 
         assert_eq!(old.name, "Old Name");
         assert_eq!(new.name, "New Name");
-        assert_eq!(new.color, FolderColor::Green.to_string());
+        assert_eq!(new.color, FolderColor::Green);
         assert_eq!(folders[0].name, "New Name");
     }
 
     #[test]
     fn should_fail_update_folder_on_duplicate() {
         let mut folders = vec![
-            Folder::new("First", "Red"),
-            Folder::new("Second", "Lavender"),
+            Folder::new("First", FolderColor::Red),
+            Folder::new("Second", FolderColor::Lavender),
         ];
         let id_to_update = folders[1].id;
 
@@ -161,8 +161,8 @@ mod tests {
     #[test]
     fn should_remove_folder_service() {
         let mut folders = vec![
-            Folder::new("Trash", "Red"),
-            Folder::new("Archive", "Magenta"),
+            Folder::new("Trash", FolderColor::Red),
+            Folder::new("Archive", FolderColor::Magenta),
         ];
         let id_to_remove = folders[0].id;
 

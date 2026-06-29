@@ -1,6 +1,6 @@
 use crate::{
     core::FocusArea,
-    models::{Folder, FolderColor, Priority, Task, TaskFilter},
+    models::{Folder, Priority, Task, TaskFilter},
     state::{SidebarTab, UIState},
     theme::ThemePalette,
     ui::RenderContext,
@@ -131,14 +131,13 @@ impl<'a> SidebarWidget<'a> {
             }
 
             let text = format!(" {} ({})", folder.name, count);
-            let folder_color: Color = FolderColor::from_string(&folder.color);
             items.push(self.create_list_item(
                 text,
                 is_selected,
                 focused,
                 palette,
                 is_dimmed,
-                Some(folder_color),
+                Some(folder.color.into()),
             ));
 
             current_idx += 1;
@@ -411,7 +410,10 @@ impl<'a> SidebarWidget<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, KeyMaps};
+    use crate::{
+        config::{Config, KeyMaps},
+        models::FolderColor,
+    };
 
     fn mock_ctx<'a>(
         ui: &'a UIState,
@@ -568,7 +570,7 @@ mod tests {
 
     #[test]
     fn should_append_folders_to_filter_list() {
-        let folder = Folder::new("Work", "Red");
+        let folder = Folder::new("Work", FolderColor::Red);
         let folders = vec![folder.clone()];
 
         let tasks = vec![

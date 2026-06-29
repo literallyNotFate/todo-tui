@@ -268,8 +268,13 @@ impl ApplicationState {
     }
 
     /// Return task of a given id
-    pub fn find_by_id(&self, id: Uuid) -> Option<&Task> {
+    pub fn find_task_by_id(&self, id: Uuid) -> Option<&Task> {
         self.tasks.iter().find(|t| t.id == id)
+    }
+
+    /// Return folder of a given id
+    pub fn find_folder_by_id(&self, id: Uuid) -> Option<&Folder> {
+        self.folders.iter().find(|t| t.id == id)
     }
 
     /// Returns vector of folder uuids
@@ -316,6 +321,7 @@ impl ApplicationState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::FolderColor;
 
     #[test]
     fn should_determine_unsaved_changes_for_folders() {
@@ -323,7 +329,9 @@ mod tests {
         state.saved_hash = state.hash_state();
         state.is_unsaved_cache.set(false);
 
-        state.folders.push(Folder::new("Work", "Red"));
+        state
+            .folders
+            .push(Folder::new("Work", FolderColor::Lavender));
         state.mark_as_dirty();
 
         assert!(
@@ -380,7 +388,7 @@ mod tests {
         let mut state = ApplicationState::default();
         state.tasks = vec![Task::new("A"), Task::new("B")];
         let id_to_find: Uuid = state.tasks[1].id;
-        let selected: Option<&Task> = state.find_by_id(id_to_find);
+        let selected: Option<&Task> = state.find_task_by_id(id_to_find);
 
         assert_eq!(selected.unwrap().title, "B");
         assert_eq!(selected.unwrap().id, id_to_find);

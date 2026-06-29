@@ -90,7 +90,10 @@ impl Popup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{models::Priority, ui::FieldType};
+    use crate::{
+        models::{FolderColor, Priority},
+        ui::FieldType,
+    };
     use ratatui::crossterm::event::{KeyCode, KeyEventKind, KeyEventState, KeyModifiers};
 
     fn key(code: KeyCode) -> KeyEvent {
@@ -159,7 +162,7 @@ mod tests {
 
     #[test]
     fn should_create_update_folder_popup_via_factory() {
-        let folder = Folder::new("Personal", "Blue");
+        let folder = Folder::new("Personal", FolderColor::Blue);
         let popup = Popup::update_folder(&folder);
 
         assert_eq!(popup.kind, PopupKind::Info);
@@ -168,7 +171,7 @@ mod tests {
 
     #[test]
     fn should_folder_form_context_convert_to_result() {
-        let folder = Folder::new("Archive", "Lavender");
+        let folder = Folder::new("Archive", FolderColor::Lavender);
         let folder_id = folder.id;
         let context = FolderFormContext::update_folder(&folder);
 

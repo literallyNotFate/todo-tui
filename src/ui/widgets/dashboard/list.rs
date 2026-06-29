@@ -1,6 +1,6 @@
 use crate::{
     core::{Action, ApplicationMode, FocusArea, Sort},
-    models::{Folder, FolderColor, Task},
+    models::{Folder, Task},
     state::{AdaptiveScroll, UIState},
     theme::ThemePalette,
     ui::{FeedbackKind, FeedbackWidget, RenderContext, scrollable, widgets::input::Input},
@@ -154,7 +154,7 @@ impl<'a> ListTasks<'a> {
                 .map(|f| {
                     Span::styled(
                         format!("[{}] ", f.name),
-                        Style::default().fg(FolderColor::from_string(&f.color)),
+                        Style::default().fg(f.color.into()),
                     )
                 })
                 .unwrap_or_default();

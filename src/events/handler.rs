@@ -3,7 +3,7 @@ use crate::{
     app::ApplicationController,
     config::KeyMaps,
     core::{Action, ApplicationMode, Autosave, FocusArea, Selectable, Storage},
-    models::{Folder, FolderColor, FolderEditor, TaskDetails, TaskEditor},
+    models::{FolderColor, FolderEditor, TaskDetails, TaskEditor},
     state::SidebarTab,
     ui::{
         Popup, WidgetResponse, is_terminal_small,
@@ -114,7 +114,7 @@ impl EventHandler {
                     if let Some(folder_id) = id {
                         ctrl.dispatch_update_folder(folder_id, editor);
                     } else {
-                        ctrl.dispatch_append_folder(editor.name, editor.color.to_string());
+                        ctrl.dispatch_append_folder(editor.name, editor.color);
                     }
                 }
                 ModalResult::Confirmed => {
@@ -287,9 +287,7 @@ impl EventHandler {
                     }
                     Action::UpdateFolder => {
                         if let Some(folder_id) = ctrl.ui.active_folder {
-                            if let Some(folder) =
-                                Folder::find_by_id(&ctrl.state.folders, &folder_id)
-                            {
+                            if let Some(folder) = ctrl.state.find_folder_by_id(folder_id) {
                                 ctrl.ui
                                     .show_modal(Popup::update_folder(&folder), ModalAction::None);
                             }
@@ -315,7 +313,7 @@ impl EventHandler {
                         if let Some(task) = ctrl
                             .ui
                             .selected_id(ctrl.state, &ctrl.config.behavior)
-                            .and_then(|id| ctrl.state.find_by_id(id))
+                            .and_then(|id| ctrl.state.find_task_by_id(id))
                         {
                             ctrl.ui
                                 .show_modal(Popup::update_task(&task), ModalAction::None)
@@ -340,7 +338,7 @@ impl EventHandler {
                     }
                     Action::ShowDetails => {
                         if let Some(id) = ctrl.ui.selected_id(ctrl.state, &ctrl.config.behavior) {
-                            if let Some(task) = ctrl.state.find_by_id(id) {
+                            if let Some(task) = ctrl.state.find_task_by_id(id) {
                                 log::debug!("Opening task details popup");
                                 ctrl.ui.show_modal(
                                     Popup::details(
