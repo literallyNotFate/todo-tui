@@ -5,7 +5,7 @@ use crate::{
 };
 use comfy_table::{Cell, Color, ContentArrangement, Table, presets};
 
-/// `list` command implementation
+/// `list` command implementation for task subcommand
 pub fn run(
     all_tasks: &[Task],
     filter: FilterMode,

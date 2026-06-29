@@ -1,12 +1,12 @@
 use crate::{
     Application,
     app::{OperationResult, TaskService},
-    cli::types::FindResult,
+    cli::types::EntitySelector,
     core::Selectable,
     models::{Priority, TaskEditor},
 };
 
-/// `update` command implementation
+/// `update` command implementation for task subcommand
 pub fn run(
     app: &mut Application,
     id_query: String,
@@ -14,19 +14,15 @@ pub fn run(
     desc: Option<String>,
     priority: Option<Priority>,
 ) -> color_eyre::Result<()> {
-    FindResult::find(&app.data.tasks, &id_query).execute(&id_query, |id| {
-        let current_task = app.data.find_by_id(id).unwrap();
-
+    EntitySelector::find(&app.data.tasks, &id_query).execute(&id_query, |task| {
         let editor: TaskEditor = TaskEditor {
-            title: title.clone().unwrap_or_else(|| current_task.title.clone()),
-            description: desc
-                .clone()
-                .unwrap_or_else(|| current_task.description.clone()),
-            priority: Selectable::new(priority.unwrap_or_else(|| current_task.priority.clone())),
-            folder_id: current_task.folder_id,
+            title: title.clone().unwrap_or_else(|| task.title.clone()),
+            description: desc.clone().unwrap_or_else(|| task.description.clone()),
+            priority: Selectable::new(priority.unwrap_or_else(|| task.priority.clone())),
+            folder_id: task.folder_id,
         };
 
-        let result = TaskService::update_task(&mut app.data.tasks, &id, editor)?;
+        let result = TaskService::update_task(&mut app.data.tasks, &task.id, editor)?;
         app.save_all()?;
 
         if let OperationResult::TaskUpdated { old, new } = result {

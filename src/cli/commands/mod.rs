@@ -1,14 +1,10 @@
-pub mod add;
-pub mod details;
-pub mod list;
-pub mod pin;
-pub mod remove;
-pub mod update;
+pub mod folder;
+pub mod task;
 
 use crate::{
     cli::types::FilterMode,
     core::{SortBy, SortOrder},
-    models::Priority,
+    models::{FolderColor, Priority},
 };
 use clap::{Parser, Subcommand};
 
@@ -23,6 +19,17 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Manage tasks
+    #[command(subcommand)]
+    Task(TaskCommands),
+
+    /// Manage folders
+    #[command(subcommand)]
+    Folder(FolderCommands),
+}
+
+#[derive(Subcommand)]
+pub enum TaskCommands {
     /// Adds task to the list
     #[command(alias = "a")]
     Add {
@@ -100,6 +107,53 @@ pub enum Commands {
     #[command(alias = "det")]
     Details {
         /// ID of the task
+        id: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum FolderCommands {
+    /// Adds folder to the list
+    #[command(alias = "a")]
+    Add {
+        /// Name of the folder
+        name: String,
+
+        /// Color of a folder
+        #[arg(short, long, value_enum, default_value_t = FolderColor::Neutral)]
+        color: FolderColor,
+    },
+
+    /// Update selected folder by ID
+    #[command(alias = "u")]
+    Update {
+        /// UUID of a folder
+        id: String,
+
+        /// New name
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// New priority
+        #[arg(short, long)]
+        color: Option<FolderColor>,
+    },
+
+    /// Remove selected folder by ID
+    #[command(alias = "d")]
+    Rm {
+        /// UUID of a folder
+        id: String,
+    },
+
+    /// Shows the list of all folders
+    #[command(alias = "ls")]
+    List,
+
+    /// Show detailed info about a folder
+    #[command(alias = "det")]
+    Details {
+        /// ID of the folder
         id: String,
     },
 }

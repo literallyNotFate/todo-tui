@@ -1,11 +1,9 @@
-use crate::{Application, cli::types::FindResult};
+use crate::{Application, cli::types::EntitySelector};
 use comfy_table::{Cell, Color, Table, presets};
 
-/// `details` command implementation
+/// `details` command implementation for task subcommand
 pub fn run(app: &Application, id_query: String) -> color_eyre::Result<()> {
-    FindResult::find(&app.data.tasks, &id_query).execute(&id_query, |id| {
-        let task = app.data.find_by_id(id).unwrap();
-
+    EntitySelector::find(&app.data.tasks, &id_query).execute(&id_query, |task| {
         let mut table = Table::new();
         table.load_preset(presets::UTF8_FULL);
 

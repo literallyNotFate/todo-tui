@@ -4,7 +4,7 @@ use crate::{
     models::{Priority, Task},
 };
 
-/// `add` command implementation
+/// `add` command implementation for task subcommand
 pub fn run(app: &mut Application, title: String, priority: Priority) -> color_eyre::Result<()> {
     let new_task: Task = Task::new(title).with_priority(priority);
     let result = TaskService::append_task(&mut app.data.tasks, new_task)?;

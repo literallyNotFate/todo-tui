@@ -1,9 +1,9 @@
-use crate::{Application, app::TaskService, cli::types::FindResult};
+use crate::{Application, app::TaskService, cli::types::EntitySelector};
 
-/// `pin` and `unpin` commands implementation
+/// `pin` and `unpin` commands implementation for task subcommand
 pub fn run(app: &mut Application, id_query: String, should_pin: bool) -> color_eyre::Result<()> {
-    FindResult::find(&app.data.tasks, &id_query).execute(&id_query, |id| {
-        let is_already_pinned: bool = app.data.find_by_id(id).map(|t| t.pinned).unwrap_or(false);
+    EntitySelector::find(&app.data.tasks, &id_query).execute(&id_query, |task| {
+        let is_already_pinned: bool = task.pinned == true;
 
         if is_already_pinned == should_pin {
             println!(
@@ -13,7 +13,7 @@ pub fn run(app: &mut Application, id_query: String, should_pin: bool) -> color_e
             return Ok(());
         }
 
-        TaskService::toggle_pinned(&mut app.data.tasks, &id)?;
+        TaskService::toggle_pinned(&mut app.data.tasks, &task.id)?;
         app.save_all()?;
 
         println!(
