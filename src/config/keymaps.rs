@@ -413,7 +413,7 @@ impl Default for KeyMaps {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::ThemeName;
+    use crate::theme::BuiltinTheme;
     use tempdir::TempDir;
 
     #[test]
@@ -571,7 +571,7 @@ mod tests {
     #[test]
     fn should_test_hotkeys_alignment_consistency() {
         let keymap: KeyMaps = KeyMaps::default();
-        let palette = ThemeName::GruvboxDark.palette();
+        let palette = BuiltinTheme::GruvboxDark.palette();
         let lines = keymap.hotkeys_info(&palette);
 
         for line in lines {
@@ -585,7 +585,7 @@ mod tests {
     #[test]
     fn should_add_section_spacing() {
         let keymap: KeyMaps = KeyMaps::default();
-        let palette = ThemeName::GruvboxDark.palette();
+        let palette = BuiltinTheme::GruvboxDark.palette();
         let lines = keymap.hotkeys_info(&palette);
 
         let empty_lines = lines

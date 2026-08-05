@@ -99,7 +99,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::ThemeName;
+    use crate::theme::BuiltinTheme;
     use ratatui::{crossterm::event::KeyCode, style::Color};
 
     #[derive(Debug, Clone, PartialEq, Default, Copy, strum::Display, strum::EnumIter)]
@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn should_return_styles_if_focused() {
         let input = EnumInput::from(MockEnum::B);
-        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let palette: ThemePalette = BuiltinTheme::GruvboxDark.palette();
         let mut styles: (Style, Style) = input.on_focused(false, &palette);
         assert_eq!(
             styles,

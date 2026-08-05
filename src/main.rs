@@ -21,6 +21,10 @@ fn main() -> color_eyre::Result<()> {
 
     let mut app: Application = Application::new(config, config_error);
 
+    if let Some(theme) = cli.theme {
+        app.ui.apply_theme_id(theme);
+    }
+
     if let Some(command) = cli.command {
         return cli::run_cli(&mut app, command);
     }

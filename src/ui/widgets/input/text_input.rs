@@ -164,7 +164,7 @@ impl Input for TextInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::ThemeName;
+    use crate::theme::BuiltinTheme;
     use ratatui::{crossterm::event::KeyCode, style::Color};
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn should_return_styles_if_focused() {
         let input = TextInput::new();
-        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let palette: ThemePalette = BuiltinTheme::GruvboxDark.palette();
         let mut styles: (Style, Style) = input.on_focused(false, &palette);
         assert_eq!(
             styles,

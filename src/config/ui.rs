@@ -1,6 +1,6 @@
 use crate::{
     common::{is_default, is_default_dark, is_default_light},
-    theme::{ThemeID, ThemeName},
+    theme::{BuiltinTheme, ThemeId},
 };
 use ratatui::widgets::BorderType;
 use serde::{Deserialize, Serialize};
@@ -9,13 +9,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(default)]
 pub struct UIConfig {
-    pub theme: ThemeID,
+    pub theme: ThemeId,
     pub use_system_theme: bool,
 
     #[serde(skip_serializing_if = "is_default_dark")]
-    pub last_dark: Option<ThemeID>,
+    pub last_dark: Option<ThemeId>,
     #[serde(skip_serializing_if = "is_default_light")]
-    pub last_light: Option<ThemeID>,
+    pub last_light: Option<ThemeId>,
 
     pub show_sidebar: bool,
     pub show_footer: bool,
@@ -53,10 +53,10 @@ pub struct SymbolsConfig {
 impl Default for UIConfig {
     fn default() -> Self {
         Self {
-            theme: ThemeID::Builtin(ThemeName::default()),
+            theme: ThemeId::Builtin(BuiltinTheme::default()),
             use_system_theme: true,
-            last_dark: Some(ThemeID::Builtin(ThemeName::default())),
-            last_light: Some(ThemeID::Builtin(ThemeName::GruvboxLight)),
+            last_dark: Some(ThemeId::Builtin(BuiltinTheme::default())),
+            last_light: Some(ThemeId::Builtin(BuiltinTheme::GruvboxLight)),
             show_sidebar: true,
             show_footer: true,
             sidebar_width: 30,

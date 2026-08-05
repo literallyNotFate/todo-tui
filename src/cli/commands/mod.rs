@@ -5,6 +5,7 @@ use crate::{
     cli::types::FilterMode,
     core::{SortBy, SortOrder},
     models::{FolderColor, Priority},
+    theme::ThemeId,
 };
 use clap::{Parser, Subcommand};
 
@@ -13,6 +14,10 @@ use clap::{Parser, Subcommand};
 #[command(version = "1.0")]
 #[command(about = "CLI version of Toodles TUI application", long_about = None)]
 pub struct Cli {
+    /// Theme for TUI application (ignored if running CLI commands)
+    #[arg(long)]
+    pub theme: Option<ThemeId>,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

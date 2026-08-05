@@ -212,7 +212,7 @@ impl Modal for Popup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::ThemeName;
+    use crate::theme::BuiltinTheme;
     use ratatui::crossterm::event::KeyModifiers;
 
     struct DummyComponent;
@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn should_return_color_based_on_popup_kind_with_theme() {
-        let palette = ThemeName::GruvboxDark.palette();
+        let palette = BuiltinTheme::GruvboxDark.palette();
         let success_popup = Popup::new("T", Box::new(DummyComponent), PopupKind::Success);
         assert_eq!(
             success_popup.color_on_kind(&palette),

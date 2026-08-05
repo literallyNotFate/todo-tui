@@ -60,8 +60,8 @@ impl PaletteDisk {
             })
     }
 
-    /// Scans themes directory and tries to load every .toml file
-    /// Returns list of tuples (theme name, palette)
+    /// Scans themes directory and tries to load every .toml file.
+    /// Returns list of tuples (theme key / file stem, palette)
     pub fn load_all() -> Vec<(String, ThemePalette)> {
         let mut custom_themes = Vec::new();
 
@@ -83,8 +83,13 @@ impl PaletteDisk {
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+
+                let theme_key: String = file_stem.to_lowercase();
                 match Self::load_single_theme(&path) {
-                    Ok((name, palette)) => custom_themes.push((name, palette)),
+                    Ok((_, palette)) => custom_themes.push((theme_key, palette)),
                     Err(e) => log::error!("Skipping theme {:?}: {}", path.file_name(), e),
                 }
             }
@@ -93,7 +98,16 @@ impl PaletteDisk {
         custom_themes
     }
 
-    /// Helper method to load only one file theme (.toml)
+    /// Helper method to load a single theme file by its name (e.g. "nord")
+    pub fn load_single(name: &str) -> Option<ThemePalette> {
+        let dir: PathBuf = Self::themes_dir().ok()?;
+        let path: PathBuf = dir.join(format!("{}.toml", name.to_lowercase()));
+        Self::load_single_theme(&path)
+            .ok()
+            .map(|(_, palette)| palette)
+    }
+
+    /// Helper method to load only one file theme (.toml) and return its display name and palette
     fn load_single_theme(path: &PathBuf) -> Result<(String, ThemePalette), StorageError> {
         let content: String = fs::read_to_string(path).map_err(|e| StorageError::IO {
             path: path.to_owned(),
@@ -112,9 +126,8 @@ impl PaletteDisk {
 /// Unit-tests for theme disk operations
 #[cfg(test)]
 mod tests {
-    use tempdir::TempDir;
-
     use super::*;
+    use tempdir::TempDir;
 
     #[test]
     fn should_parse_colors_from_disk_format() {

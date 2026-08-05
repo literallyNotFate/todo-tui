@@ -216,7 +216,7 @@ impl Modal for Confirm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::ThemeName;
+    use crate::theme::BuiltinTheme;
     use ratatui::crossterm::event::KeyModifiers;
 
     fn create_helper_frame() -> Rect {
@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn should_return_proper_styles_for_buttons_with_theme() {
         let mut confirm = Confirm::new("Test");
-        let palette = ThemeName::GruvboxDark.palette();
+        let palette = BuiltinTheme::GruvboxDark.palette();
         let mut styles = confirm.button_styles(&palette);
 
         assert_eq!(styles.0, Style::default().fg(palette.muted));
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn should_generate_buttons_with_theme() {
         let mut confirm = Confirm::new("Test");
-        let palette = ThemeName::GruvboxDark.palette();
+        let palette = BuiltinTheme::GruvboxDark.palette();
 
         let styles = confirm.button_styles(&palette);
         let buttons = confirm.button_line(styles, &palette);

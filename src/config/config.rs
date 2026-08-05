@@ -107,7 +107,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::{Theme, ThemeID, ThemeName};
+    use crate::theme::{BuiltinTheme, Theme, ThemeId};
     use tempdir::TempDir;
 
     #[test]
@@ -125,7 +125,7 @@ mod tests {
         let path = temp_dir.path().join("config.toml");
 
         let mut config = Config::default();
-        let test_theme = ThemeID::Builtin(ThemeName::RosePineMoon);
+        let test_theme = ThemeId::Builtin(BuiltinTheme::RosePineMoon);
 
         config.ui.theme = test_theme.clone();
         config.ui.use_system_theme = true;
@@ -193,7 +193,7 @@ mod tests {
         let path = temp_dir.path().join("config.toml");
 
         let mut config = Config::default();
-        let dark = ThemeID::Builtin(ThemeName::MelangeDark);
+        let dark = ThemeId::Builtin(BuiltinTheme::MelangeDark);
         config.ui.last_dark = Some(dark.clone());
         config.ui.last_light = None;
 
@@ -210,7 +210,7 @@ mod tests {
         let initial_config = Config::default();
         let mut ui = UIState::new(initial_config.ui.clone());
 
-        let new_theme_id = ThemeID::Builtin(ThemeName::GruvboxDark);
+        let new_theme_id = ThemeId::Builtin(BuiltinTheme::GruvboxDark);
         ui.theme = Theme::new(new_theme_id.clone());
         ui.config.show_sidebar = false;
         ui.config.use_system_theme = false;

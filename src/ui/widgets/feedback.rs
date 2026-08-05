@@ -161,13 +161,13 @@ impl FeedbackWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::ThemeName;
+    use crate::theme::BuiltinTheme;
     use ratatui::{layout::Alignment, text::Span};
 
     #[test]
     fn should_render_message_for_empty_list() {
         let feedback: FeedbackWidget = FeedbackWidget::new(FeedbackKind::EmptyList);
-        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let palette: ThemePalette = BuiltinTheme::GruvboxDark.palette();
 
         assert_eq!(feedback.kind, FeedbackKind::EmptyList);
 
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn should_render_message_for_invalid_query() {
         let query: String = String::from("Test");
-        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let palette: ThemePalette = BuiltinTheme::GruvboxDark.palette();
         let feedback: FeedbackWidget = FeedbackWidget::new(FeedbackKind::NoResults(query.clone()));
 
         assert_eq!(feedback.kind, FeedbackKind::NoResults(query.clone()));
@@ -223,7 +223,7 @@ mod tests {
         let width: u16 = 80;
         let height: u16 = 24;
 
-        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let palette: ThemePalette = BuiltinTheme::GruvboxDark.palette();
         let colors: (Color, Color) = (palette.error, palette.success);
         let result: Vec<Line> = feedback.message(&width, &height, colors, &palette, false);
 

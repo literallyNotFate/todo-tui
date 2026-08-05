@@ -1,4 +1,4 @@
-use crate::theme::ThemeName;
+use crate::theme::BuiltinTheme;
 use ratatui::style::Color;
 
 /// A semantic color palette for a theme
@@ -58,7 +58,7 @@ impl ThemePalette {
 impl Default for ThemePalette {
     /// Returns the default palette
     fn default() -> Self {
-        ThemeName::default().palette()
+        BuiltinTheme::default().palette()
     }
 }
 
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn should_verify_default_palette_matches_default_theme() {
         let palette = ThemePalette::default();
-        let expected = ThemeName::default().palette();
+        let expected = BuiltinTheme::default().palette();
 
         assert_eq!(palette, expected);
         assert!(palette.is_dark());

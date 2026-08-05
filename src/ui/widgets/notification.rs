@@ -118,7 +118,7 @@ impl Notification {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::ThemeName;
+    use crate::theme::BuiltinTheme;
 
     /// Mock application for tick() and automatic notifcation closing
     struct MockApplication {
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn should_return_notification_icon_and_color_based_on_kind_and_theme() {
         let mut notification: Notification = Notification::success("Success");
-        let mut res = notification.icon_with_color(&ThemeName::CatppuccinMocha.palette());
+        let mut res = notification.icon_with_color(&BuiltinTheme::CatppuccinMocha.palette());
 
         assert_eq!(notification.message, "Success");
         assert_eq!(notification.kind, NotificationKind::Success);
@@ -175,7 +175,7 @@ mod tests {
         assert_eq!(res.1, Color::Rgb(166, 227, 161));
 
         notification = Notification::error("Error");
-        res = notification.icon_with_color(&ThemeName::CatppuccinMocha.palette());
+        res = notification.icon_with_color(&BuiltinTheme::CatppuccinMocha.palette());
 
         assert_eq!(notification.message, "Error");
         assert_eq!(notification.kind, NotificationKind::Error);

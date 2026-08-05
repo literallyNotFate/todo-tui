@@ -283,7 +283,7 @@ mod tests {
     use super::*;
     use crate::{
         core::ApplicationError,
-        theme::{ThemeName, ThemePalette},
+        theme::{BuiltinTheme, ThemePalette},
     };
     use chrono::{Days, Duration, Months, NaiveDate};
 
@@ -446,7 +446,7 @@ mod tests {
 
     #[test]
     fn should_return_right_color_of_priority_with_theme() {
-        let palette: ThemePalette = ThemeName::GruvboxDark.palette();
+        let palette: ThemePalette = BuiltinTheme::GruvboxDark.palette();
         let mut priority: Priority = Priority::Low;
         assert_eq!(priority.palette(&palette), palette.success);
 
