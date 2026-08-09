@@ -54,8 +54,7 @@ pub enum Action {
     UpdateFolder,
     RemoveFolder,
 
-    NextTheme,
-    PrevTheme,
+    SwitchTheme,
     ToggleThemeMode,
 
     #[strum(serialize = "sidebar_toggle")]
@@ -108,8 +107,7 @@ impl Action {
             Self::Sort => ("Sort list", "Actions"),
             Self::SortReverse => ("Reverse sorting", "Actions"),
 
-            Self::NextTheme => ("Next theme", "UI"),
-            Self::PrevTheme => ("Previous theme", "UI"),
+            Self::SwitchTheme => ("Switch theme", "UI"),
             Self::ToggleThemeMode => ("Light/Dark mode", "UI"),
             Self::ToggleSidebar => ("Show/Hide sidebar", "UI"),
             Self::ToggleFooter => ("Show/Hide footer", "UI"),

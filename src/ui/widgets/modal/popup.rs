@@ -22,6 +22,7 @@ pub enum PopupContent {
     Task(TaskDetails),
     Help(Vec<Line<'static>>),
     Form(Form),
+    ThemeSwitcher(Form),
 }
 
 /// Defines how popup is getting closed (on any key or on specific)
@@ -177,6 +178,9 @@ impl Modal for Popup {
                 return Some(self.content.to_modal_result());
             }
             WidgetResponse::Cancel => return Some(ModalResult::Cancelled),
+            WidgetResponse::Changed => {
+                return Some(self.content.to_modal_result());
+            }
             WidgetResponse::Continue => {}
         }
 

@@ -33,43 +33,24 @@ impl PopupComponent for HelpComponent {
     fn render(&self, ctx: &mut RenderContext, area: Rect) {
         use crate::ui::scrollable;
         use ratatui::{
-            layout::{Constraint, Direction, Layout},
             style::Style,
             widgets::{Block, Paragraph},
         };
 
         let palette = ctx.palette();
-        let mid = self.lines.len().div_ceil(2);
-        let dummy_lines = vec![Line::from(""); mid];
-
         scrollable(
             ctx,
             area,
             Block::default().title(""),
             &self.scroll,
-            &dummy_lines,
+            &self.lines,
             false,
             Style::default().fg(palette.accent),
             |ctx, inner_area| {
-                let chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([
-                        Constraint::Percentage(48),
-                        Constraint::Percentage(4),
-                        Constraint::Percentage(48),
-                    ])
-                    .split(inner_area);
-
-                let (left, right) = self.lines.split_at(mid);
                 let scroll_val = self.scroll.current.get() as u16;
-
                 ctx.render_widget(
-                    Paragraph::new(left.to_vec()).scroll((scroll_val, 0)),
-                    chunks[0],
-                );
-                ctx.render_widget(
-                    Paragraph::new(right.to_vec()).scroll((scroll_val, 0)),
-                    chunks[2],
+                    Paragraph::new(self.lines.clone()).scroll((scroll_val, 0)),
+                    inner_area,
                 );
             },
         );
@@ -90,7 +71,7 @@ impl Popup {
             PopupKind::Info,
         )
         .close_on(KeyCode::Char('?'))
-        .with_size(ModalSize::Large)
+        .with_size(ModalSize::Medium)
     }
 }
 

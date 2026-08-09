@@ -1,7 +1,9 @@
 pub mod enum_input;
+pub mod select_input;
 pub mod text_input;
 
 pub use enum_input::EnumInput;
+pub use select_input::SelectInput;
 pub use text_input::TextInput;
 
 use crate::{

@@ -1,6 +1,10 @@
 use crate::{
     models::{FolderColor, Priority},
-    ui::{EnumInput, RenderContext, TextInput, widgets::input::Input},
+    theme::{ThemeId, ThemeRegistry},
+    ui::{
+        EnumInput, RenderContext, TextInput,
+        widgets::{SelectInput, input::Input},
+    },
 };
 use ratatui::layout::Rect;
 use tui_textarea::TextArea;
@@ -11,6 +15,7 @@ pub enum FieldType {
     Text { input: TextInput },
     PriorityEnum { input: EnumInput<Priority> },
     ColorEnum { input: EnumInput<FolderColor> },
+    Select { input: SelectInput<ThemeId> },
     Multiline { input: TextArea<'static> },
     Button,
 }
@@ -49,6 +54,13 @@ impl FieldType {
 
         Self::Multiline {
             input: TextArea::new(lines),
+        }
+    }
+
+    /// Create select input for themes (supports builtin, system and custom)
+    pub fn theme(current: &ThemeId, registry: &ThemeRegistry) -> Self {
+        Self::Select {
+            input: SelectInput::from(registry.all_ids.clone(), current).title(" Theme "),
         }
     }
 
@@ -104,6 +116,26 @@ impl FieldType {
                 input.set_block(block);
                 input.set_style(Style::default().fg(palette.fg));
                 ctx.render_widget(&input, area);
+            }
+            FieldType::Select { input } => {
+                let border_type = ctx.config.ui.border_type.into();
+
+                let display_text = input
+                    .items
+                    .get(input.selected_index)
+                    .map(|id| id.to_string())
+                    .unwrap_or_default();
+
+                let block = Block::bordered()
+                    .title(input.title.as_str())
+                    .border_type(border_type)
+                    .border_style(focused_style);
+
+                let paragraph = Paragraph::new(display_text)
+                    .block(block)
+                    .style(Style::default().fg(palette.fg));
+
+                ctx.render_widget(paragraph, area);
             }
             FieldType::Button => {
                 let button_layout = Layout::default()

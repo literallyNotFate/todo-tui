@@ -217,16 +217,6 @@ impl UIState {
         self.apply_theme_id(target);
     }
 
-    /// Next theme wrapper
-    pub fn next_theme(&mut self) {
-        self.cycle_theme(true);
-    }
-
-    /// Previous theme wrapper
-    pub fn prev_theme(&mut self) {
-        self.cycle_theme(false);
-    }
-
     /// Helper function to refresh theme
     pub fn refresh_theme(&mut self) {
         if self.config.use_system_theme {
@@ -236,28 +226,6 @@ impl UIState {
                 self.apply_theme_id(self.config.theme.clone());
             }
         }
-    }
-
-    /// Base method to cycle through themes in both directions
-    fn cycle_theme(&mut self, forward: bool) {
-        self.config.use_system_theme = false;
-
-        if forward {
-            self.theme.next();
-        } else {
-            self.theme.prev();
-        }
-
-        let new_id: ThemeId = self.theme.theme_id().clone();
-        self.config.theme = new_id.clone();
-
-        if self.theme.is_dark() {
-            self.config.last_dark = Some(new_id);
-        } else {
-            self.config.last_light = Some(new_id);
-        }
-
-        self.request_redraw();
     }
 
     /// Applies theme based on system preferences
@@ -625,33 +593,6 @@ mod tests {
             fresh_notification.is_some(),
             "Fresh notification must remain active"
         );
-    }
-
-    #[test]
-    fn should_handle_theme_mode_switching_with_memory() {
-        let mut config = UIConfig::default();
-        let dark = ThemeId::Builtin(BuiltinTheme::KanagawaWave);
-        let light = ThemeId::Builtin(BuiltinTheme::KanagawaLotus);
-
-        config.last_dark = Some(dark.clone());
-        config.last_light = Some(light.clone());
-        config.theme = dark.clone();
-
-        let mut ui = UIState::new(config);
-
-        ui.toggle_mode();
-        assert_eq!(ui.theme.theme_id(), &light);
-        assert!(!ui.config.use_system_theme);
-
-        ui.next_theme();
-        let current_light_id = ui.theme.theme_id().clone();
-        assert_eq!(ui.config.last_light, Some(current_light_id.clone()));
-
-        ui.toggle_mode();
-        assert_eq!(ui.theme.theme_id(), &dark);
-
-        ui.toggle_mode();
-        assert_eq!(ui.theme.theme_id(), &current_light_id);
     }
 
     #[test]

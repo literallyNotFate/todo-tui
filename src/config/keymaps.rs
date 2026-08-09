@@ -385,8 +385,7 @@ impl Default for KeyMaps {
             // System & UI
             (Action::Sort, "s"),
             (Action::SortReverse, "r"),
-            (Action::NextTheme, "t"),
-            (Action::PrevTheme, "ctrl+t"),
+            (Action::SwitchTheme, "t"),
             (Action::ToggleThemeMode, "m"),
             (Action::ToggleSidebar, "ctrl+b"),
             (Action::ToggleFooter, "ctrl+f"),

@@ -94,6 +94,9 @@ impl Form {
                 FieldType::ColorEnum { input } => {
                     input.handle_key(&key);
                 }
+                FieldType::Select { input } => {
+                    input.handle_key(&key);
+                }
                 _ => {}
             }
         }
@@ -145,11 +148,13 @@ impl Form {
         }
     }
 
-    /// Checks whether textarea is selected
-    fn is_enum_focused(&self) -> bool {
+    /// Checks whether enum input/select input is selected
+    fn is_enum_or_select_focused(&self) -> bool {
         matches!(
             self.fields.get(self.focused).map(|f| &f.field_type),
-            Some(FieldType::PriorityEnum { .. }) | Some(FieldType::ColorEnum { .. })
+            Some(FieldType::PriorityEnum { .. })
+                | Some(FieldType::ColorEnum { .. })
+                | Some(FieldType::Select { .. })
         )
     }
 
@@ -177,15 +182,26 @@ impl Form {
         false
     }
 
+    /// Checks whether the form contains a submit button field
+    pub fn has_button(&self) -> bool {
+        self.fields
+            .iter()
+            .any(|f| matches!(f.field_type, FieldType::Button))
+    }
+
     /// Generates hotkeys for form
     fn hotkeys(&self, palette: &ThemePalette) -> Line<'static> {
         use ratatui::text::{Line, Span};
-        let mut spans = vec![
-            Span::styled("<alt+enter>", Style::default().fg(palette.success).bold()),
-            Span::styled(":submit ", Style::default().fg(palette.muted)),
-        ];
 
-        if self.is_enum_focused() {
+        let mut spans = Vec::new();
+        if self.has_button() {
+            spans.extend(vec![
+                Span::styled("<alt+enter>", Style::default().fg(palette.success).bold()),
+                Span::styled(":submit ", Style::default().fg(palette.muted)),
+            ]);
+        }
+
+        if self.is_enum_or_select_focused() {
             spans.push(Span::styled(
                 " ◄/►",
                 Style::default().fg(palette.accent).bold(),
@@ -193,13 +209,14 @@ impl Form {
             spans.push(Span::styled(":select ", Style::default().fg(palette.muted)));
         }
 
-        spans.extend(vec![
-            Span::styled(" ▲/▼", Style::default().fg(palette.secondary).bold()),
-            Span::styled(":move ", Style::default().fg(palette.muted)),
-            Span::styled(" <esc>", Style::default().fg(palette.warning).bold()),
-            Span::styled(":back ", Style::default().fg(palette.muted)),
-        ]);
-        Line::from(spans).centered()
+        if self.fields.len() > 1 {
+            spans.extend(vec![
+                Span::styled(" ▲/▼", Style::default().fg(palette.secondary).bold()),
+                Span::styled(":move ", Style::default().fg(palette.muted)),
+            ]);
+        }
+
+        Line::from(spans).left_aligned()
     }
 
     /// Main form layout method
@@ -212,6 +229,7 @@ impl Form {
                 FieldType::Text { .. }
                 | FieldType::PriorityEnum { .. }
                 | FieldType::ColorEnum { .. }
+                | FieldType::Select { .. }
                 | FieldType::Button => Constraint::Length(3),
                 FieldType::Multiline { .. } => Constraint::Min(6),
             })
@@ -248,11 +266,21 @@ impl Form {
                         input.selected.value = color;
                     }
                 }
+                FieldType::Select { input } => {
+                    use crate::theme::ThemeId;
+
+                    if let Ok(theme_id) = ThemeId::from_str(value) {
+                        if let Some(pos) = input.items.iter().position(|item| item == &theme_id) {
+                            input.selected_index = pos;
+                        }
+                    }
+                }
                 FieldType::Button => {}
             }
         }
     }
 }
+
 /// Unit-tests for generic form widget and its contexts
 #[cfg(test)]
 mod tests {

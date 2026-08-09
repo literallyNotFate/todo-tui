@@ -1,7 +1,9 @@
 use crate::{
     models::{Folder, Task},
+    theme::ThemeId,
     ui::{
-        FolderFormContext, Popup, PopupComponent, RenderContext, TaskFormContext, WidgetResponse,
+        FolderFormContext, Popup, PopupComponent, RenderContext, TaskFormContext, ThemeFormContext,
+        WidgetResponse,
         widgets::modal::{ModalResult, ModalSize, popup::PopupKind},
     },
 };
@@ -44,6 +46,30 @@ impl PopupComponent for FolderFormContext {
     }
 }
 
+/// Component to render theme switcher form
+impl PopupComponent for ThemeFormContext {
+    fn render(&self, ctx: &mut RenderContext, area: Rect) {
+        self.form.render(ctx, area);
+    }
+
+    fn handle_key(&mut self, event: &KeyEvent) -> WidgetResponse {
+        let old_theme: ThemeId = self.get_theme_value();
+        let response: WidgetResponse = self.form.handle_key(event);
+        let new_theme: ThemeId = self.get_theme_value();
+
+        if old_theme != new_theme {
+            return WidgetResponse::Changed;
+        }
+
+        response
+    }
+
+    fn to_modal_result(&self) -> ModalResult {
+        let theme_id = self.parse_data();
+        ModalResult::Changed { theme_id }
+    }
+}
+
 impl Popup {
     /// Popup to create new task form
     pub fn append_task() -> Self {
@@ -83,6 +109,16 @@ impl Popup {
             PopupKind::Info,
         )
         .with_size(ModalSize::Medium)
+    }
+
+    /// Popup to create new switch theme form
+    pub fn switch_theme(theme_id: &ThemeId) -> Self {
+        Self::new(
+            " Switch Theme ",
+            Box::new(ThemeFormContext::new(theme_id)),
+            PopupKind::Info,
+        )
+        .with_size(ModalSize::Small)
     }
 }
 

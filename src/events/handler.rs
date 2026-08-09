@@ -79,10 +79,17 @@ impl EventHandler {
         };
 
         if let Some(result) = result {
+            if let ModalResult::Changed { theme_id } = result {
+                ctrl.ui.apply_theme_id(theme_id);
+                ctrl.ui.request_redraw();
+                return;
+            }
+
             let modal_action = ctrl.ui.modal.as_ref().unwrap().action.clone();
             ctrl.ui.close_modal();
 
             match result {
+                ModalResult::Changed { .. } => unreachable!(),
                 ModalResult::TaskSubmitted {
                     id,
                     title,
@@ -170,6 +177,7 @@ impl EventHandler {
             WidgetResponse::Continue => {
                 ctrl.state.select_state.select(Some(0));
             }
+            _ => {}
         }
         ctrl.ui.request_redraw();
     }
@@ -210,8 +218,10 @@ impl EventHandler {
                     ModalAction::None,
                 );
             }
-            Action::NextTheme => ctrl.ui.next_theme(),
-            Action::PrevTheme => ctrl.ui.prev_theme(),
+            Action::SwitchTheme => ctrl.ui.show_modal(
+                Popup::switch_theme(ctrl.ui.theme.theme_id()),
+                ModalAction::None,
+            ),
             Action::ToggleThemeMode => ctrl.ui.toggle_mode(),
             Action::AddTask => ctrl.ui.show_modal(Popup::append_task(), ModalAction::None),
             Action::AddFolder => ctrl

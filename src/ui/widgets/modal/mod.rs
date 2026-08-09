@@ -4,7 +4,7 @@ pub mod popup;
 pub use confirm::Confirm;
 pub use popup::Popup;
 
-use crate::{core::Action, models::Priority, ui::RenderContext};
+use crate::{core::Action, models::Priority, theme::ThemeId, ui::RenderContext};
 use ratatui::{crossterm::event::KeyEvent, layout::Rect};
 use uuid::Uuid;
 
@@ -30,6 +30,9 @@ pub enum ModalResult {
         id: Option<Uuid>,
         name: String,
         color: String,
+    },
+    Changed {
+        theme_id: ThemeId,
     },
 }
 
@@ -57,9 +60,9 @@ pub enum ModalSize {
 impl ModalSize {
     pub fn percentages(&self) -> (u16, u16) {
         match self {
-            ModalSize::Small => (30, 20),
-            ModalSize::Medium => (50, 40),
-            ModalSize::Large => (85, 80),
+            ModalSize::Small => (40, 30),
+            ModalSize::Medium => (60, 50),
+            ModalSize::Large => (90, 80),
             ModalSize::Custom { width, height } => (*width, *height),
         }
     }

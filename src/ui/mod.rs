@@ -26,6 +26,7 @@ pub enum WidgetResponse {
     Continue,
     Submit,
     Cancel,
+    Changed,
 }
 
 use crate::config::UIConfig;
